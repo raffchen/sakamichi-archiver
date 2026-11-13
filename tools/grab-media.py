@@ -24,6 +24,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -61,6 +62,61 @@ import cdp as cdp_mod
 
 MEDIA_TYPES = {"picture", "video", "audio", "voice"}
 
+# ---------------------------------------------------------------- status
+# Session bookkeeping (docs/deployment.md §3.7): every run records whether the
+# session cookie works into logs/<site>-session-status.json — the viewer's
+# GET /api/secrets/status summarizes these and session-upload.py --check
+# prints them. If NOTIFY_URL is set (ntfy / SMTP / webhook), a failure and the
+# subsequent recovery are pushed; repeat-failures stay quiet (no spam).
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """tmp + rename so a reader never observes a half-written file"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def _notify(site_key: str, message: str) -> None:
+    url = os.environ.get("NOTIFY_URL")
+    if not url:
+        return
+    try:
+        req = urllib.request.Request(
+            url,
+            data=f"[{site_key}] {message}".encode("utf-8"),
+            method="POST",
+            headers={"Title": "sakamichi syncer", "User-Agent": "grab-media"},
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:  # never let monitoring break syncing
+        print(f"[status] notify failed: {e}")
+
+
+def record_session_status(site: dict, ok: bool, error: str | None = None) -> None:
+    key = site["key"]
+    sf = LOGS / f"{key}-session-status.json"
+    prev = None
+    try:
+        if sf.exists():
+            prev = json.loads(sf.read_text(encoding="utf-8")).get("ok")
+    except Exception:
+        pass
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _atomic_write(sf, json.dumps(
+        {"site": key, "ok": ok, "checked_at": now, "last_error": error},
+        ensure_ascii=False,
+    ))
+    state = "OK" if ok else "EXPIRED"
+    detail = f" ({error})" if error else ""
+    print(f"[status] {key}: session {state}{detail}")
+    if not ok and prev is not False:  # fresh failure (or first record) → push
+        _notify(key, f"session EXPIRED — archive paused until a fresh cookie "
+                     f"is uploaded{detail}")
+    elif ok and prev is False:        # recovery → push
+        _notify(key, "session recovered — sync resuming")
+
 
 def api_headers(token: str, site: dict) -> dict:
     return {
@@ -78,21 +134,26 @@ def refresh_token_via_cdp(site: dict) -> str:
     """Grab the app's current Bearer token by watching desktop Chrome's requests.
 
     Requires Chrome running with --remote-debugging-port=9222 and a logged-in
-    session on the site (see README).
+    session on the site (see README). Returns "" if Chrome isn't reachable —
+    a missing fallback is a sync failure to record, never a crash.
     """
-    c = cdp_mod.connect(site["web"].split("https://")[1].split(".")[0])
-    tok = {}
-    def on_req(p):
-        h = p["request"].get("headers", {})
-        a = h.get("Authorization") or h.get("authorization")
-        if a and "authorization" not in tok:
-            tok["authorization"] = a.split("Bearer ")[-1]
-    c.on("Network.requestWillBeSent", on_req)
-    c.send("Network.enable")
-    c.send("Page.enable")
-    c.navigate(site["web"] + "/organization/1/talk/timeline")
-    c.pump(12)
-    c.close()
+    try:
+        c = cdp_mod.connect(site["web"].split("https://")[1].split(".")[0])
+        tok = {}
+        def on_req(p):
+            h = p["request"].get("headers", {})
+            a = h.get("Authorization") or h.get("authorization")
+            if a and "authorization" not in tok:
+                tok["authorization"] = a.split("Bearer ")[-1]
+        c.on("Network.requestWillBeSent", on_req)
+        c.send("Network.enable")
+        c.send("Page.enable")
+        c.navigate(site["web"] + "/organization/1/talk/timeline")
+        c.pump(12)
+        c.close()
+    except Exception as e:
+        print(f"    CDP fallback unavailable: {e}")
+        return ""
     token = tok.get("authorization", "")
     if token:
         site["token_file"].write_text(token)
@@ -143,7 +204,7 @@ def refresh_token_via_api(site: dict) -> str:
             for sc in r.headers.get_all("Set-Cookie") or []:
                 m = re.match(r"session=([^;\s]+); Path=/v2/update_token", sc)
                 if m:
-                    cf.write_text(m.group(1))
+                    _atomic_write(cf, m.group(1))
                     break
     except urllib.error.HTTPError as e:
         return ""
@@ -210,7 +271,6 @@ def fetch_member_media(member_id: int, token: str, site: dict, full_history: boo
         cursor = from_date
         for _ in range(500):
             try:
-                import urllib.parse
                 q = urllib.parse.quote(cursor)
                 r = api_get(f"/groups/{member_id}/timeline?count=200&order=asc&updated_from={q}",
                             token, site)
@@ -292,6 +352,9 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
         except urllib.error.HTTPError:
             # signature expired mid-run: re-sync this member with a fresh token
             token = refresh_token_via_api(site) or refresh_token_via_cdp(site)
+            if not token:
+                record_session_status(site, False, "mid-run token refresh failed")
+                break
             all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date)
             for m2 in media:  # retry the member's media once with new signatures
                 u2 = m2["file"]
@@ -320,8 +383,10 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
                     prof_got += 1
         if prof_got:
             print(f"    profile pictures: {prof_got}")
-        (OUT / slug / "profile" / "_profile.json").write_text(
-            json.dumps(members, ensure_ascii=False, indent=1), encoding="utf-8")
+        # _atomic_write mkdirs — the profile dir only exists when a thumbnail
+        # was downloaded (e.g. the org accounts 乃木坂46/櫻坂46 have none)
+        _atomic_write(OUT / slug / "profile" / "_profile.json",
+                      json.dumps(members, ensure_ascii=False, indent=1))
     except urllib.error.HTTPError as e:
         print(f"    profile HTTP {e.code}")
 
@@ -341,20 +406,19 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
     except urllib.error.HTTPError as e:
         print(f"    single HTTP {e.code}")
 
-    # manifest (media only) + full message archive + readable transcript
-    man = OUT / slug / "_manifest.json"
-    man.write_text(json.dumps(media, ensure_ascii=False, indent=1), encoding="utf-8")
-    msgs_f = OUT / slug / "_messages.json"
-    msgs_f.write_text(json.dumps(all_msgs, ensure_ascii=False, indent=1), encoding="utf-8")
-    tr = OUT / slug / "_transcript.md"
-    tr.write_text(
-        f"# {name}\n\n" + "\n---\n\n".join(transcript_line(m) for m in all_msgs),
-        encoding="utf-8",
-    )
+    # manifest (media only) + full message archive + readable transcript —
+    # atomic so the viewer's index builder never reads a half-written file
+    _atomic_write(OUT / slug / "_manifest.json",
+                  json.dumps(media, ensure_ascii=False, indent=1))
+    _atomic_write(OUT / slug / "_messages.json",
+                  json.dumps(all_msgs, ensure_ascii=False, indent=1))
+    _atomic_write(OUT / slug / "_transcript.md",
+                  f"# {name}\n\n" + "\n---\n\n".join(transcript_line(m) for m in all_msgs))
     # which site this folder belongs to — nothing else in media/ records it, and
     # the viewer needs it to put the member under the right site tab
     gid = member.get("group_id") or (all_msgs[0].get("group_id") if all_msgs else None)
-    (OUT / slug / "_member.json").write_text(
+    _atomic_write(
+        OUT / slug / "_member.json",
         json.dumps(
             {
                 "site": site.get("key", "?"),
@@ -366,7 +430,6 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
             ensure_ascii=False,
             indent=1,
         ),
-        encoding="utf-8",
     )
     return got, skipped
 
@@ -388,9 +451,13 @@ def main():
     site = SITES[args.site]
     token = get_token(site) or refresh_token_via_api(site) or refresh_token_via_cdp(site)
     if not token:
+        record_session_status(site, False,
+                              "no working token: session cookie expired/revoked "
+                              "and no CDP fallback")
         print("No token. Run `python tools/keep-alive.py` to renew via the "
               "session cookie, or re-login + `python tools/harvest-session.py`.")
         sys.exit(1)
+    record_session_status(site, True)
 
     try:
         groups = api_get("/groups?organization_id=1", token, site)

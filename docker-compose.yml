@@ -14,9 +14,12 @@ services:
       - "${VIEWER_PORT:-8080}:8080"
     volumes:
       - media:/data/media
+      - secrets:/data/logs    # the upload endpoint (§3.7) writes the fresh cookie here
     environment:
       PORT: 8080
       MEDIA_DIR: /data/media
+      LOGS_DIR: /data/logs
+      UPLOAD_TOKEN: ${UPLOAD_TOKEN:-}   # unset = endpoint disabled
     restart: unless-stopped
 
   syncer:
@@ -30,6 +33,7 @@ services:
       SYNC_INTERVAL: ${SYNC_INTERVAL:-6h}
       SYNC_SITES: ${SYNC_SITES:-nogizaka46}
       SYNC_FLAGS: ${SYNC_FLAGS:-}
+      NOTIFY_URL: ${NOTIFY_URL:-}   # optional push on failure/recovery (ntfy/SMTP/webhook)
     restart: unless-stopped
 
 volumes:
