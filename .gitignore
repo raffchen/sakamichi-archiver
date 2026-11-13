@@ -35,3 +35,6 @@ Thumbs.db
 
 # compose env (secrets/config — copy .env.example)
 .env
+
+# local working notes (not part of the repo)
+docs/deployment.md

@@ -174,7 +174,6 @@ and `_transcript.md`/`_messages.json` are regenerated.
 | `tools/grab-media.py` | the sync/downloader (see above) |
 | `tools/cdp.py` | Chrome DevTools Protocol helper (desktop Chrome, auto-probes IPv4/IPv6 loopback) |
 | `docs/api.md` | reverse-engineered API reference (auth, endpoints, message schema, pagination) |
-| `docs/deployment.md` | design doc: packaging the syncer + viewer as a Docker web service |
 | `logs/` | tokens (`api-token.txt`, `sakura-token.txt`), session cookies (`<site>-session-cookie.txt`) |
 | `viewer/` | local Svelte+Vite web viewer for `media/` (see `viewer/README.md`) |
 
@@ -211,7 +210,8 @@ docker compose up -d viewer # viewer only, or `up -d` for viewer + syncer
 # → http://localhost:8080
 ```
 
-The design and the full change list are in **`docs/deployment.md`**.
+
+
 
 - `npm run index` (runs automatically before `dev`) turns `media/` into
   `public/index.json` and generates video/photo posters with `ffmpeg`

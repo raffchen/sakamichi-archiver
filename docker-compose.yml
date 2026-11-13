@@ -1,4 +1,4 @@
-# Sakamichi archiver — viewer + syncer. See docs/deployment.md.
+# Sakamichi archiver — viewer + syncer.
 #
 #   viewer — serves the archive web UI on :8080 (index built at startup,
 #            re-indexed automatically when the syncer lands files)
