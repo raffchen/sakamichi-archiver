@@ -28,6 +28,7 @@ export const icons: Record<string, string> = {
   play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>`,
   pause: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4h4v16H7zM13 4h4v16h-4z"/></svg>`,
   mute: `<svg ${S} fill="currentColor"><path d="M4 9h3l4-4v14l-4-4H4z"/><path d="M15 9.5 20 15M20 9.5 15 15" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>`,
+  download: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"/><path d="M7.5 11.5 12 16l4.5-4.5"/><path d="M5 19.5h14"/></svg>`,
 }
 
 export const icon = (name: string) => icons[name] ?? ''

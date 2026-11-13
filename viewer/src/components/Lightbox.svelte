@@ -18,10 +18,16 @@
   })
 
   /* clicking the backdrop (anything that isn't the media, the nav buttons or
-     the close button) returns to the thread */
+     the close/download buttons) returns to the thread */
   function onBackdrop(e: MouseEvent) {
-    if ((e.target as HTMLElement)?.closest('button, img, video, audio')) return
+    if ((e.target as HTMLElement)?.closest('button, a, img, video, audio')) return
     closeLightbox()
+  }
+
+  /* download keeps the archive filename (<message-id>_<published-at>.<ext>) */
+  function fileName(m: (typeof lightbox.items)[number]) {
+    const p = m.file ?? m.thumb ?? ''
+    return decodeURIComponent(p.split('/').pop() || '') || 'media'
   }
 </script>
 
@@ -37,6 +43,9 @@
   <div class="lb-top">
     <span>{lightbox.i + 1} / {n}</span>
     {#if m}<span>{fmtDateTime(m.at)}</span> · <span>{m.type}</span>{/if}
+    {#if m?.file || m?.thumb}
+      <a class="dl" href={m.file ?? m.thumb!} download={fileName(m)} aria-label="download" title="download">{@html icon('download')}</a>
+    {/if}
     <button class="x" aria-label="close" onclick={closeLightbox}>✕</button>
   </div>
 

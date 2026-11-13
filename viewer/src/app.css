@@ -777,8 +777,25 @@ img {
   font-size: 13.5px;
   flex: none;
 }
-.lb-top .x {
+.lb-top .dl {
+  /* the download anchor takes the auto margin so ✕ stays a plain button */
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  border-radius: 50%;
+}
+.lb-top .dl:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.lb-top .dl svg {
+  width: 21px;
+  height: 21px;
+}
+.lb-top .x {
   font-size: 22px;
   color: #fff;
   width: 34px;
