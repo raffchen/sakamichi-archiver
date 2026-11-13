@@ -16,6 +16,7 @@ HEALTH_URL="http://SERVER-REDACTED:8484"
 if [[ "${1:-}" != "--no-push" ]]; then
     echo "==> pushing code"
     git push omv main
+    git remote get-url github >/dev/null 2>&1 && git push github main   # keep the GitHub mirror in sync
 fi
 
 echo "==> building + restarting on server"
