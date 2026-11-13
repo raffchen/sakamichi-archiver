@@ -65,13 +65,6 @@ After this, Chrome can be closed — daily syncs need no browser at all.
 The cookie is rotated on every renewal (handled automatically by the tools);
 if a cookie ever expires server-side, re-login and re-run the harvest.
 
-### 1.5 (Optional, legacy) Android emulator stack
-
-The `00-restart-all.sh` / `01-create-avd.sh` / `02-install-cert.sh` /
-`03-start-emulator.sh` scripts and the mitmproxy capture setup are kept for
-API traffic debugging only; they are **not** needed for the daily sync
-anymore. See git history for the full emulator-era instructions.
-
 ## 2. Daily workflow
 
 ```bash
@@ -180,41 +173,18 @@ and `_transcript.md`/`_messages.json` are regenerated.
 | `tools/keep-alive.py` | renew access tokens via `/v2/update_token` + session cookie (no browser; `--loop 45m` for daemon mode; persists cookie rotation) |
 | `tools/grab-media.py` | the sync/downloader (see above) |
 | `tools/cdp.py` | Chrome DevTools Protocol helper (desktop Chrome, auto-probes IPv4/IPv6 loopback) |
-| `tools/api-capture.py` | mitmdump addon: dumps JSON API responses to `logs/api/` (legacy/debug) |
-| `tools/media-debug.py` | mitmdump addon: logs media responses (legacy/debug) |
-| `tools/TlsTest.java` | on-device TLS verification client (emulator debugging, legacy) |
-| `ssl-unpinning.js` | Frida script for apps that pin certificates (legacy) |
-| `logs/` | tokens (`api-token.txt`, `sakura-token.txt`, `<site>-refresh-token.txt`), legacy capture logs, `api/` |
+| `logs/` | tokens (`api-token.txt`, `sakura-token.txt`), session cookies (`<site>-session-cookie.txt`) |
 | `viewer/` | local Svelte+Vite web viewer for `media/` (see `viewer/README.md`) |
 
-Legacy emulator scripts (`00-restart-all.sh` … `03-start-emulator.sh`,
-`tools/dns-strip-aaaa.py`) kept for traffic debugging only.
-
-## 5. Viewing traffic
-
-- `logs/mitmdump.log` — all flows, decrypted (unbuffered, live)
-- flows may be keyed by **IP** instead of hostname when the guest did its own
-  DNS — decryption still works
-- interactive UI: stop the script's mitmdump and run
-  `mitmweb --listen-port 8080` (UI at http://127.0.0.1:8081)
-- TLS check without any app:
-  `adb shell "CLASSPATH=/data/local/tmp/tlstest.dex app_process / TlsTest https://example.com/"`
+The early emulator + mitmproxy setup that discovered the session-cookie
+mechanism was removed after the desktop path proved out — see git history.
 
 ## 6. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| Emulator window dies silently | host GPU driver instability (VIDEO_TDR_FAILURE BSOD seen). Stack uses `-gpu swiftshader_indirect` software rendering to avoid it |
-| Emulator frozen / adb hangs | guest wedged (seen after network toggles / long Chrome sessions). `powershell Stop-Process -Id <qemu-pid> -Force` then `./00-restart-all.sh` |
-| `adb remount` fails | on a playstore image — recreate AVD with `01-create-avd.sh` |
-| Cert "installed" but apps reject it | Android 14 APEX store — `00-restart-all.sh` re-applies the overlay each boot |
-| Chrome rejects certs despite system CA | Chrome uses its own root store — that's why the `chrome-command-line` flag file exists (ignore-cert-errors + disable-quic) |
-| Google/CDN domains return 502 | AAAA/IPv6 issue — host has no IPv6 route; the dns-strip-aaaa proxy + `-dns-server 127.0.0.1` solve it |
-| Status bar "No internet connection" | captive-portal probe fails through MITM; already disabled via `settings put global captive_portal_detection_enabled 0` + `captive_portal_mode 0` (persisted) |
-| Git Bash mangles `/system/...` paths | scripts set `MSYS_NO_PATHCONV=1`; native tools get `cygpath`-converted paths |
-| `taskkill` silently fails in scripts | flags must go through `cmd /c "taskkill /F /IM ..."` when `MSYS_NO_PATHCONV=1` is set |
-| Can't type in the emulator | `hw.keyboard = yes` is set in the AVD config (Esc=Back, F1/F2=Menu) |
 | 400 "api_major_version" from API | missing `X-Talk-App-ID` / `X-Talk-App-Platform` headers — grab-media.py sends them |
+| HTTP 400 on `update_token` | session cookie expired/revoked — re-login in the Chrome window, then `python tools/harvest-session.py` |
 
 ## 7. Local viewer
 
