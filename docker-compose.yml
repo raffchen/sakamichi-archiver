@@ -9,7 +9,11 @@
 
 services:
   viewer:
-    build: ./viewer
+    build:
+      context: ./viewer
+      # Dockerfiles live in build/ (repo root); the build context stays the
+      # service directory, so each .dockerignore keeps applying as before
+      dockerfile: ../build/viewer.Dockerfile
     ports:
       - "${VIEWER_PORT:-8080}:8080"
     volumes:
@@ -23,7 +27,9 @@ services:
     restart: unless-stopped
 
   syncer:
-    build: ./tools
+    build:
+      context: ./tools
+      dockerfile: ../build/syncer.Dockerfile
     volumes:
       - media:/data/media
       - secrets:/data/logs
