@@ -14,7 +14,10 @@ npm install     # once
 npm run dev     # → http://localhost:5173  (also on your LAN, e.g. phone)
 ```
 
-`npm run dev` rebuilds the index first (`predev` → `npm run index`).
+`npm run dev` rebuilds the index first (`predev` → `npm run index`). **The dev
+server also watches `../media`** — after `python tools/grab-media.py` lands
+new files, the index rebuilds automatically (debounced) and any open viewer
+tabs live-reload. Nothing to do by hand.
 
 | script | what it does |
 |---|---|
@@ -89,11 +92,20 @@ scripts/shot.mjs            optional: screenshot every screen in headless Chrome
 
 ## Screens
 
-Talk list (per-site tabs, unread pills from localStorage, member artwork from
-`single/`) · thread (day separators, `New` divider, inline video with poster +
-"no audio" badge for `is_silent`, voice bubbles with a scrub bar) · gallery
-(all / photos / videos / voice, masonry) · search (all members, highlighted) ·
-archive info sheet (per-member counts and date ranges).
+Styled after the official Message apps (bottom nav icons traced from the real
+thing; the whole UI renders at a 125% app zoom, `--app-zoom` in `app.css`).
+
+- **Talk list** — per-site tabs, unread pills from localStorage, member
+  artwork from `single/`
+- **Thread** — day separators, `New` divider, inline video with poster and a
+  play overlay (tapping opens the lightbox), "no audio" badge for `is_silent`,
+  voice bubbles with a scrub bar
+- **Gallery** — filter tabs (All / Photos / Videos / Voice). Photos & videos
+  are a 4-per-row square grid grouped in ascending month sections, with
+duration badges on videos; the Voice tab is a flat list with unread dots and
+a bottom player bar (leaving the tab stops playback)
+- **Search** — full-text across every member, highlighted
+- **Info sheet** — per-member counts and date ranges
 
 The Blog / News / Official tabs are deliberately disabled — that content was
 never part of these archives.
