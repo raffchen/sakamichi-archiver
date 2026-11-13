@@ -1,0 +1,37 @@
+# Sakamichi archiver — viewer + syncer. See docs/deployment.md.
+#
+#   viewer — serves the archive web UI on :8080 (index built at startup,
+#            re-indexed automatically when the syncer lands files)
+#   syncer — loops grab-media.py over SYNC_SITES; secrets (tokens + rotating
+#            session cookies) live on their own volume at /data/logs
+#
+# .env.example documents the variables; `cp .env.example .env` to customize.
+
+services:
+  viewer:
+    build: ./viewer
+    ports:
+      - "${VIEWER_PORT:-8080}:8080"
+    volumes:
+      - media:/data/media
+    environment:
+      PORT: 8080
+      MEDIA_DIR: /data/media
+    restart: unless-stopped
+
+  syncer:
+    build: ./tools
+    volumes:
+      - media:/data/media
+      - secrets:/data/logs
+    environment:
+      MEDIA_DIR: /data/media
+      LOGS_DIR: /data/logs
+      SYNC_INTERVAL: ${SYNC_INTERVAL:-6h}
+      SYNC_SITES: ${SYNC_SITES:-nogizaka46}
+      SYNC_FLAGS: ${SYNC_FLAGS:-}
+    restart: unless-stopped
+
+volumes:
+  media: {}
+  secrets: {}

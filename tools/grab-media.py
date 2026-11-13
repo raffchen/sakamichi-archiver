@@ -19,6 +19,7 @@ Usage:
 """
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -28,8 +29,11 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+# Paths resolve from the script's location by default; in a container they are
+# overridden by env (see docs/deployment.md): MEDIA_DIR + LOGS_DIR.
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "media"
+OUT = Path(os.environ.get("MEDIA_DIR") or ROOT / "media")
+LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 
 SITES = {
     "nogizaka46": {
@@ -37,16 +41,16 @@ SITES = {
         "base": "https://api.message.nogizaka46.com/v2",
         "web": "https://message.nogizaka46.com",
         "app_id": "jp.co.sonymusic.communication.nogizaka 2.5",
-        "token_file": ROOT / "logs" / "api-token.txt",
-        "cookie_file": ROOT / "logs" / "nogizaka-session-cookie.txt",
+        "token_file": LOGS / "api-token.txt",
+        "cookie_file": LOGS / "nogizaka-session-cookie.txt",
     },
     "sakurazaka46": {
         "key": "sakurazaka46",
         "base": "https://api.message.sakurazaka46.com/v2",
         "web": "https://message.sakurazaka46.com",
         "app_id": "jp.co.sonymusic.communication.sakurazaka 2.5",
-        "token_file": ROOT / "logs" / "sakura-token.txt",
-        "cookie_file": ROOT / "logs" / "sakura-session-cookie.txt",
+        "token_file": LOGS / "sakura-token.txt",
+        "cookie_file": LOGS / "sakura-session-cookie.txt",
     },
 }
 

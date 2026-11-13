@@ -23,8 +23,13 @@ import { fileURLToPath } from 'node:url'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const VIEWER = path.resolve(HERE, '..')
 const ROOT = path.resolve(VIEWER, '..')
-const MEDIA = path.join(ROOT, 'media')
-const PUB = path.join(VIEWER, 'public')
+// In the container these are set by the environment (docs/deployment.md):
+//   MEDIA_DIR   the archive volume
+//   PUBLIC_DIR  where index.json + thumbs/ land (the server serves it at / and /thumbs)
+//   ARCHIVE_CONFIG  archive.config.json override
+const MEDIA = path.resolve(process.env.MEDIA_DIR || path.join(ROOT, 'media'))
+const PUB = path.resolve(process.env.PUBLIC_DIR || path.join(VIEWER, 'public'))
+const CONFIG = path.resolve(process.env.ARCHIVE_CONFIG || path.join(VIEWER, 'archive.config.json'))
 const THUMBS = path.join(PUB, 'thumbs')
 
 const argv = process.argv.slice(2)
@@ -138,17 +143,21 @@ function ffmpegTo(out, input, video) {
 
 // ---------------------------------------------------------------- main
 if (!fs.existsSync(MEDIA)) {
-  console.error(`no media/ archive at ${MEDIA}`)
-  process.exit(1)
+  // In a container the media volume can legitimately be empty on first boot —
+  // write an empty index instead of failing so the viewer still comes up; the
+  // fs-watch on the server re-indexes as soon as the syncer lands files.
+  console.warn(`no media/ archive at ${MEDIA} — writing an empty index`)
 }
-const config = readJson(path.join(VIEWER, 'archive.config.json')) ?? { members: {} }
+const config = readJson(CONFIG) ?? { members: {} }
 const displayName = config.display_name ?? 'raff'
 const sites = config.sites ?? {}
 
-const slugs = fs
-  .readdirSync(MEDIA, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
-  .map((d) => d.name)
+const slugs = fs.existsSync(MEDIA)
+  ? fs
+      .readdirSync(MEDIA, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+      .map((d) => d.name)
+  : []
 
 const members = []
 const thumbJobs = []
@@ -290,8 +299,13 @@ const index = {
   members,
 }
 
+// index.json is written atomically (tmp + rename): the server may serve it to
+// polling clients while a rebuild lands, so a truncated write must never be
+// observable under the final name.
 fs.mkdirSync(PUB, { recursive: true })
-fs.writeFileSync(path.join(PUB, 'index.json'), JSON.stringify(index))
+const indexTmp = path.join(PUB, 'index.json.tmp')
+fs.writeFileSync(indexTmp, JSON.stringify(index))
+fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
 
 say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media`)
 say(`thumbs: ${thumbNote}`)

@@ -17,28 +17,31 @@ Usage:
 import argparse
 import base64
 import json
+import os
 import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+# LOGS_DIR overrides the token/cookie directory (containers; docs/deployment.md)
 ROOT = Path(__file__).resolve().parent.parent
+LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 
 SITES = {
     "nogizaka": {
         "origin": "https://message.nogizaka46.com",
         "api": "https://api.message.nogizaka46.com/v2",
         "app_id": "jp.co.sonymusic.communication.nogizaka 2.5",
-        "cookie_file": ROOT / "logs" / "nogizaka-session-cookie.txt",
-        "token_file": ROOT / "logs" / "api-token.txt",
+        "cookie_file": LOGS / "nogizaka-session-cookie.txt",
+        "token_file": LOGS / "api-token.txt",
     },
     "sakura": {
         "origin": "https://message.sakurazaka46.com",
         "api": "https://api.message.sakurazaka46.com/v2",
         "app_id": "jp.co.sonymusic.communication.sakurazaka 2.5",
-        "cookie_file": ROOT / "logs" / "sakura-session-cookie.txt",
-        "token_file": ROOT / "logs" / "sakura-token.txt",
+        "cookie_file": LOGS / "sakura-session-cookie.txt",
+        "token_file": LOGS / "sakura-token.txt",
     },
 }
 

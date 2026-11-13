@@ -32,3 +32,6 @@ pi-session-*.html
 # OS junk
 Thumbs.db
 .DS_Store
+
+# compose env (secrets/config — copy .env.example)
+.env

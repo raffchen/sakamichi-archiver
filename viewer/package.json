@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "node scripts/build-index.mjs && vite build",
     "preview": "vite preview",
+    "start": "node server.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {

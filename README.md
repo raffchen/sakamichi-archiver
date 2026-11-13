@@ -173,6 +173,8 @@ and `_transcript.md`/`_messages.json` are regenerated.
 | `tools/keep-alive.py` | renew access tokens via `/v2/update_token` + session cookie (no browser; `--loop 45m` for daemon mode; persists cookie rotation) |
 | `tools/grab-media.py` | the sync/downloader (see above) |
 | `tools/cdp.py` | Chrome DevTools Protocol helper (desktop Chrome, auto-probes IPv4/IPv6 loopback) |
+| `docs/api.md` | reverse-engineered API reference (auth, endpoints, message schema, pagination) |
+| `docs/deployment.md` | design doc: packaging the syncer + viewer as a Docker web service |
 | `logs/` | tokens (`api-token.txt`, `sakura-token.txt`), session cookies (`<site>-session-cookie.txt`) |
 | `viewer/` | local Svelte+Vite web viewer for `media/` (see `viewer/README.md`) |
 
@@ -196,6 +198,20 @@ or uploaded.
 ```sh
 cd viewer && npm install && npm run dev   # http://localhost:5173
 ```
+
+#### Docker
+
+The same stack runs as two containers — a viewer (serves the archive, builds
+the index at startup and re-indexes as the syncer lands files) and a syncer
+(`grab-media.py` on a loop, tokens/cookies on their own volume):
+
+```sh
+cp .env.example .env        # optional: port, sites, interval
+docker compose up -d viewer # viewer only, or `up -d` for viewer + syncer
+# → http://localhost:8080
+```
+
+The design and the full change list are in **`docs/deployment.md`**.
 
 - `npm run index` (runs automatically before `dev`) turns `media/` into
   `public/index.json` and generates video/photo posters with `ffmpeg`
