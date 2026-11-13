@@ -1,0 +1,14 @@
+{
+  "display_name": "raff",
+  "sites": {
+    "nogizaka46": { "name": "乃木坂46", "roman": "Nogizaka46", "origin": "https://message.nogizaka46.com" },
+    "sakurazaka46": { "name": "櫻坂46", "roman": "Sakurazaka46", "origin": "https://message.sakurazaka46.com" }
+  },
+  "members": {
+    "池田_瑛紗": { "site": "nogizaka46", "roman": "Teresa Ikeda", "kana": "いけだ てれさ" },
+    "川﨑_桜": { "site": "nogizaka46", "roman": "Sakura Kawasaki", "kana": "かわさき さくら" },
+    "菅原_咲月": { "site": "nogizaka46", "roman": "Satsuki Sugawara", "kana": "すがわら さつき" },
+    "大越_ひなの": { "site": "nogizaka46", "roman": "Hinano Okoshi", "kana": "おおこし ひなの" },
+    "山川_宇衣": { "site": "sakurazaka46", "roman": "Ui Yamakawa", "kana": "やまかわ うい" }
+  }
+}

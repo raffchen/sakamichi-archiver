@@ -1,0 +1,988 @@
+/* ---------- themes: nogizaka = purple, sakurazaka = pale pink (per screenshots) */
+:root {
+  /* phone width: 430px minimum, ~32% of a 16:9 desktop (620px at 1920),
+     capped so 4K doesn't get silly */
+  --phone-w: clamp(430px, 32vw, 660px);
+  /* global UI scale — 1.25 ≈ the official app's density (browser-zoom look);
+     .phone and .sheet .card divide their viewport units by this so the
+     zoomed app still exactly fills the window */
+  --app-zoom: 1.25;
+  /* bubbles scale with the shell so wider windows don't leave a dead column:
+     62% of the message row, floored at the phone-app proportion (300px @ 430)
+     and capped so huge windows don't stretch them silly */
+  --bubble-w: max(300px, min(62%, 460px));
+  --bubble-media-w: max(300px, min(62%, 420px));
+  --page: #ffffff;
+  --ink: #1c1c1e;
+  --muted: #8b8b90;
+  --bubble: #f1f3f6;
+  --bubble-ink: #232326;
+  --line: #ececef;
+  --desk: #e8e8ee;
+  --bar: #f8f8f9;
+}
+html[data-site='nogizaka46'] {
+  --accent: #9c2fb5;
+  --accent-2: #b25fd0;
+  --head-fg: #ffffff;
+  --head-bg: linear-gradient(90deg, #b968d5 0%, #8d21ae 100%);
+  --section: #9c2fb5;
+  --ava-bg: #c8c2d4;
+  --badge: #8d21ae;
+}
+html[data-site='sakurazaka46'] {
+  --accent: #de8fa9;
+  --accent-2: #e9b7c9;
+  --head-fg: #e2879f;
+  --head-bg: linear-gradient(90deg, #f9d6e0 0%, #fdf3fa 45%, #efdef6 100%);
+  --section: #de8fa9;
+  --ava-bg: #4d648a;
+  --badge: #e2879f;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--desk);
+  color: var(--ink);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
+    'Meiryo', system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+img {
+  display: block;
+}
+
+/* ---------- phone shell */
+.phone {
+  /* --app-zoom scales everything; the /zoom keeps the rendered frame at
+     exactly one viewport tall/wide (i.e. the layout viewport shrinks,
+     exactly like Ctrl+plus browser zoom) */
+  height: calc(100dvh / var(--app-zoom));
+  width: min(calc(100vw / var(--app-zoom)), var(--phone-w));
+  zoom: var(--app-zoom);
+  margin: 0 auto;
+  background: var(--page);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+@media (min-width: 480px) {
+  .phone {
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.18);
+  }
+}
+
+/* ---------- headers */
+.head {
+  flex: none;
+  min-height: 56px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--head-bg);
+  color: var(--head-fg);
+  position: relative;
+  z-index: 5;
+}
+.head h1 {
+  font-size: 20px;
+  margin: 0 auto;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.head .title-left {
+  margin-right: auto;
+  font-size: 19px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.head .sp {
+  width: 34px;
+  flex: none;
+}
+.head .ic {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  position: relative;
+}
+/* Font Awesome header buttons */
+.head .ic .fa-solid {
+  font-size: 19px;
+}
+.head .ic.back .fa-solid {
+  font-size: 18px;
+}
+.nogizaka-line .head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #b968d5, #7d1f9e);
+}
+.sakura-line .head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #f0b9cd, #8f4fd0);
+}
+.count-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 9px;
+  background: var(--badge);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+}
+
+/* ---------- site switch */
+.sites {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+.sites button {
+  flex: 1;
+  padding: 7px 6px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: #f1f1f4;
+  color: #7c7c82;
+}
+.sites button.on {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------- scroll area */
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- home grid */
+.sec {
+  text-align: center;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--section);
+  padding: 18px 12px 2px;
+}
+.sec.dark {
+  color: #2f2f33;
+}
+.rule {
+  height: 1px;
+  background: var(--line);
+  margin: 18px 22px 0;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px 6px;
+  padding: 14px 10px 26px;
+}
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  position: relative;
+}
+.cell .ava {
+  width: 100%;
+  max-width: 112px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 18%;
+  background: var(--ava-bg);
+}
+.cell .nm {
+  color: var(--section);
+  font-size: 15px;
+  line-height: 1.25;
+}
+.cell .sub {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.pill {
+  position: absolute;
+  top: 0;
+  right: 8%;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--badge);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.muted-note {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 14px 16px 28px;
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* ---------- search */
+.searchbar {
+  padding: 12px;
+}
+.searchbar input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f6f6f8;
+  font: inherit;
+  font-size: 14.5px;
+}
+.hit {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  width: 100%;
+  text-align: left;
+}
+.hit .ava {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 18%;
+  background: var(--ava-bg);
+  flex: none;
+}
+.hit .t {
+  font-size: 14.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.hit .m {
+  display: block;
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-bottom: 3px;
+}
+.hit mark {
+  background: #ffe9a8;
+  color: inherit;
+}
+
+/* ---------- thread ----------
+   Matches the real chat: avatar row, "Name  11/12 3:57", gray bubble. */
+.thread {
+  padding: 8px 0 24px;
+}
+.msg {
+  display: flex;
+  gap: 10px;
+  padding: 0 12px;
+  margin-bottom: 20px;
+}
+.msg .ava {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 18%;
+  background: var(--ava-bg);
+  flex: none;
+}
+.msg .col {
+  flex: 1;
+  min-width: 0;
+}
+.msg .who-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 7px;
+}
+.msg .who {
+  font-size: 15.5px;
+  font-weight: 600;
+}
+.msg .when {
+  color: var(--muted);
+  font-size: 14.5px;
+}
+.bubble {
+  background: var(--bubble);
+  color: var(--bubble-ink);
+  border-radius: 4px 16px 16px 16px;
+  padding: 12px 14px;
+  max-width: var(--bubble-w);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 15.5px;
+  line-height: 1.55;
+  width: fit-content;
+}
+.bubble.media {
+  padding: 12px;
+  /* definite width, not fit-content — a fit-content parent with a width:100%
+     img child collapses to min-content and shrinks the media */
+  width: var(--bubble-media-w);
+  max-width: 100%;
+}
+.bubble .shot {
+  border-radius: 10px;
+  max-width: calc(var(--bubble-media-w) - 24px);
+  width: 100%;
+  cursor: zoom-in;
+  background: #dcdce2;
+}
+.shot-btn {
+  display: block;
+  width: fit-content;
+  max-width: calc(var(--bubble-media-w) - 24px);
+  background: none;
+}
+.bubble .cap {
+  margin-top: 10px;
+  font-size: 15px;
+}
+.video-wrap {
+  position: relative;
+  max-width: calc(var(--bubble-media-w) - 24px);
+}
+.video-wrap .poster {
+  border-radius: 10px;
+  width: 100%;
+  cursor: zoom-in;
+}
+.play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.play i {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+}
+.play svg {
+  width: 22px;
+  height: 22px;
+  fill: #fff;
+  margin-left: 3px;
+}
+.no-audio {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 10px;
+}
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+}
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+/* speaker button at the end of the row; hovering it (or the popup itself)
+   pops a vertical volume slider above it */
+.vol-wrap {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.vol-toggle {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex: none;
+}
+.vol-toggle .fa-solid {
+  font-size: 14px;
+}
+.vol-wrap:hover .vol-toggle {
+  color: var(--accent);
+}
+.vol-pop {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 5px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s;
+  z-index: 4;
+}
+/* invisible bridge so the pointer can travel from the button to the popup
+   without the popup dismissing mid-way */
+.vol-pop::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  height: 10px;
+}
+.vol-wrap:hover .vol-pop {
+  opacity: 1;
+  visibility: visible;
+}
+/* match the progress bar: same 4px rounded track, accent fill, small accent thumb.
+   --v is the fill fraction, set inline from the component. */
+.vol-slider {
+  display: block;
+  writing-mode: vertical-lr;
+  direction: rtl; /* bottom = 0, top = max */
+  width: 4px;
+  height: 88px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  background: linear-gradient(to top, var(--accent) var(--v, 100%), #d9dce3 var(--v, 100%));
+  cursor: pointer;
+}
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.vol-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.vol-slider::-moz-range-track {
+  background: transparent;
+}
+/* hover-only affordance: hide the volume control on coarse pointers (phones) —
+   their hardware volume buttons do the job */
+@media (hover: none), (pointer: coarse) {
+  .vol-wrap {
+    display: none;
+  }
+}
+.voice .go {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.voice .go svg {
+  width: 15px;
+  height: 15px;
+  fill: #fff;
+}
+/* scrubber: same look as the volume slider — 4px rounded track, accent fill
+   via --p (set inline from cur/dur), small accent thumb. Two-way bound with
+   the audio's currentTime. */
+.voice .scrub {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--p, 0%), #d9dce3 var(--p, 0%));
+  cursor: pointer;
+  min-width: 0;
+}
+.voice .scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.voice .scrub::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.voice .scrub::-moz-range-track {
+  background: transparent;
+}
+.voice .dur {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 38px;
+  text-align: right;
+}
+.missing {
+  color: #9a9aa0;
+  font-size: 13.5px;
+  background: #f4f4f6;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.daysep,
+.newsep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 14px 14px;
+  color: #9c9ca2;
+  font-size: 12.5px;
+}
+.daysep::before,
+.daysep::after,
+.newsep::before,
+.newsep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.newsep {
+  color: var(--accent);
+}
+.newsep::before,
+.newsep::after {
+  background: currentColor;
+}
+.top-load {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.fav {
+  color: #e0447c;
+  font-size: 14px;
+}
+
+/* ---------- gallery (media list, official-app style) ----------
+   icon tabs + month sections, oldest at the top, newest at the bottom
+   (the list opens scrolled to the bottom, like the real app) */
+.tabs-row {
+  flex: none;
+  display: flex;
+  justify-content: space-around;
+  border-bottom: 1px solid var(--line);
+  background: var(--page);
+}
+.tabs-row button {
+  position: relative;
+  padding: 10px 22px 9px;
+  color: #b4b4b9;
+}
+.tabs-row button svg {
+  width: 26px;
+  height: 26px;
+  stroke: currentColor;
+  fill: none;
+  display: block;
+}
+.tabs-row button.on {
+  color: var(--accent);
+}
+.tabs-row button.on::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.month {
+  margin: 18px 14px 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 0 12px 8px;
+}
+.mgrid figure {
+  position: relative;
+  margin: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #e6e6ea;
+  aspect-ratio: 1;
+}
+.mgrid .gbtn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+.mgrid .dur {
+  position: absolute;
+  right: 5px;
+  bottom: 3px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+}
+.mgrid .mut {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  color: #fff;
+}
+.mgrid .mut svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+/* play affordance on video thumbs */
+.mgrid .vplay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.mgrid .vplay i {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.mgrid .vplay svg {
+  width: 18px;
+  height: 18px;
+}
+/* global (not scoped) so the {@html} icon inside gets styled.
+   Voice cells carry the speaker glyph (distinguishes them from videos). */
+.vthumb {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--ava-bg);
+}
+.vthumb i {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.vthumb svg {
+  width: 22px;
+  height: 22px;
+}
+/* ---------- lightbox ---------- */
+.lb {
+  /* fullscreen + acrylic: the thread stays faintly visible behind a blur */
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(8, 10, 16, 0.62);
+  backdrop-filter: blur(18px) saturate(1.3);
+  display: flex;
+  flex-direction: column;
+}
+.lb-top,
+.lb-cap {
+  /* keep the header/caption readable on very wide screens */
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+}
+.lb-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  color: #e8e8ec;
+  font-size: 13.5px;
+  flex: none;
+}
+.lb-top .x {
+  margin-left: auto;
+  font-size: 22px;
+  color: #fff;
+  width: 34px;
+  height: 34px;
+}
+.lb-body {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 0 8px;
+  position: relative;
+}
+.lb-body img,
+.lb-body video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.lb-audio {
+  color: #ddd;
+  width: 88%;
+  margin: 0 auto;
+}
+/* side nav: whole half of the screen is a click zone; the glyph stays pinned
+   to the vertical center of the viewport and ignores the caption height.
+   Header, caption and the media itself sit above the zones so the close
+   button and video controls stay clickable. */
+.lb-nav {
+  position: fixed;
+  top: calc(50% - 50px);
+  width: 96px;
+  height: 100px;
+  /* above the media: video controls live at the bottom edge, the buttons at
+     the vertical center don't cover them */
+  z-index: 3;
+  border: 0;
+  background: none;
+}
+.lb-nav.l {
+  left: calc(19vw - 48px);
+}
+.lb-nav.r {
+  right: calc(19vw - 48px);
+}
+.lb-top,
+.lb-cap {
+  position: relative;
+  z-index: 2;
+}
+.lb-body img,
+.lb-body video,
+.lb-audio {
+  position: relative;
+  z-index: 2;
+}
+/* the visible chevron: a small acrylic chip, fixed to the viewport center,
+   transparent to clicks (the .lb-nav zone under it does the work). Hovering
+   the zone lights the chip up — see the sibling selector below. */
+.lb-glyph {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  font-size: 0;
+  z-index: 3;
+  pointer-events: none;
+  color: #fff;
+  opacity: 0.5;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.lb-glyph svg {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.6));
+}
+.lb-glyph.l {
+  left: calc(19vw - 38px);
+}
+.lb-glyph.r {
+  right: calc(19vw - 38px);
+}
+/* hovering anywhere in the click zone highlights that side's chip: brighter
+   fill and a soft outer glow — no hard ring around the edge */
+.lb-nav.l:hover ~ .lb-glyph.l,
+.lb-nav.r:hover ~ .lb-glyph.r {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 32px 6px rgba(255, 255, 255, 0.28);
+}
+.lb-cap {
+  flex: none;
+  color: #e9e9ee;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 15px;
+  max-height: 32dvh;
+  overflow-y: auto;
+}
+
+/* ---------- tab bar ---------- */
+.tabs {
+  flex: none;
+  display: flex;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.tabs button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: #b4b4b9;
+  font-size: 11.5px;
+  position: relative;
+}
+.tabs svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.1;
+}
+.tabs button.on {
+  color: var(--accent);
+}
+/* hover feedback only where there is something to open */
+.tabs button:not(.locked):hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 10px;
+}
+.tabs button.locked {
+  opacity: 0.62;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ---------- info sheet ---------- */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: end center;
+}
+.sheet .card {
+  /* zoomed to match the .phone frame; divide viewport units so the
+     rendered max-height stays 78dvh and the card never exceeds the window */
+  width: calc(100% / var(--app-zoom));
+  max-width: var(--phone-w);
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height: calc(78dvh / var(--app-zoom));
+  zoom: var(--app-zoom);
+  overflow-y: auto;
+}
+.sheet h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+.sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.sheet td {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.sheet td.r {
+  text-align: right;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sheet .note {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+
+/* ---------- fatal ---------- */
+.fatal {
+  max-width: 520px;
+  margin: 12vh auto;
+  padding: 24px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.fatal code {
+  background: #f1f1f4;
+  padding: 2px 6px;
+  border-radius: 5px;
+}

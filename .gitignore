@@ -1,0 +1,34 @@
+# secrets & runtime state (tokens, cookies, captures — never commit)
+logs/
+chrome-profile/
+
+# downloaded archive + generated viewer index/thumbs (rebuild with npm run index)
+media/
+viewer/public/index.json
+viewer/public/thumbs/
+
+# node / vite
+node_modules/
+viewer/dist/
+
+# python
+__pycache__/
+*.pyc
+
+# java/dex build artifacts from the SSL-unpinning experiment
+tools/TlsTest.class
+tools/classes.dex
+TlsTest.class
+classes.dex
+
+# emulator-side stray output
+*.dex
+
+# session dumps & dev screenshots
+pi-session-*.html
+*.png
+!docs/*.png
+
+# OS junk
+Thumbs.db
+.DS_Store
