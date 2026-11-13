@@ -210,6 +210,16 @@ docker compose up -d viewer # viewer only, or `up -d` for viewer + syncer
 # → http://localhost:8080
 ```
 
+#### Deploying to a server
+
+`./deploy.sh` pushes the repo to the server over git (the server's appdata
+directory is the `omv` remote, configured with
+`receive.denyCurrentBranch=updateInstead` so a push updates its working tree),
+rebuilds the images, recreates the containers and health-checks the viewer.
+One-time server setup: `raff` in the `docker` group, the directory registered
+as a safe.directory, and `git remote add omv ...` locally. Code changes deploy
+with `git commit && ./deploy.sh` — only changed files cross the wire.
+
 
 
 
