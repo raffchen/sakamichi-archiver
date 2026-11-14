@@ -21,7 +21,9 @@ services:
       # never the internet. Empty = all interfaces (local dev).
       - "${VIEWER_BIND_IP:-}:${VIEWER_PORT:-8080}:8080"
     volumes:
-      - media:/data/media
+      # MEDIA_HOST_DIR pins the archive to a host directory (e.g. a NAS pool
+      # share) so the files are browsable outside Docker; unset = named volume
+      - "${MEDIA_HOST_DIR:-media}:/data/media"
       - secrets:/data/logs    # the upload endpoint (§3.7) writes the fresh cookie here
     environment:
       PORT: 8080
@@ -37,7 +39,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"   # lets PUSH_URL reach services on the docker host
     volumes:
-      - media:/data/media
+      - "${MEDIA_HOST_DIR:-media}:/data/media"
       - secrets:/data/logs
     environment:
       MEDIA_DIR: /data/media
