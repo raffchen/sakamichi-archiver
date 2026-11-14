@@ -29,6 +29,11 @@ export const icons: Record<string, string> = {
   pause: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4h4v16H7zM13 4h4v16h-4z"/></svg>`,
   mute: `<svg ${S} fill="currentColor"><path d="M4 9h3l4-4v14l-4-4H4z"/><path d="M15 9.5 20 15M20 9.5 15 15" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>`,
   download: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"/><path d="M7.5 11.5 12 16l4.5-4.5"/><path d="M5 19.5h14"/></svg>`,
+  /* the message menu dots (official app: horizontal ··· at the row's end) */
+  kebab: `<svg ${S}><circle cx="5" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.9" fill="currentColor" stroke="none"/></svg>`,
+  link: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.8 4.7a4 4 0 0 1 5.7 5.7L16.6 12.3"/><path d="M13 17.5 11.2 19.3a4 4 0 0 1-5.7-5.7L7.4 11.7"/></svg>`,
+  check: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></svg>`,
+
 }
 
 export const icon = (name: string) => icons[name] ?? ''

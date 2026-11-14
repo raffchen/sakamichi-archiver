@@ -26,6 +26,26 @@ export const sentinel: Action<HTMLDivElement, { onLoad?: () => void; enabled?: b
   }
 }
 
+/** Calls onOutside on pointerdown outside the node (message menus). */
+export const clickOutside: Action<HTMLElement, () => void> = (node, onOutside) => {
+  let cb = onOutside
+  const on = (e: PointerEvent) => {
+    if (!node.contains(e.target as Node)) cb()
+  }
+  /* defer registration so the pointerdown that opened the menu doesn't
+     immediately fire back and close it */
+  const t = setTimeout(() => document.addEventListener('pointerdown', on), 0)
+  return {
+    update(next) {
+      cb = next
+    },
+    destroy() {
+      clearTimeout(t)
+      document.removeEventListener('pointerdown', on)
+    },
+  }
+}
+
 /** Global keyboard shortcuts (lightbox): ← → Esc. */
 export const keynav: Action<HTMLElement, { onLeft?: () => void; onRight?: () => void; onEsc?: () => void }> = (
   _node,

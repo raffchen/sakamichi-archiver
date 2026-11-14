@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { fade } from 'svelte/transition'
   import type { Member, Msg } from '../lib/types'
   import { fmtStamp } from '../lib/format'
+  import { clickOutside } from '../lib/actions'
   import { icon } from '../lib/icons'
   import VoiceMsg from './VoiceMsg.svelte'
 
@@ -17,6 +19,25 @@
   } = $props()
 
   const style = $derived(m.ratio ? `aspect-ratio:${m.ratio};` : '')
+
+  /* the ··· menu (official-app parity): copy a deep link to this message —
+     #/thread/<member>/<id> scrolls here on load, and media messages open
+     straight into the lightbox */
+  let menuOpen = $state(false)
+  let copied = $state(false)
+  const copyLink = async () => {
+    const url = `${location.origin}${location.pathname}#/thread/${encodeURIComponent(member.slug)}/${m.id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      copied = true
+    } catch {
+      copied = false // clipboard blocked (permissions/insecure context)
+    }
+    setTimeout(() => {
+      copied = false
+      menuOpen = false
+    }, 900)
+  }
 </script>
 
 <div class="msg {m.type}" id="m-{m.id}">
@@ -26,6 +47,24 @@
       <span class="who">{who}</span>
       <span class="when">{fmtStamp(m.at)}</span>
       {#if m.fav}<span class="fav" title="favorite">★</span>{/if}
+      <div class="menu-anchor" use:clickOutside={() => (menuOpen = false)}>
+        <button
+          class="kebab"
+          aria-label="message menu"
+          aria-expanded={menuOpen}
+          onclick={() => (menuOpen = !menuOpen)}
+        >
+          <i>{@html icon('kebab')}</i>
+        </button>
+        {#if menuOpen}
+          <div class="menu" transition:fade={{ duration: 90 }}>
+            <button onclick={copyLink}>
+              <i>{@html icon(copied ? 'check' : 'link')}</i>
+              {copied ? 'copied!' : 'copy link'}
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
 
     {#if m.type === 'text'}
