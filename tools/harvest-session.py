@@ -11,6 +11,7 @@ per-page queries), and saves them where keep-alive.py / grab-media.py expect:
 
 Run after any manual login:  python tools/harvest-session.py
 """
+import argparse
 import json
 import sys
 import time
@@ -19,7 +20,8 @@ from pathlib import Path
 
 import websocket
 
-HOSTS = ("http://127.0.0.1:9222", "http://[::1]:9222")
+# default :9222 (dedicated-profile desktop Chrome); the local API recorder
+# (tools/record-api.py, local-only) uses :9339 — pass --port to match it
 SITES = {
     ".message.nogizaka46.com": ("nogizaka", "logs/nogizaka-session-cookie.txt"),
     ".message.sakurazaka46.com": ("sakura", "logs/sakura-session-cookie.txt"),
@@ -27,19 +29,24 @@ SITES = {
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def browser_ws_url():
-    for host in HOSTS:
+def browser_ws_url(port: int) -> str:
+    last_err = None
+    for host in (f"http://127.0.0.1:{port}", f"http://[::1]:{port}"):
         try:
             ver = json.load(urllib.request.urlopen(host + "/json/version", timeout=5))
             return ver["webSocketDebuggerUrl"]
-        except Exception:
-            continue
-    raise SystemExit("no DevTools endpoint on :9222 — start desktop Chrome with "
-                     "--remote-debugging-port=9222")
+        except Exception as e:
+            last_err = e
+    raise SystemExit(f"no DevTools endpoint on :{port} ({last_err}) — start the "
+                     "browser with --remote-debugging-port=<port> first")
 
 
 if __name__ == "__main__":
-    ws = websocket.create_connection(browser_ws_url(), timeout=15, suppress_origin=True)
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--port", type=int, default=9222,
+                    help="browser DevTools port (9339 = tools/record-api.py)")
+    args = ap.parse_args()
+    ws = websocket.create_connection(browser_ws_url(args.port), timeout=15, suppress_origin=True)
     ws.send(json.dumps({"id": 1, "method": "Storage.getCookies", "params": {}}))
     res = None
     deadline = time.time() + 20
