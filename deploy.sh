@@ -11,7 +11,7 @@ set -euo pipefail
 
 SSH_TARGET="SERVER-REDACTED"
 APP_DIR="/srv/DISK-UUID-REDACTED/appdata/Sakamichi Archive"
-HEALTH_URL="http://SERVER-REDACTED:8484"
+HEALTH_URL="https://PUBLIC-URL-REDACTED"
 
 if [[ "${1:-}" != "--no-push" ]]; then
     echo "==> pushing code"
@@ -26,9 +26,11 @@ ssh "$SSH_TARGET" "cd '$APP_DIR' &&
     docker compose up -d"
 
 echo "==> waiting for viewer"
+# health-check on the server itself via the docker bridge gateway — the
+# viewer port is intentionally not reachable from outside (VIEWER_BIND_IP)
 for _ in $(seq 1 24); do
-    if curl -fsS "$HEALTH_URL/api/health" >/dev/null 2>&1; then
-        echo "==> deployed: viewer healthy at $HEALTH_URL"
+    if ssh "$SSH_TARGET" "curl -fsS http://172.17.0.1:${VIEWER_PORT:-8484}/api/health" >/dev/null 2>&1; then
+        echo "==> deployed: viewer healthy (public URL: $HEALTH_URL)"
         exit 0
     fi
     sleep 5
