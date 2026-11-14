@@ -66,10 +66,22 @@
       await tick()
       document.getElementById(`m-${focus}`)?.scrollIntoView({ block: 'center' })
       ui.focusId = null
+    } else if (boundary) {
+      // returning reader: open at the first unread message (the "New"
+      // divider), not the bottom — like the official app's unread jump
+      const idx = member.messages.findIndex((m) => m.at > boundary)
+      if (idx >= 0) {
+        shown = Math.max(shown, member.messages.length - idx + 5)
+        await tick()
+        document.querySelector('.newsep')?.scrollIntoView({ block: 'start' })
+        return
+      }
+      await tick()
+      if (el) el.scrollTop = el.scrollHeight // nothing unseen — newest
     } else {
       await tick()
       requestAnimationFrame(() => {
-        if (el) el.scrollTop = el.scrollHeight // open at the newest message, like the app
+        if (el) el.scrollTop = el.scrollHeight // first visit — newest, like the app
       })
     }
   })

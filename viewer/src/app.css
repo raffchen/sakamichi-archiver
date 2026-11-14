@@ -670,6 +670,8 @@ img {
   margin: 20px 14px 14px;
   color: #9c9ca2;
   font-size: 12.5px;
+  /* scroll-into-view landing pad: the divider opens the thread */
+  scroll-margin-top: 14px;
 }
 .daysep::before,
 .daysep::after,
