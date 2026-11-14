@@ -27,6 +27,15 @@
   // both grids show the Japanese name with the romanized name under it
   const label = (m: Member) => m.name
   const sub = (m: Member) => disp(m)
+
+  // per-group counts for the footer, one segment per site tab
+  const siteTotals = (k: string) => {
+    const ms = archive.members.filter((m) => m.site === k)
+    return {
+      messages: ms.reduce((a, m) => a + m.message_count, 0),
+      media: ms.reduce((a, m) => a + m.media_count, 0),
+    }
+  }
 </script>
 
 <header class="head">
@@ -84,7 +93,8 @@
 
   <div class="rule"></div>
   <p class="muted-note">
-    {archive.totals.messages} messages · {archive.totals.media} media<br />
+    {#each siteKeys as k, i (k)}{#if i} — {/if}{archive.sites[k]?.name ?? k}：{siteTotals(k).messages} messages · {siteTotals(k).media} media{/each}<br />
+    {archive.totals.messages} messages · {archive.totals.media} media total<br />
     sync: {fmtDateTime(archive.generated_at)}<br />
     tap a member to open the thread
   </p>
