@@ -41,3 +41,6 @@ docs/deployment.md
 
 # deployment secrets (never commit)
 ssh-creds.txt
+
+# local-only dev tool (server cookie pull/push — not part of the repo)
+tools/pull-secrets.sh
