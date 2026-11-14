@@ -62,18 +62,15 @@ export function showLightbox(items: Msg[], index: number, slug: string) {
   lightbox.i = index
   lightbox.memberSlug = slug
   lightbox.open = true
-  /* the lightbox is part of the URL: ui.focusId drives the #/<view>/<slug>/<id>
-     route (see App.svelte), so any open media has a copyable link */
-  ui.focusId = items[index]?.id ?? null
+  /* the URL follows via App.svelte's hash effect: an open lightbox is its
+     own #/media/<slug>/<id> route, whatever screen it was opened from */
 }
 export function closeLightbox() {
   lightbox.open = false
-  ui.focusId = null
 }
 export function stepLightbox(d: number) {
   /* clamp instead of wrap — the ends of the media list are hard stops */
   lightbox.i = Math.min(Math.max(lightbox.i + d, 0), lightbox.items.length - 1)
-  ui.focusId = lightbox.items[lightbox.i]?.id ?? null
 }
 
 /* "last read" markers -> the unread pill on the home grid + the "New" divider. */
