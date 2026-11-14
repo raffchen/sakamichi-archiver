@@ -15,7 +15,11 @@ services:
       # service directory, so each .dockerignore keeps applying as before
       dockerfile: ../build/viewer.Dockerfile
     ports:
-      - "${VIEWER_PORT:-8080}:8080"
+      # VIEWER_BIND_IP restricts the unauthenticated port: on a server fronted
+      # by a reverse proxy set it to the docker bridge gateway (172.17.0.1) so
+      # only the proxy and co-hosted containers (uptime-kuma) can reach it —
+      # never the internet. Empty = all interfaces (local dev).
+      - "${VIEWER_BIND_IP:-}:${VIEWER_PORT:-8080}:8080"
     volumes:
       - media:/data/media
       - secrets:/data/logs    # the upload endpoint (§3.7) writes the fresh cookie here
