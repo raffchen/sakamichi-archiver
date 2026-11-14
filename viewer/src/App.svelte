@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { Archive, Member } from './lib/types'
-  import { closeLightbox, info, lightbox, ui, type View } from './lib/store.svelte'
+  import { closeLightbox, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
   import Home from './components/Home.svelte'
   import InfoSheet from './components/InfoSheet.svelte'
@@ -27,8 +27,15 @@
     document.title = `${who} — 坂道 Message アーカイブ`
   })
 
-  /* hash <-> state: Back, reload and deep links all work */
+  /* hash <-> state: Back, reload and deep links all work. The URL names the
+     topmost screen: an open lightbox is its own #/media/<slug>/<id> route
+     whether it was opened from a thread or the gallery; without it the
+     thread/gallery addresses carry the scroll focus */
   function hashFor(v: View, slug: string | null, focus: number | null) {
+    if (lightbox.open) {
+      const cur = lightbox.items[lightbox.i]
+      if (cur) return `#/media/${encodeURIComponent(lightbox.memberSlug ?? '')}/${cur.id}`
+    }
     if (v === 'home') return ui.site === siteKeys[0] ? '#/' : `#/site/${encodeURIComponent(ui.site)}`
     const s = slug ? encodeURIComponent(slug) : ''
     return `#/${v}${s ? '/' + s : ''}${focus ? '/' + focus : ''}`
@@ -36,15 +43,31 @@
 
   function parseHash() {
     const parts = location.hash.replace(/^#\/?/, '').split('/')
-    const route = (parts[0] || 'home') as View | 'site'
+    const route = (parts[0] || 'home') as View | 'site' | 'media'
     const slug = parts[1] ? decodeURIComponent(parts[1]) : null
     const focus = parts[2] ? Number(parts[2]) : null
     const hit = slug ? archive.members.find((m) => m.slug === slug) : null
     if (hit?.site) ui.site = hit.site
+    /* Back/Forward or an edited URL: leaving the media route closes the
+       lightbox — its state is part of the address, not independent of it */
+    if (lightbox.open && route !== 'media') closeLightbox()
     if (route === 'thread' && hit) {
       ui.view = 'thread'
       ui.slug = slug
       ui.focusId = focus
+    } else if (route === 'media' && hit) {
+      /* pasted/refreshed link: the thread mounts behind the viewer, scrolled
+         to the message; a text id (or a stale one) degrades to that scroll */
+      ui.view = 'thread'
+      ui.slug = slug
+      ui.focusId = focus
+      const msg = focus != null ? hit.messages.find((m) => m.id === focus) : null
+      if (msg?.file && slug) {
+        const media = hit.messages.filter((m) => m.file)
+        showLightbox(media, media.findIndex((x) => x.id === focus), slug)
+      } else {
+        closeLightbox()
+      }
     } else if (route === 'site' && archive.sites[slug ?? '']) {
       ui.site = slug!
       ui.view = 'home'
@@ -53,7 +76,7 @@
     } else if (route === 'gallery' && hit) {
       ui.view = 'gallery'
       ui.slug = slug
-      ui.focusId = focus   // #/gallery/<slug>/<id> deep-links into the lightbox
+      ui.focusId = null   // the lightbox is addressed by #/media now
     } else if (route === 'search') {
       ui.view = 'search'
       ui.slug = null
@@ -68,9 +91,7 @@
   onMount(() => {
     parseHash()
     routed = true
-    // popstate = browser Back/Forward; hashchange = an edited/pasted #url.
-    // A dropped focus segment (Back out of a lightbox deep link) closes it.
-    if (lightbox.open && ui.focusId == null) closeLightbox()
+    // popstate = browser Back/Forward; hashchange = an edited/pasted #url
     window.addEventListener('popstate', parseHash)
     window.addEventListener('hashchange', parseHash)
     return () => {
@@ -82,13 +103,14 @@
   $effect(() => {
     if (!routed) return
     const want = hashFor(ui.view, ui.slug, ui.focusId)
-    if (location.hash !== want) {
-      // updating an existing focus segment (lightbox next/prev, a consumed
-      // thread focus) edits history in place — Back must close the lightbox,
-      // not walk through every photo; anything else is a new entry
-      if (/\/\d+$/.test(location.hash)) history.replaceState(null, '', want)
-      else history.pushState(null, '', want)
-    }
+    if (location.hash === want) return
+    /* on the media route, every change (next/prev, ✕/Back-close) edits the
+       same history entry — Back exits the viewer in one step; opening the
+       viewer from a thread/grid address is a new entry, so Back returns to
+       exactly where you were; a consumed focus segment cleans up in place */
+    if (/^#\/media\//.test(location.hash) || (!lightbox.open && /\/\d+$/.test(location.hash)))
+      history.replaceState(null, '', want)
+    else history.pushState(null, '', want)
   })
 </script>
 
