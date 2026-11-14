@@ -257,9 +257,22 @@ def slugify(name: str) -> str:
 
 
 def fetch_member_media(member_id: int, token: str, site: dict, full_history: bool,
-                       from_date: str) -> tuple[list, list]:
-    """Fetch all messages. Returns (all_messages, media_entries)."""
+                       from_date: str, slug: str = "") -> tuple[list, list]:
+    """Fetch all messages. Returns (all_messages, media_entries).
+
+    Seeded with the member's existing _messages.json: the timeline endpoints
+    only ever return the newest 200 messages, so without the disk merge every
+    routine round would clobber members with longer archives back down to
+    that window. Fresh API data wins for ids seen again; anything older the
+    API didn't return this round survives from disk.
+    """
     entries = {}
+    if slug:
+        try:
+            prev = json.loads((OUT / slug / "_messages.json").read_text(encoding="utf-8"))
+            entries = {m["id"]: m for m in prev}
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     try:
         tl = api_get(f"/groups/{member_id}/timeline?count=200&order=desc", token, site)
         for m in tl.get("messages", []):
@@ -334,7 +347,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
     print(f"[{mid}] {name}")
     got = skipped = 0
     try:
-        all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date)
+        all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date, slug)
     except urllib.error.HTTPError as e:
         if e.code == 401:
             return got, skipped
@@ -355,7 +368,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
             if not token:
                 record_session_status(site, False, "mid-run token refresh failed")
                 break
-            all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date)
+            all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date, slug)
             for m2 in media:  # retry the member's media once with new signatures
                 u2 = m2["file"]
                 d2 = OUT / slug / m2["type"] / f"{m2['id']}_{m2['published_at'].replace(':', '-')}.{ext_of(u2)}"
