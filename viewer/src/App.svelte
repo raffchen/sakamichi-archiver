@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { Archive, Member } from './lib/types'
-  import { info, lightbox, ui, type View } from './lib/store.svelte'
+  import { closeLightbox, info, lightbox, ui, type View } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
   import Home from './components/Home.svelte'
   import InfoSheet from './components/InfoSheet.svelte'
@@ -53,7 +53,7 @@
     } else if (route === 'gallery' && hit) {
       ui.view = 'gallery'
       ui.slug = slug
-      ui.focusId = null
+      ui.focusId = focus   // #/gallery/<slug>/<id> deep-links into the lightbox
     } else if (route === 'search') {
       ui.view = 'search'
       ui.slug = null
@@ -68,7 +68,9 @@
   onMount(() => {
     parseHash()
     routed = true
-    // popstate = browser Back/Forward; hashchange = an edited/pasted #url
+    // popstate = browser Back/Forward; hashchange = an edited/pasted #url.
+    // A dropped focus segment (Back out of a lightbox deep link) closes it.
+    if (lightbox.open && ui.focusId == null) closeLightbox()
     window.addEventListener('popstate', parseHash)
     window.addEventListener('hashchange', parseHash)
     return () => {
@@ -80,7 +82,13 @@
   $effect(() => {
     if (!routed) return
     const want = hashFor(ui.view, ui.slug, ui.focusId)
-    if (location.hash !== want) history.pushState(null, '', want)
+    if (location.hash !== want) {
+      // updating an existing focus segment (lightbox next/prev, a consumed
+      // thread focus) edits history in place — Back must close the lightbox,
+      // not walk through every photo; anything else is a new entry
+      if (/\/\d+$/.test(location.hash)) history.replaceState(null, '', want)
+      else history.pushState(null, '', want)
+    }
   })
 </script>
 

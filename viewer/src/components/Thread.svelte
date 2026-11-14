@@ -65,7 +65,13 @@
       if (idx >= 0) shown = Math.max(shown, member.messages.length - idx + 5)
       await tick()
       document.getElementById(`m-${focus}`)?.scrollIntoView({ block: 'center' })
-      ui.focusId = null
+      // deep link to a media message: open the lightbox on it and keep the
+      // focus segment in the URL while it's open; text messages consume it
+      if (idx >= 0 && member.messages[idx].file) {
+        openMedia(member.messages[idx])
+      } else {
+        ui.focusId = null
+      }
     } else {
       await tick()
       requestAnimationFrame(() => {
