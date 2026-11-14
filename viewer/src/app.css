@@ -431,23 +431,29 @@ img {
   width: fit-content;
 }
 .bubble.media {
+  /* flex column so Svelte's preserved whitespace text nodes can't create
+     line-box struts (a stray line-height of empty space below the media);
+     the caption stays a normal flex item */
+  display: flex;
+  flex-direction: column;
   padding: 12px;
   /* definite width, not fit-content — a fit-content parent with a width:100%
-     img child collapses to min-content and shrinks the media */
+     img child collapses to min-content and shrinks the media. The bubble is
+     the ONLY width-definer: inner media just fills it */
   width: var(--bubble-media-w);
   max-width: 100%;
 }
 .bubble .shot {
+  display: block;
   border-radius: 10px;
-  max-width: calc(var(--bubble-media-w) - 24px);
   width: 100%;
   cursor: zoom-in;
   background: #dcdce2;
 }
 .shot-btn {
-  display: block;
-  width: fit-content;
-  max-width: calc(var(--bubble-media-w) - 24px);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   background: none;
 }
 .bubble .cap {
@@ -456,9 +462,11 @@ img {
 }
 .video-wrap {
   position: relative;
-  max-width: calc(var(--bubble-media-w) - 24px);
+  display: flex;
+  flex-direction: column;
 }
 .video-wrap .poster {
+  display: block;
   border-radius: 10px;
   width: 100%;
   cursor: zoom-in;
