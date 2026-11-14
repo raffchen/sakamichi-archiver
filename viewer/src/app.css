@@ -1,18 +1,16 @@
 /* ---------- themes: nogizaka = purple, sakurazaka = pale pink (per screenshots) */
-/* 4K-class displays only — main.ts decides by physical resolution
-   (devicePixelRatio × screen.width ≥ 3000) + desktop pointer */
-html.hidpi {
-  --app-zoom: 1.25;
-}
 :root {
   /* phone width: 430px minimum, ~32% of a 16:9 desktop (620px at 1920),
      capped so 4K doesn't get silly */
   --phone-w: clamp(430px, 32vw, 660px);
-  /* global UI scale — 1.25 ≈ the official app's density (browser-zoom look);
-     .phone and .sheet .card divide their viewport units by this so the
-     zoomed app still exactly fills the window. 1.25 only applies on
-     4K-class displays (main.ts adds html.hidpi); regular displays and
-     phones — already DPI-normalized — render 1:1 */
+  /* global UI scale — 1:1 fallback; grows continuously with the viewport
+     via the @supports rule below so the app keeps a constant physical
+     proportion on any display: 1:1 on phones/laptops/1080p, ~1.25 at
+     4K-class widths, scaling smoothly beyond (8K, snapped windows, anything
+     — no display classes, no thresholds to miss). 3072px = the CSS viewport
+     width that yields 1.25 on a 3840-physical-px display — the density the
+     UI was calibrated at; retune there. .phone and the lightbox divide
+     their viewport units by this so the zoomed app still fills the window */
   --app-zoom: 1;
   /* bubbles scale with the shell so wider windows don't leave a dead column:
      62% of the message row, floored at the phone-app proportion (300px @ 430)
@@ -27,6 +25,14 @@ html.hidpi {
   --line: #ececef;
   --desk: #e8e8ee;
   --bar: #f8f8f9;
+}
+/* continuous UI scale replacing the 1:1 fallback above (see the comment in
+   :root). tan(atan2()) is the CSS idiom for the ratio of two lengths (calc
+   can't divide lengths); @supports keeps pre-trig browsers (pre-2023) at 1:1 */
+@supports (zoom: tan(atan2(100vw, 3072px))) {
+  :root {
+    --app-zoom: max(1, tan(atan2(100vw, 3072px)));
+  }
 }
 html[data-site='nogizaka46'] {
   --accent: #9c2fb5;

@@ -8,18 +8,6 @@ import '@fortawesome/fontawesome-free/css/solid.min.css'
 const target = document.getElementById('app')
 if (!target) throw new Error('#app missing')
 
-// 4K-class display detection for the app-density zoom (html.hidpi in
-// app.css). Physical resolution — devicePixelRatio × screen.width — is the
-// reliable signal: 4K hits ≥3000 at any OS/browser zoom, while 1080p and
-// phones (already DPI-normalized, and excluded again by pointer: fine) stay
-// below. Runs before mount so the first paint already has the right scale.
-if (
-  window.devicePixelRatio * screen.width >= 3000 &&
-  matchMedia('(pointer: fine)').matches
-) {
-  document.documentElement.classList.add('hidpi')
-}
-
 /**
  * Load the archive. The production server exposes it at /api/index (rebuilt
  * live as the syncer lands files); in `vite dev`/`preview` the generated
