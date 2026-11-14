@@ -44,3 +44,8 @@ ssh-creds.txt
 
 # local-only dev tool (server cookie pull/push — not part of the repo)
 tools/pull-secrets.sh
+
+# api recorder (browser capture — local exploration tool)
+tools/record-api.py
+logs/api-capture-*.jsonl
+logs/chrome-blog-profile/
