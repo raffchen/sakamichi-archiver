@@ -324,7 +324,9 @@ def fetch_member_media(member_id: int, token: str, site: dict, full_history: boo
 def transcript_line(m: dict) -> str:
     """Render one message as markdown."""
     ts = m["published_at"].replace("T", " ")[:16]
-    text = (m.get("text") or "").replace("%%%", "raff")
+    # %%% (or full-width ％％％ — some accounts use those) is the app's
+    # placeholder for the subscriber's display name
+    text = re.sub(r"[%％]{3}", "raff", m.get("text") or "")
     if m["type"] in MEDIA_TYPES:
         fname = f"{m['id']}_{m['published_at'].replace(':', '-')}.{ext_of(m['file'])}"
         rel = f"{m['type']}/{fname}"

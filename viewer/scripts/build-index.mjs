@@ -197,8 +197,9 @@ for (const slug of slugs) {
       type: m.type,
       at: m.published_at,
       updated: m.updated_at,
-      // %%% is the app's placeholder for the subscriber's display name
-      text: (m.text ?? '').replaceAll('%%%', displayName) || null,
+      // %%% (or full-width ％％％ — some accounts use those) is the app's
+      // placeholder for the subscriber's display name
+      text: (m.text ?? '').replace(/[%％]{3}/g, displayName) || null,
       silent: !!m.is_silent,
       fav: !!m.is_favorite,
       mime: hit ? (MIME[m.type] ?? null) : null,
