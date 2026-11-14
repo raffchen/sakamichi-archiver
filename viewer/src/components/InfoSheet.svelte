@@ -55,20 +55,13 @@
       index: {fmtDateTime(archive.generated_at)}<br />
       timestamps shown in your browser's timezone ({Intl.DateTimeFormat().resolvedOptions().timeZone})<br />
       <br />
-      refresh: <code>python tools/grab-media.py --site … --member-id …</code> then
-      <code>cd viewer && npm run index</code><br />
+      new messages appear here automatically after each sync<br />
       blog / news / official tabs are not part of this archive.
     </p>
   </div>
 </div>
 
 <style>
-  code {
-    background: #f1f1f4;
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 12px;
-  }
   .close {
     position: absolute;
     top: 10px;

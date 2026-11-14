@@ -59,7 +59,7 @@
   {#if !members.length}
     <p class="muted-note">
       このサイトはアーカイブされていません<br />
-      nothing archived for this site yet — run <code>tools/grab-media.py --site {ui.site} --full-history</code>
+      nothing archived for this site yet
     </p>
   {/if}
 

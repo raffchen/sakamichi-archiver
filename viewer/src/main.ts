@@ -60,8 +60,7 @@ loadArchive()
   })
   .catch((err) => {
     target.innerHTML =
-      `<div class="fatal"><h2>index.json が見つかりません</h2>` +
+      `<div class="fatal"><h2>index が見つかりません</h2>` +
       `<p>${String(err?.message ?? err)}</p>` +
-      `<p>Build it first: <code>cd viewer &amp;&amp; npm run index</code><br>` +
-      `then <code>npm run dev</code> (the <code>predev</code> hook builds the index automatically).</p></div>`
+      `<p>The index is generated when the server starts and refreshed as new media arrives.</p></div>`
   })
