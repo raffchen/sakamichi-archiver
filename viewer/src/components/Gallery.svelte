@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import type { Member, Msg } from '../lib/types'
   import { openMember, showLightbox, seen, ui } from '../lib/store.svelte'
   import { fmtDur, fmtMediaStamp, fmtMonth } from '../lib/format'
@@ -43,6 +44,14 @@
     const i = sorted.findIndex((x) => x.id === m.id)
     if (i >= 0) showLightbox(sorted, i, member.slug)
   }
+
+  /* deep link: #/gallery/<slug>/<id> opens straight into the lightbox */
+  onMount(() => {
+    if (ui.focusId == null) return
+    const i = sorted.findIndex((x) => x.id === ui.focusId)
+    if (i >= 0) showLightbox(sorted, i, member.slug)
+    else ui.focusId = null
+  })
 
   /* the official voice tab: a flat list (no month headers) with a bottom
      player bar; tapping a row plays it there.
