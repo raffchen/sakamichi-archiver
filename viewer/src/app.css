@@ -1,12 +1,19 @@
 /* ---------- themes: nogizaka = purple, sakurazaka = pale pink (per screenshots) */
+/* 4K-class displays only — main.ts decides by physical resolution
+   (devicePixelRatio × screen.width ≥ 3000) + desktop pointer */
+html.hidpi {
+  --app-zoom: 1.25;
+}
 :root {
   /* phone width: 430px minimum, ~32% of a 16:9 desktop (620px at 1920),
      capped so 4K doesn't get silly */
   --phone-w: clamp(430px, 32vw, 660px);
   /* global UI scale — 1.25 ≈ the official app's density (browser-zoom look);
      .phone and .sheet .card divide their viewport units by this so the
-     zoomed app still exactly fills the window */
-  --app-zoom: 1.25;
+     zoomed app still exactly fills the window. 1.25 only applies on
+     4K-class displays (main.ts adds html.hidpi); regular displays and
+     phones — already DPI-normalized — render 1:1 */
+  --app-zoom: 1;
   /* bubbles scale with the shell so wider windows don't leave a dead column:
      62% of the message row, floored at the phone-app proportion (300px @ 430)
      and capped so huge windows don't stretch them silly */
