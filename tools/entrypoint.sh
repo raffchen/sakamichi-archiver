@@ -7,6 +7,9 @@
 #   SYNC_SITES     sites to sync, space-separated ("nogizaka46 sakurazaka46")
 #   SYNC_FLAGS     extra grab-media flags, e.g. "--full-history" for the very
 #                  first sync of a long archive (removed afterwards)
+#   PUSH_URL       optional Uptime Kuma push monitor URL — one heartbeat per
+#                  site round: status=up on success, status=down on failure;
+#                  a dead container simply stops pushing (Kuma marks it down)
 #
 # A failing round (e.g. expired session cookie → HTTP 400 on update_token)
 # never kills the container: it just logs loudly; recovery is the session
@@ -15,14 +18,40 @@ set -u
 INTERVAL="${SYNC_INTERVAL:-6h}"
 SITES="${SYNC_SITES:-nogizaka46}"
 FLAGS="${SYNC_FLAGS:-}"
+PUSH_BASE="${PUSH_URL:-}"
+PUSH_BASE="${PUSH_BASE%%\?*}"   # strip the sample query string from the URL
 
-echo "[syncer] sites='$SITES' interval=$INTERVAL flags='$FLAGS'"
+# $1=status(up|down) $2=msg $3=ping ms (optional). Heartbeat failures are
+# logged, never fatal — monitoring must not break syncing.
+kuma() {
+  [ -n "$PUSH_BASE" ] || return 0
+  python - "$PUSH_BASE" "$@" <<'PY'
+import sys, urllib.parse, urllib.request
+base, status, msg = sys.argv[1], sys.argv[2], sys.argv[3]
+q = {"status": status, "msg": msg}
+if len(sys.argv) > 4 and sys.argv[4]:
+    q["ping"] = sys.argv[4]
+try:
+    urllib.request.urlopen(f"{base}?{urllib.parse.urlencode(q)}", timeout=10)
+except Exception as e:
+    print(f"[syncer] kuma push failed: {e}")
+PY
+}
+
+echo "[syncer] sites='$SITES' interval=$INTERVAL flags='$FLAGS' push='${PUSH_BASE:+on}'"
 while :; do
   for site in $SITES; do
     echo "[syncer] === $site $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
-    # shellcheck disable=SC2086  # FLAGS is intentionally word-split
-    python grab-media.py --site "$site" --subscribed $FLAGS \
-      || echo "[syncer] $site: sync FAILED (see log above)"
+    t0=$(date +%s)
+    if # shellcheck disable=SC2086  # FLAGS is intentionally word-split
+      python grab-media.py --site "$site" --subscribed $FLAGS
+    then
+      kuma up "$site OK" $(( ($(date +%s) - t0) * 1000 ))
+    else
+      rc=$?
+      echo "[syncer] $site: sync FAILED rc=$rc (see log above)"
+      kuma down "$site sync failed (exit $rc)"
+    fi
   done
   echo "[syncer] sleeping $INTERVAL"
   sleep "$INTERVAL"

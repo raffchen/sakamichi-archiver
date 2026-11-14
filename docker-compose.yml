@@ -30,6 +30,8 @@ services:
     build:
       context: ./tools
       dockerfile: ../build/syncer.Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets PUSH_URL reach services on the docker host
     volumes:
       - media:/data/media
       - secrets:/data/logs
@@ -40,6 +42,7 @@ services:
       SYNC_SITES: ${SYNC_SITES:-nogizaka46}
       SYNC_FLAGS: ${SYNC_FLAGS:-}
       NOTIFY_URL: ${NOTIFY_URL:-}   # optional push on failure/recovery (ntfy/SMTP/webhook)
+      PUSH_URL: ${PUSH_URL:-}       # optional Uptime Kuma push monitor (heartbeat per sync round)
     restart: unless-stopped
 
 volumes:
