@@ -365,6 +365,59 @@ img {
   color: var(--muted);
   font-size: 14.5px;
 }
+.msg .menu-anchor {
+  position: relative;
+  margin-left: auto;
+  display: flex;
+}
+.msg .kebab {
+  color: var(--muted);
+  padding: 0 4px;
+  border-radius: 6px;
+  line-height: 0;
+}
+.msg .kebab svg {
+  width: 19px;
+  height: 19px;
+}
+.msg .kebab:hover,
+.msg .kebab[aria-expanded='true'] {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.05);
+}
+.msg .menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 30;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+  min-width: 170px;
+}
+.msg .menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--ink);
+  border-radius: 7px;
+  text-align: left;
+  white-space: nowrap;
+}
+.msg .menu button:hover {
+  background: var(--bubble);
+}
+.msg .menu svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
 .bubble {
   background: var(--bubble);
   color: var(--bubble-ink);
