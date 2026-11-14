@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
+  import { fade } from 'svelte/transition'
   import type { Archive, Member, Msg } from '../lib/types'
   import { markSeen, openGallery, seenAt, showLightbox, ui } from '../lib/store.svelte'
   import { dayKey, fmtDayLabel } from '../lib/format'
   import { disp } from '../lib/display'
   import { sentinel } from '../lib/actions'
+  import { icon } from '../lib/icons'
   import Message from './Message.svelte'
 
   let { archive, member }: { archive: Archive; member: Member } = $props()
@@ -55,6 +57,17 @@
     if (el) el.scrollTop = el.scrollHeight - prevH + prevTop
   }
 
+  /* floating jump-to-newest chip (official-app parity): appears once you
+     scroll up from the bottom, hides again when you return */
+  let showJump = $state(false)
+  function onScroll() {
+    if (!el) return
+    showJump = el.scrollHeight - el.scrollTop - el.clientHeight > 160
+  }
+  function jumpToBottom() {
+    el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }
+
   onMount(async () => {
     boundary = seenAt(member.slug) ?? ''
     markSeen(member.slug, member.last)
@@ -102,7 +115,7 @@
   </button>
 </header>
 
-<div class="screen" bind:this={el}>
+<div class="screen" bind:this={el} onscroll={onScroll}>
   <div class="thread">
     <div class="top-load" use:sentinel={{ onLoad: loadOlder, enabled: !atStart }}>
       {atStart
@@ -120,4 +133,16 @@
       {/if}
     {/each}
   </div>
+
+  {#if showJump}
+    <button
+      class="jump-bottom"
+      aria-label="jump to newest message"
+      title="jump to newest"
+      onclick={jumpToBottom}
+      transition:fade={{ duration: 120 }}
+    >
+      <i>{@html icon('chevron-down')}</i>
+    </button>
+  {/if}
 </div>
