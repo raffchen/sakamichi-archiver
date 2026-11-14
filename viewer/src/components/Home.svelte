@@ -93,7 +93,7 @@
 
   <div class="rule"></div>
   <p class="muted-note">
-    {#each siteKeys as k, i (k)}{#if i} — {/if}{archive.sites[k]?.name ?? k}：{siteTotals(k).messages} messages · {siteTotals(k).media} media{/each}<br />
+    {site.name}：{siteTotals(ui.site).messages} messages · {siteTotals(ui.site).media} media<br />
     {archive.totals.messages} messages · {archive.totals.media} media total<br />
     sync: {fmtDateTime(archive.generated_at)}<br />
     tap a member to open the thread
