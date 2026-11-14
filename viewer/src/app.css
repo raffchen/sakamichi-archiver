@@ -228,6 +228,8 @@ img {
 .jump-bottom svg {
   width: 28px;
   height: 28px;
+  /* arrows read better nudged toward the direction they point */
+  transform: translateY(2px);
 }
 .jump-bottom:active {
   transform: scale(0.94);
