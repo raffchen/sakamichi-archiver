@@ -321,7 +321,7 @@ def main() -> None:
             print(f"=== {site_key}: {len(members)} blog member(s) ===")
             for info in members.values():
                 key = info["display"].replace(" ", "_")
-                why = skip_reason(site_key, info["member_uuid"], key, gens)
+                why = skip_reason(site_key, info["uuid"], key, gens)
                 if why:
                     print(f"  {key}: skipped ({why})")
                     continue
@@ -354,7 +354,7 @@ def main() -> None:
                 if info is None:
                     print(f"  {name}: no blog member match — skipped")
                     continue
-                why = skip_reason(site_key, info["member_uuid"], name, gens)
+                why = skip_reason(site_key, info["uuid"], name, gens)
                 if why:
                     print(f"  {name}: skipped ({why})")
                     continue
