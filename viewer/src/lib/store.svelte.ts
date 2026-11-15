@@ -2,7 +2,7 @@ import type { Msg } from './types'
 
 /* Shared app state (Svelte 5 runes in a .svelte.ts module). */
 
-export type View = 'home' | 'thread' | 'gallery' | 'search'
+export type View = 'home' | 'thread' | 'gallery' | 'search' | 'blog'
 
 export const ui = $state({
   view: 'home' as View,
@@ -10,6 +10,9 @@ export const ui = $state({
   focusId: null as number | null,
   site: 'nogizaka46',
   query: '',
+  /* blog tab: directory -> member post list -> post detail */
+  blogMember: null as string | null, // directory key under media/blogs/
+  blogPost: null as number | null,
 })
 
 export const lightbox = $state({
@@ -35,8 +38,15 @@ export function goHome() {
   ui.slug = null
   ui.focusId = null
 }
+export function openBlog(member: string | null = null, post: number | null = null) {
+  ui.view = 'blog'
+  ui.blogMember = member
+  ui.blogPost = post
+}
 export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
+  else if (ui.view === 'blog' && ui.blogPost != null) openBlog(ui.blogMember)
+  else if (ui.view === 'blog' && ui.blogMember) openBlog()
   else goHome()
 }
 

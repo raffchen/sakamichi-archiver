@@ -1,15 +1,17 @@
 <script lang="ts">
   import type { Archive } from '../lib/types'
-  import { goHome, info, ui, unreadCount } from '../lib/store.svelte'
+  import { goHome, openBlog, info, ui, unreadCount } from '../lib/store.svelte'
   import { icon } from '../lib/icons'
 
   let { archive }: { archive: Archive } = $props()
 
   const isSaka = $derived(ui.site === 'sakurazaka46')
 
+  const hasBlogs = $derived(!!archive.blogs?.members.some((b) => b.site === ui.site))
+
   const tabs = $derived([
     { id: 'talk', label: 'Talk', ic: 'talk', locked: false },
-    { id: 'blog', label: 'Blog', ic: 'blog', locked: true },
+    { id: 'blog', label: 'Blog', ic: 'blog', locked: !hasBlogs },
     { id: 'news', label: 'News', ic: 'news', locked: true },
     { id: 'official', label: 'Official', ic: isSaka ? 'official-saka' : 'official', locked: true },
     { id: 'info', label: 'Info', ic: 'info', locked: false },
@@ -27,12 +29,13 @@
 <nav class="tabs">
   {#each tabs as t (t.id)}
     <button
-      class:on={t.id === 'talk' && onTalk()}
+      class:on={(t.id === 'talk' && onTalk()) || (t.id === 'blog' && ui.view === 'blog')}
       class:locked={t.locked}
       disabled={t.locked}
       title={t.locked ? 'not part of the archive' : ''}
       onclick={() => {
         if (t.id === 'talk') goHome()
+        else if (t.id === 'blog') openBlog()
         else if (!t.locked) info.open = true
       }}
     >

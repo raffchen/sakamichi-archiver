@@ -46,10 +46,36 @@ export interface Site {
   origin?: string
 }
 
+export interface BlogMemberInfo {
+  key: string // directory name under media/blogs/
+  site: string | null
+  uuid: string // message/blog member_uuid (joins blog-generations.json)
+  name: string
+  gen: string | null
+  gen_num: number | null
+  graduated: boolean
+  count: number
+  first: string | null
+  last: string | null
+  thumb: string | null // latest post's thumbnail -> directory card
+}
+
+export interface BlogEntry {
+  id: number
+  title: string | null
+  creator: string | null
+  at: string // "YYYY/MM/DD HH:mm:ss" site-local
+  link: string | null
+  thumbnail: string | null // "files/..." relative to the member's blog dir
+  content: string | null // post HTML (detail view only; list has `lead`)
+  lead?: string | null
+}
+
 export interface Archive {
   generated_at: string
   display_name: string
   sites: Record<string, Site>
   totals: { messages: number; media: number }
   members: Member[]
+  blogs?: { members: BlogMemberInfo[] }
 }

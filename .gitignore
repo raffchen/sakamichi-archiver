@@ -49,3 +49,4 @@ tools/pull-secrets.sh
 tools/record-api.py
 logs/api-capture-*.jsonl
 logs/chrome-blog-profile/
+*.jpg

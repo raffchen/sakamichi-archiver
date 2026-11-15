@@ -145,7 +145,58 @@ typed `voice` — not `audio` — on this platform).
 Re-running is always safe — existing files are skipped; new messages are added
 and `_transcript.md`/`_messages.json` are regenerated.
 
-## 3. How it works
+## 3. Blog tab archiving (no subscription needed)
+
+The app's Blog tab mirrors the members' **official-site diaries**, which are
+public and expose a plain JSON API — no session, no token, safe to run
+anywhere:
+
+```
+nogizaka46:  https://www.nogizaka46.com/s/n46/api/json/diary?cd=MEMBER&get=B&member_id=<uuid>&getnum=<count>&st=<start>
+sakurazaka46: https://sakurazaka46.com/s/s46app/api/json/diary?cd=blog&get=B&member_id=<uuid>&getnum=<count>&st=<start>
+```
+
+(The URL templates themselves come from the message API's
+`GET /v2/blog-sources?organization_id=1`, which needs a Bearer token once to
+discover — see `docs/api.md`. The diary calls afterwards need nothing.)
+
+```bash
+python tools/grab-blog.py                 # the members in archive.config.json
+python tools/grab-blog.py --all           # EVERY blog member, both sites
+python tools/grab-blog.py --member 山川_宇衣
+python tools/grab-blog.py --full          # refetch everything, ignore skip
+```
+
+Per member this fetches diary pages (50 entries per page, newest first, stops
+at already-archived ids), downloads thumbnails + inline images with retries,
+and stores:
+
+```
+media/blogs/<member>/blog/_blogs.json   entries, oldest first (title, html
+                                        content, timestamps, thumbnails)
+media/blogs/<member>/blog/files/*       downloaded images (HTML rewritten to
+                                        local `files/...` paths)
+```
+
+`blogs/` is a sibling of the message archives (not inside them), so members
+without a message subscription still get blog directories. The grabber is
+incremental and resumable — re-running only picks up new posts.
+
+Member roster + generations: `--all` uses `GET /v2/blog-members` (token
+required the first time; the roster is cached under `logs/blog-members-<site>.json`)
+and joins it with `viewer/public/blog-generations.json` — a static
+`{<site>: {<member_uuid>: {name, gen, gen_num, graduated, ...}}}` map built
+from the official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
+(e.g. 四期生リレー) are skipped.
+
+### 3.1 Blog data in the viewer
+
+The Blog tab in the viewer (directory grouped by 期生 → member post list →
+post detail) is served by the same containers — see `viewer/README.md`. The
+index carries one entry per blog member (`blogs.members[]` in `index.json`);
+post bodies are fetched lazily from `/api/blog/...`.
+
+## 4. How it works
 
 - **Tokens**: access tokens are ~1 h JWTs (`{"exp", "sub"}`, HS256-ish). The
   web app renews them via `POST /v2/update_token` with a long-lived refresh
@@ -165,16 +216,17 @@ and `_transcript.md`/`_messages.json` are regenerated.
   page immediately after fetching it; on 403 (expired signature) it re-syncs
   with a fresh token and retries.
 
-## 4. Files reference
+## 5. Files reference
 
 | Path | Purpose |
 |---|---|
 | `tools/harvest-session.py` | browser-level cookie read: saves the session cookie after any login (run once per login) |
 | `tools/keep-alive.py` | renew access tokens via `/v2/update_token` + session cookie (no browser; `--loop 45m` for daemon mode; persists cookie rotation) |
-| `tools/grab-media.py` | the sync/downloader (see above) |
+| `tools/grab-media.py` | the message sync/downloader (see above) |
+| `tools/grab-blog.py` | blog archiver — public official-site diary APIs, no session (see §3) |
 | `tools/cdp.py` | Chrome DevTools Protocol helper (desktop Chrome, auto-probes IPv4/IPv6 loopback) |
-| `docs/api.md` | reverse-engineered API reference (auth, endpoints, message schema, pagination) |
-| `logs/` | tokens (`api-token.txt`, `sakura-token.txt`), session cookies (`<site>-session-cookie.txt`) |
+| | `docs/api.md` | reverse-engineered API reference (auth, endpoints, message schema, pagination, blog APIs) |
+| `logs/` | tokens (`api-token.txt`, `sakura-token.txt`), session cookies (`<site>-session-cookie.txt`), blog roster cache (`blog-members-<site>.json`) |
 | `viewer/` | local Svelte+Vite web viewer for `media/` (see `viewer/README.md`) |
 
 The early emulator + mitmproxy setup that discovered the session-cookie
@@ -191,8 +243,8 @@ mechanism was removed after the desktop path proved out — see git history.
 
 Browse what was synced without the app — `viewer/` is a Svelte 5 + Vite UI that
 looks like the real Message apps (Talk list → thread → photo/video/voice), plus
-gallery, search and archive stats. It reads `media/` directly; nothing is copied
-or uploaded.
+the Blog tab (official-site diaries, §3), a media gallery, search and archive
+stats. It reads `media/` directly; nothing is copied or uploaded.
 
 ```sh
 cd viewer && npm install && npm run dev   # http://localhost:5173
