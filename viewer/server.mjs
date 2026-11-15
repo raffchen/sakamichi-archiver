@@ -62,6 +62,22 @@ const getEmbedder = () =>
    Both tunable per env (stage 6 tunes them with logged distributions). */
 const SEMANTIC_MIN_COS = Number(process.env.SEMANTIC_MIN_COS) || 0.65
 const SEMANTIC_GAP = Number(process.env.SEMANTIC_GAP) || 0.06
+/* stage 6: set SEMANTIC_LOG=1 to log per-query score distributions (tuning aid) */
+const SEMANTIC_LOG = process.env.SEMANTIC_LOG === '1'
+
+/* long-lived read-only handle for the DB-backed /api/blog feed (O(1) reads;
+   any failure falls back to the file scan per request) */
+let feedDb = null
+const getFeedDb = () => {
+  if (feedDb !== null) return feedDb
+  try {
+    feedDb = fs.existsSync(DB_PATH) ? new DatabaseSync(DB_PATH, { readOnly: true }) : false
+  } catch (e) {
+    say(`! feed DB unavailable (${e.message}) — /api/blog reads files`)
+    feedDb = false
+  }
+  return feedDb || null
+}
 const PORT = Number(process.env.PORT || 8080)
 const INDEX = path.join(PUB, 'index.json')
 /* stage 4: how many recent messages keep their text in the SLIM /api/index
@@ -506,26 +522,30 @@ const app = http.createServer(async (req, res) => {
         }
       }
       results.sort((a, b) => a.score - b.score) // bm25: lower (more negative) = better
-      // stage 5: the related (semantic) section — blog posts near the query in
-      // embedding space, chunked + KNN'd in vec_posts. Never fused with exact;
-      // exact hits are deduped out.
+      // stage 5/6: the related (semantic) section — blog posts near the query
+      // in embedding space (chunked, vec_posts) plus whole-message vectors
+      // (vec_messages). Never fused with exact; exact hits are deduped out.
       const related = []
       const embedder = await getEmbedder()
       if (embedder) {
         const qv = await embedder.query(raw).catch(() => null)
         if (qv) {
+          const qbuf = Buffer.from(qv.buffer, qv.byteOffset, qv.byteLength)
+          const dists = []
           try {
-            const knn = db
-              .prepare(
-                `SELECT rowid, distance FROM vec_posts WHERE embedding MATCH ? ORDER BY distance LIMIT 60`,
-              )
-              .all(Buffer.from(qv.buffer, qv.byteOffset, qv.byteLength))
+            const members = new Map(
+              (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
+            )
+            const knnPosts = db
+              .prepare(`SELECT rowid, distance FROM vec_posts WHERE embedding MATCH ? ORDER BY distance LIMIT 60`)
+              .all(qbuf)
             const resolve = db.prepare(
               `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member, p.at, p.body
                FROM post_chunks c JOIN posts p ON p.rowid = c.post_rowid WHERE c.vec_rowid = ?`,
             )
             const byPost = new Map()
-            for (const k of knn) {
+            for (const k of knnPosts) {
+              dists.push(k.distance)
               const p = resolve.get(k.rowid)
               if (!p) continue
               const cos = 1 - k.distance
@@ -533,14 +553,19 @@ const app = http.createServer(async (req, res) => {
               const cur = byPost.get(kkey)
               if (!cur || cos > cur.score) byPost.set(kkey, { ...p, score: cos })
             }
-            const exactKeys = new Set(results.filter((r) => r.type === 'blog').map((r) => `${r.key}/${r.id}`))
+            const exactBlog = new Set(results.filter((r) => r.type === 'blog').map((r) => `${r.key}/${r.id}`))
+            const exactMsg = new Set(results.filter((r) => r.type === 'message').map((r) => `${r.slug}/${r.id}`))
+            /* two rank groups (posts/messages don't share a score scale — passage
+               length biases), each with its own gap rule + budget, merged after */
+            const BLOG_CAP = 12
+            const MSG_CAP = 8
             const cand = [...byPost.values()]
-              .filter((c) => !exactKeys.has(`${c.key}/${c.id}`) && c.score >= SEMANTIC_MIN_COS)
+              .filter((c) => !exactBlog.has(`${c.key}/${c.id}`) && c.score >= SEMANTIC_MIN_COS)
               .sort((a, b) => b.score - a.score)
             const best = cand[0]?.score ?? 0
             for (const c of cand) {
               if (c.score < best - SEMANTIC_GAP) break
-              if (related.length >= 20) break
+              if (related.length >= BLOG_CAP) break
               related.push({
                 type: 'blog',
                 key: c.key,
@@ -552,6 +577,46 @@ const app = http.createServer(async (req, res) => {
                 score: c.score,
                 snippet: (c.body ?? '').slice(0, 120) + ((c.body ?? '').length > 120 ? '…' : ''),
               })
+            }
+            // stage 6: whole-message vectors (second rank group, same cutoffs)
+            const knnMsgs = db
+              .prepare(`SELECT rowid, distance FROM vec_messages WHERE embedding MATCH ? ORDER BY distance LIMIT 60`)
+              .all(qbuf)
+            const resolveMsg = db.prepare(
+              `SELECT slug, msg_id AS id, at, type, text FROM messages WHERE vec_rowid = ?`,
+            )
+            const candMsg = []
+            for (const k of knnMsgs) {
+              dists.push(k.distance)
+              const m = resolveMsg.get(k.rowid)
+              if (!m) continue
+              const cos = 1 - k.distance
+              if (exactMsg.has(`${m.slug}/${m.id}`) || cos < SEMANTIC_MIN_COS) continue
+              const mem = members.get(m.slug)
+              candMsg.push({
+                type: 'message',
+                slug: m.slug,
+                id: m.id,
+                at: m.at,
+                mtype: m.type,
+                member: mem ? (mem.roman ?? mem.name) : m.slug.replace(/_/g, ' '),
+                site: mem?.site ?? null,
+                avatar: mem?.avatar ?? null,
+                score: cos,
+                snippet: (m.text ?? '').slice(0, 120) + ((m.text ?? '').length > 120 ? '…' : ''),
+              })
+            }
+            candMsg.sort((a, b) => b.score - a.score)
+            const bestMsg = candMsg[0]?.score ?? 0
+            for (const c of candMsg) {
+              if (c.score < bestMsg - SEMANTIC_GAP) break
+              if (related.length >= BLOG_CAP + MSG_CAP) break
+              related.push(c)
+            }
+            related.sort((a, b) => b.score - a.score) // cosine: higher is better
+            if (SEMANTIC_LOG && dists.length) {
+              const sorted = [...dists].sort((a, b) => a - b).map((d) => (1 - d).toFixed(3))
+              say(`semantic: "${raw}" n=${dists.length} cos ${sorted[0]}…${sorted.slice(0, 20).join(' ')} min=${sorted.at(-1)}`)
             }
           } catch (e) {
             say(`! related search failed (${e.message}) — exact section unaffected`)
@@ -628,6 +693,34 @@ const app = http.createServer(async (req, res) => {
     const q = new URL(req.url, 'http://x').searchParams
     const site = q.get('site')
     const limit = Math.min(Number(q.get('limit')) || 60, 200)
+    /* stage 6: read the feed from the search DB when possible — O(1) instead
+       of re-reading every member's _blogs.json per request. Falls back to the
+       file scan whenever the DB is absent/corrupt (graceful, as always). */
+    let feed = null
+    try {
+      const sdb = getFeedDb()
+      if (sdb) {
+        feed = sdb
+          .prepare(
+            `SELECT member_key AS "key", post_id AS id, title, at, member_name AS member, site, thumb, body
+             FROM posts ${site ? 'WHERE site = ?' : ''} ORDER BY at DESC LIMIT ?`,
+          )
+          .all(...(site ? [site] : []), limit)
+          .map((r) => ({
+            key: r.key,
+            member: r.member,
+            site: r.site,
+            id: r.id,
+            title: r.title,
+            at: r.at,
+            thumbnail: r.thumb ? `/media/blogs/${encodeURIComponent(r.key)}/blog/${r.thumb}` : null,
+            lead: (r.body ?? '').slice(0, 140) || null, // body is stored HTML-stripped
+          }))
+      }
+    } catch (e) {
+      feed = null // corrupt DB / missing member dir — fall back below
+    }
+    if (feed) return sendJson(res, 200, { posts: feed })
     const root = path.join(MEDIA, 'blogs')
     const posts = []
     if (fs.existsSync(root)) {

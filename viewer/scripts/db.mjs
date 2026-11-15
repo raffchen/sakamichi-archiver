@@ -13,7 +13,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { EMBED_DIM } from './embed.mjs'
 
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 const md5 = (s) => createHash('md5').update(s ?? '').digest('hex')
 
 const SCHEMA = `
@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS posts (
   src_mtime   INTEGER,           -- _blogs.json mtime at index time
   reading     TEXT,              -- kuromoji readings, hiragana (stage 3)
   chunks_md5  TEXT,              -- stage 5: set once the body's chunks are embedded
+  thumb       TEXT,              -- thumbnail filename (stage 6: /api/blog feed from DB)
   PRIMARY KEY (member_key, post_id)
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -40,6 +41,8 @@ CREATE TABLE IF NOT EXISTS messages (
   text       TEXT,
   body_md5   TEXT NOT NULL,
   reading    TEXT,               -- kuromoji readings, hiragana (stage 3)
+  vec_rowid  INTEGER,            -- stage 6: rowid in vec_messages (whole-message embed)
+  embed_md5  TEXT,               -- stage 6: md5(text) when the vector was stored
   PRIMARY KEY (slug, msg_id)
 );`
 
@@ -81,7 +84,8 @@ CREATE TABLE IF NOT EXISTS post_chunks (
   md5        TEXT NOT NULL,
   UNIQUE (post_rowid, idx)
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS vec_posts USING vec0(embedding float[${EMBED_DIM}] distance_metric=cosine);`
+CREATE VIRTUAL TABLE IF NOT EXISTS vec_posts USING vec0(embedding float[${EMBED_DIM}] distance_metric=cosine);
+CREATE VIRTUAL TABLE IF NOT EXISTS vec_messages USING vec0(embedding float[${EMBED_DIM}] distance_metric=cosine);`
 
 /* sentence-boundary chunking for e5-small's 512-token context; hard-splits
    pathological sentences. ~480 chars ≈ the model's window for Japanese. */
@@ -150,6 +154,19 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
       db.exec('DROP TABLE IF EXISTS post_chunks; DROP TABLE IF EXISTS vec_posts')
       log('search schema v3 → v4: chunk + vector tables reset (will re-embed)')
     }
+    if (ver > 0 && ver < 5) {
+      // stage 6: message vectors + per-post thumb for the DB-backed /api/blog
+      // feed; derived vector table reset (messages re-embed lazily via
+      // embed_md5, posts via chunks_md5)
+      const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((r) => r.name)
+      if (!cols('messages').includes('vec_rowid')) {
+        db.exec('ALTER TABLE messages ADD COLUMN vec_rowid INTEGER')
+        db.exec('ALTER TABLE messages ADD COLUMN embed_md5 TEXT')
+      }
+      if (!cols('posts').includes('thumb')) db.exec('ALTER TABLE posts ADD COLUMN thumb TEXT')
+      db.exec('DROP TABLE IF EXISTS vec_messages')
+      log('search schema v4 → v5: message vectors + post thumbs')
+    }
     if (embed) db.exec(SCHEMA_VEC)
     db.exec(SCHEMA_FTS)
     // readings for any base row that lacks one (the v3 migration lands here;
@@ -206,10 +223,10 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
         try {
           const sel = db.prepare('SELECT post_id, body_md5, rowid, chunks_md5 FROM posts WHERE member_key = ?')
           const ins = db.prepare(
-            'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime, reading) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime, reading, thumb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
           const upd = db.prepare(
-            'UPDATE posts SET site = ?, member_uuid = ?, member_name = ?, title = ?, at = ?, body = ?, body_md5 = ?, src_mtime = ?, reading = ? WHERE member_key = ? AND post_id = ?',
+            'UPDATE posts SET site = ?, member_uuid = ?, member_name = ?, title = ?, at = ?, body = ?, body_md5 = ?, src_mtime = ?, reading = ?, thumb = ? WHERE member_key = ? AND post_id = ?',
           )
           const del = db.prepare('DELETE FROM posts WHERE member_key = ? AND post_id = ?')
           /* chunk/vector maintenance (stage 5) — no-op without an embedder.
@@ -252,20 +269,24 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
             const seen = new Set()
             for (const p of m.posts) {
               seen.add(String(p.id))
-              const digest = md5(p.body)
+              // digest covers title + thumb too (they feed /api/blog + the UI),
+              // but chunks_md5 stays body-only so text edits don't re-embed
+              const digest = md5(`${p.body}\u0000${p.title ?? ''}\u0000${p.thumb ?? ''}`)
+              const wantChunks = md5(chunkText(p.body).join('\u0000'))
               const prev = existing.get(String(p.id))
               let rowid
-              let dirty = true // chunk work needed (or skipped when !embed)
+              // chunk work needed only when the body (not the digest) changed
+              const dirty = !!embed && (!prev || prev.chunks !== wantChunks)
               if (!prev) {
                 const reading = tokenize?.(`${p.title ?? ''} ${p.body ?? ''}`) ?? null
                 rowid = ins.run(
-                  memberKey, m.site, String(p.id), m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, reading,
+                  memberKey, m.site, String(p.id), m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, reading, p.thumb ?? null,
                 ).lastInsertRowid
                 fts.postsIns.run(rowid, p.title, p.body, reading)
                 stat.added++
               } else if (prev.md5 !== digest) {
                 const reading = tokenize?.(`${p.title ?? ''} ${p.body ?? ''}`) ?? null
-                upd.run(m.site, m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, reading, memberKey, String(p.id))
+                upd.run(m.site, m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, reading, p.thumb ?? null, memberKey, String(p.id))
                 fts.postsDel.run(prev.rowid)
                 fts.postsIns.run(prev.rowid, p.title, p.body, reading)
                 rowid = prev.rowid
@@ -273,10 +294,8 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
               } else {
                 rowid = prev.rowid
                 stat.unchanged++
-                // chunks are keyed to the body — unchanged body ⇒ check the gate only
-                dirty = prev.chunks !== md5(chunkText(p.body).join('\u0000'))
               }
-              if (embed && dirty) await embedBody(rowid, p.body)
+              if (dirty) await embedBody(rowid, p.body)
             }
             for (const [gone, prev] of existing) {
               if (!seen.has(gone)) {
@@ -314,11 +333,11 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
         return stat
       },
       /** Mirror messages. rowsBySlug: Map<slug, [{ id, at, type, text }]>. */
-      syncMessages(rowsBySlug) {
-        const stat = { added: 0, updated: 0, removed: 0, unchanged: 0 }
+      async syncMessages(rowsBySlug) {
+        const stat = { added: 0, updated: 0, removed: 0, unchanged: 0, embedded: 0 }
         db.exec('BEGIN')
         try {
-          const sel = db.prepare('SELECT msg_id, body_md5, rowid FROM messages WHERE slug = ?')
+          const sel = db.prepare('SELECT msg_id, body_md5, rowid, embed_md5, vec_rowid FROM messages WHERE slug = ?')
           const ins = db.prepare(
             'INSERT INTO messages (slug, msg_id, at, type, text, body_md5, reading) VALUES (?, ?, ?, ?, ?, ?, ?)',
           )
@@ -326,30 +345,53 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
             'UPDATE messages SET at = ?, type = ?, text = ?, body_md5 = ?, reading = ? WHERE slug = ? AND msg_id = ?',
           )
           const del = db.prepare('DELETE FROM messages WHERE slug = ? AND msg_id = ?')
+          /* whole-message vectors (stage 6): messages are short — one embedding
+             each, no chunking; empty texts (pure media) get none */
+          const vecDel = db.prepare('DELETE FROM vec_messages WHERE rowid = ?')
+          const vecIns = db.prepare('INSERT INTO vec_messages (embedding) VALUES (?)')
+          const setVec = db.prepare('UPDATE messages SET vec_rowid = ?, embed_md5 = ? WHERE rowid = ?')
+          const embedMsg = async (rowid, text, prevVec) => {
+            if (!text || !text.trim()) return
+            const v = await embed.passage(text).catch(() => null)
+            if (!v) return
+            if (prevVec) vecDel.run(prevVec) // clear the previous vector
+            const { lastInsertRowid } = vecIns.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength))
+            setVec.run(lastInsertRowid, md5(text), rowid)
+            stat.embedded++
+          }
           for (const [slug, msgs] of rowsBySlug) {
-            const existing = new Map(sel.all(slug).map((r) => [r.msg_id, { md5: r.body_md5, rowid: r.rowid }]))
+            const existing = new Map(
+              sel.all(slug).map((r) => [r.msg_id, { md5: r.body_md5, rowid: r.rowid, embed: r.embed_md5, vec: r.vec_rowid }]),
+            )
             const seen = new Set()
             for (const msg of msgs) {
               seen.add(Number(msg.id))
               const digest = md5(msg.text)
               const prev = existing.get(Number(msg.id))
+              let rowid
+              let vecDirty = true
               if (!prev) {
                 const reading = tokenize?.(msg.text ?? '') ?? null
-                const { lastInsertRowid } = ins.run(slug, Number(msg.id), msg.at, msg.type, msg.text, digest, reading)
-                fts.msgsIns.run(lastInsertRowid, msg.text, reading)
+                rowid = ins.run(slug, Number(msg.id), msg.at, msg.type, msg.text, digest, reading).lastInsertRowid
+                fts.msgsIns.run(rowid, msg.text, reading)
                 stat.added++
               } else if (prev.md5 !== digest) {
                 const reading = tokenize?.(msg.text ?? '') ?? null
                 upd.run(msg.at, msg.type, msg.text, digest, reading, slug, Number(msg.id))
                 fts.msgsDel.run(prev.rowid)
                 fts.msgsIns.run(prev.rowid, msg.text, reading)
+                rowid = prev.rowid
                 stat.updated++
               } else {
+                rowid = prev.rowid
                 stat.unchanged++
+                vecDirty = prev.embed !== digest
               }
+              if (embed && vecDirty && msg.text) await embedMsg(rowid, msg.text, prev?.vec ?? null)
             }
             for (const [gone, prev] of existing) {
               if (!seen.has(gone)) {
+                if (embed && prev.vec) vecDel.run(prev.vec)
                 fts.msgsDel.run(prev.rowid)
                 del.run(slug, gone)
                 stat.removed++
@@ -363,10 +405,13 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
             .map((r) => r.slug)
             .filter((s) => !slugs.includes(s))
           if (stale.length) {
-            const rowids = db.prepare('SELECT rowid FROM messages WHERE slug = ?')
+            const rows = db.prepare('SELECT rowid, vec_rowid FROM messages WHERE slug = ?')
             const delMember = db.prepare('DELETE FROM messages WHERE slug = ?')
             for (const s of stale) {
-              for (const r of rowids.all(s)) fts.msgsDel.run(r.rowid)
+              for (const r of rows.all(s)) {
+                if (embed && r.vec_rowid) vecDel.run(r.vec_rowid)
+                fts.msgsDel.run(r.rowid)
+              }
               stat.removed += Number(db.prepare('SELECT COUNT(*) c FROM messages WHERE slug = ?').get(s).c)
               delMember.run(s)
             }
