@@ -1,164 +1,162 @@
-# Message (Sony Music) → Media Sync — Complete Guide
+# Sakamichi Archiver — Message/blog archive + local web viewer
 
-Pure-host downloader (`tools/grab-media.py`) that archives all messages, media
-and text from the Message (Sony Music) fan apps. **No emulator needed** —
-access tokens are renewed with a plain API call using the login **session
-cookie**, harvested once after a login in desktop Chrome.
+A private archive and viewer for the **Message (Sony Music) fan apps** and the
+members' **official blogs**: a pair of Python tools downloads everything
+(messages, photos, videos, voice notes, full blog diaries) into plain files on
+disk, and a **Svelte 5 web viewer** renders it like the real apps — Talk list →
+chat thread → photo/video/voice bubbles, plus a Blog tab, media gallery,
+full-text search and archive stats. Everything runs locally or on your own
+server; nothing is uploaded anywhere.
 
 ```
-desktop Chrome (--remote-debugging-port=9222, logged in once)
-        │
-        └── tools/harvest-session.py ──► logs/<site>-session-cookie.txt  (once)
-                                           (browser-wide cookie jar read)
-        ▼
-  tools/keep-alive.py / grab-media.py ──► POST /v2/update_token (no browser!)
-        │   Cookie: session=<id>  →  fresh 1 h access token + rotated cookie
-        ▼
-  media/<member>/{picture,video,voice}/ + transcripts
+              ┌─ tools/grab-media.py ──►  media/<member>/…        messages,
+ desktop      │   (session cookie → API)                          media, voice
+ Chrome ──────┤                                                   (subscription)
+ (login once) │
+              └─ tools/grab-blog.py ───►  media/blogs/<member>/…  official-site
+                  (public JSON API)                               diaries (free)
+                                          │
+                              ┌───────────┴────────────┐
+                              │  viewer  (Svelte + Vite)│  ← you are here
+                              │  npm run dev  or        │
+                              │  docker compose up -d   │
+                              └────────────────────────┘
 ```
 
-How the session works (discovered empirically, see §3): the web app never
-receives a refresh token — its login sets a long-lived httpOnly
-`session=<uuid>` cookie on `.message.<site>.com` instead. `update_token`
-accepts that cookie (body `refresh_token: null` is fine) and **rotates** it:
-every response carries `Set-Cookie: session=<new>` scoped to
-`Path=/v2/update_token`, which the tools persist automatically.
-## 1. One-time setup
+- **`tools/`** — the archivers (Python; see §4)
+- **`viewer/`** — the web viewer (Svelte 5 + Vite; detailed docs in
+  **`viewer/README.md`**)
+- **`docs/api.md`** — the reverse-engineered Message API reference
 
-### 1.1 Prerequisites
+## 1. The viewer
 
-- **Desktop Chrome**; **Python 3.10+** with `pip install websocket-client cryptography`.
+The viewer renders `media/` directly — no database, nothing copied or uploaded.
+Per-site theming (nogizaka purple / sakurazaka pink) matches the official apps.
 
-### 1.2 Start Chrome with remote debugging (dedicated profile)
+**Screens** (styled after the real Message apps, bottom nav traced from them):
+
+- **Talk list** — per-site switcher, unread pills, "Online/Offline" grouping
+  (relative to the newest message in the archive), member artwork from
+  `single/`, romanized name under the Japanese one
+- **Thread** — day separators, `New` divider, inline video with poster + play
+  overlay, "no audio" badge for silent voice notes, voice bubbles with a scrub
+  bar, per-message `···` copy-link menu, jump-to-newest chip
+- **Lightbox** — every photo/video/voice has a shareable deep link
+  (`#/media/<member>/<id>`); `←`/`→` step, `Esc` closes
+- **Blog tab** — directory of every blog member grouped by 期生 → member post
+  list (thumbnail, pink title, lead, stamp) → post detail rendering the
+  archived HTML with an in-post image overlay. A `⇅` menu switches the
+  directory sort (generation old→new / new→old, name A→Z / Z→A, newest/oldest
+  posts across all members); site switcher pills and per-site shareable URLs
+  (`#/blog/sakurazaka46`)
+- **Gallery** — per-member photos/videos as a month-grouped grid + voice list
+  with a bottom player bar
+- **Search** — full-text over every archived message (works offline, in-memory)
+- **Info sheet** — per-member counts and date ranges
+
+Hash routing throughout, so Back / reload / pasting a link all work. The full
+route table, config (`archive.config.json`), index/thumbnail generation and
+dev-server details live in **`viewer/README.md`**.
+
+### 1.1 Run it
+
+```sh
+cd viewer
+npm install        # once
+npm run dev        # → http://localhost:5173 (host:true, so phones on the LAN work)
+```
+
+`npm run dev` builds `public/index.json` from `media/` first (and regenerates
+thumbnails when the archive changes — the dev server watches `../media`).
+
+**Production / Docker** — the same stack as two containers: a **viewer**
+(serves the archive with HTTP Range support, builds the index at startup and
+re-indexes as new files land, plus a few JSON API routes) and an optional
+**syncer** (`grab-media.py` on a loop):
+
+```sh
+cp .env.example .env     # optional: port, sites, sync interval
+docker compose up -d     # viewer + syncer; `up -d viewer` for viewer only
+# → http://localhost:8080
+```
+
+Alongside `public/index.json` the indexer now maintains a derived **SQLite**
+search index (`viewer/scripts/db.mjs` — posts + messages, rebuildable from the
+files alone). It's unused by the UI yet; it's the foundation for server-side
+search. On the server it lives in the `viewer-db` volume so it stays warm
+across deploys.
+
+### 1.2 Deploy to a server
+
+`./deploy.sh` pushes the repo to the server over git (the server's appdata
+directory is the `omv` git remote, configured with
+`receive.denyCurrentBranch=updateInstead` so a push updates its working tree),
+rebuilds the images, recreates the containers and health-checks the viewer.
+
+One-time server setup: `raff` in the `docker` group, the appdata directory
+registered as a git `safe.directory`, and `git remote add omv ...` locally.
+After that, code changes deploy with `git commit && ./deploy.sh` — only
+changed files cross the wire. The media volume is pinned to a host directory
+(`MEDIA_HOST_DIR` in the server's `.env`) so the archive is browsable outside
+Docker too.
+
+## 2. Getting content into the archive
+
+Two archivers feed `media/`. Re-running either is always safe — existing
+files are skipped, new content is added, metadata files are regenerated.
+
+### 2.1 Messages (needs a subscription)
+
+The Message app's API is backed by a long-lived **session cookie** (set on
+login; the app itself never receives a refresh token). Harvest it once from a
+desktop Chrome login, after which every renewal is a plain API call — no
+browser needed:
 
 ```bash
-nohup "/c/Program Files/Google/Chrome/Application/chrome.exe" \
-    --remote-debugging-port=9222 \
-    --user-data-dir="$PWD/chrome-profile" \
-    --no-first-run --no-default-browser-check \
-    "https://message.nogizaka46.com/" &
-```
+# 1. start Chrome with remote debugging and log in (both sites, once)
+"/c/Program Files/Google/Chrome/Application/chrome.exe" \
+    --remote-debugging-port=9222 --user-data-dir="$PWD/chrome-profile" \
+    --no-first-run "https://message.nogizaka46.com/" &
 
-Note: Chrome binds DevTools to IPv6 loopback too — `tools/cdp.py` probes both.
-Don't run an `adb forward tcp:9222` at the same time (it would shadow this port).
-
-### 1.3 Log in (once per site, in that Chrome window)
-
-Log in at `https://message.nogizaka46.com` and
-`https://message.sakurazaka46.com` (OAuth via LINE). The sessions persist in
-`chrome-profile/` across restarts. The site no longer forces phone access —
-desktop works fine.
-
-### 1.4 Harvest the session cookies (once per login)
-
-The web login issues no refresh token — it sets a long-lived httpOnly
-`session` cookie on `.message.<site>.com` (partitioned, invisible to
-per-page CDP queries). `tools/harvest-session.py` reads the browser-wide
-cookie jar via the DevTools **Storage** domain:
-
-```bash
+# 2. harvest the browser-wide cookie jar via the DevTools Storage domain
 python tools/harvest-session.py
-```
+#    → logs/<site>-session-cookie.txt   (Chrome can be closed afterwards)
 
-Files: `logs/nogizaka-session-cookie.txt`, `logs/sakura-session-cookie.txt`.
-After this, Chrome can be closed — daily syncs need no browser at all.
-The cookie is rotated on every renewal (handled automatically by the tools);
-if a cookie ever expires server-side, re-login and re-run the harvest.
-
-## 2. Daily workflow
-
-```bash
-# optional but recommended between syncs: keep the session warm
-python tools/keep-alive.py            # refresh both access tokens once
-
-# sync media + text  (incremental; skips already-downloaded files)
+# 3. sync (incremental; tokens renew via POST /v2/update_token + cookie)
+python tools/keep-alive.py             # optional between syncs: keep sessions warm
 python tools/grab-media.py --member-id 47
-python tools/grab-media.py --member-id 53
-python tools/grab-media.py --member-id 54
-python tools/grab-media.py --member-id 61
 python tools/grab-media.py --site sakurazaka46 --member-id 82 --full-history
 ```
 
-Token resolution order in `grab-media.py`:
-
-1. stored access token (`logs/api-token.txt` / `logs/sakura-token.txt`)
-2. **refresh via API** — `POST /v2/update_token` with the stored session
-   cookie (no browser needed; the rotated cookie is persisted automatically)
-3. fallback: watch desktop Chrome over CDP (`--remote-debugging-port=9222`)
-
-If both fail, re-login in the Chrome window and re-run
-`python tools/harvest-session.py`.
-
-Subscribed member IDs:
-
-| Site | Member | ID |
-|---|---|---|
-| nogizaka46 | 池田 瑛紗 | 47 |
-| nogizaka46 | 川﨑 桜 | 53 |
-| nogizaka46 | 菅原 咲月 | 54 |
-| nogizaka46 | 大越 ひなの | 61 |
-| sakurazaka46 | 山川 宇衣 | 82 |
-
-New subscription? Look up the ID:
-
-```bash
-# member list with ids (uses the site's own API, token auto-refreshed)
-python - <<'EOF'
-import importlib.util, sys
-spec = importlib.util.spec_from_file_location("gm", "tools/grab-media.py")
-gm = importlib.util.module_from_spec(spec); spec.loader.exec_module(gm)
-site = gm.SITES["sakurazaka46"]
-tok = gm.get_token(site) or gm.refresh_token_via_api(site) or gm.refresh_token_via_cdp(site)
-for g in gm.api_get("/groups?organization_id=1", tok, site):
-    print(g["id"], g["name"])
-EOF
-```
-
-### 2.1 What the sync produces
-
-Per member under `media/<member>/`:
-
-| File | Contents |
-|---|---|
-| `picture/`, `video/`, `voice/` | media files, named `<message-id>_<published-at>.<ext>` |
-| `single/` | the "current single" uniform artwork shown on the home/Talk page — changes with every single release; date-stamped filenames accumulate per release |
-| `profile/` | the member's chosen profile picture (+ `phone_image` variant) from `/groups/{id}/members` |
-| `_manifest.json` | media-only message metadata |
-| `_messages.json` | **all** messages (text + media), chronological, full API metadata |
-| `_transcript.md` | readable transcript: text messages interleaved with media, captions quoted under each image (`%%%` in messages is replaced with the display name `raff`) |
-
-Reverse-engineered API details (auth, endpoints, message schema, signed media
-URLs, pagination semantics) are documented separately in **`docs/api.md`**.
-
-Message `type` values: `text`, `picture`, `video`, `voice` (audio messages are
-typed `voice` — not `audio` — on this platform).
-
-### 2.2 Sync flags
+Token resolution order in `grab-media.py`: stored token → API refresh with the
+stored cookie (rotating it automatically) → watching desktop Chrome over CDP.
+If both fail: re-login and re-run `harvest-session.py`.
 
 | Flag | Meaning |
 |---|---|
 | `--site <name>` | `nogizaka46` (default) or `sakurazaka46` — different domains, app IDs, tokens |
 | `--member-id <n>` / `--member <substr>` | select member(s) |
-| `--full-history` | walk the entire timeline via the `updated_from` cursor (needed when history > 200 msgs, e.g. the 123-day sakurazaka archive) |
+| `--full-history` | walk the entire timeline via the `updated_from` cursor (needed when history > 200 msgs) |
 | `--from <ISO date>` | start date for the full-history walk (default `2024-01-01T00:00:00Z`) |
 
-Re-running is always safe — existing files are skipped; new messages are added
-and `_transcript.md`/`_messages.json` are regenerated.
+What lands per member under `media/<member>/`:
 
-## 3. Blog tab archiving (no subscription needed)
+| File | Contents |
+|---|---|
+| `picture/`, `video/`, `voice/` | media files, named `<message-id>_<published-at>.<ext>` |
+| `single/` | the "current single" uniform artwork shown on the home/Talk page — date-stamped filenames accumulate per release |
+| `profile/` | the member's chosen profile picture (+ `phone_image` variant) |
+| `_manifest.json` | media-only message metadata |
+| `_messages.json` | **all** messages (text + media), chronological, full API metadata |
+| `_transcript.md` | readable transcript; `%%%` in messages is replaced with the display name from `archive.config.json` |
 
-The app's Blog tab mirrors the members' **official-site diaries**, which are
-public and expose a plain JSON API — no session, no token, safe to run
-anywhere:
+Message `type` values: `text`, `picture`, `video`, `voice` (audio messages are
+typed `voice` — not `audio` — on this platform).
 
-```
-nogizaka46:  https://www.nogizaka46.com/s/n46/api/json/diary?cd=MEMBER&get=B&member_id=<uuid>&getnum=<count>&st=<start>
-sakurazaka46: https://sakurazaka46.com/s/s46app/api/json/diary?cd=blog&get=B&member_id=<uuid>&getnum=<count>&st=<start>
-```
+### 2.2 Blogs (public, no subscription needed)
 
-(The URL templates themselves come from the message API's
-`GET /v2/blog-sources?organization_id=1`, which needs a Bearer token once to
-discover — see `docs/api.md`. The diary calls afterwards need nothing.)
+The Blog tab mirrors the members' **official-site diaries**, exposed by a
+plain JSON API — no session, no token:
 
 ```bash
 python tools/grab-blog.py                 # the members in archive.config.json
@@ -168,8 +166,7 @@ python tools/grab-blog.py --full          # refetch everything, ignore skip
 ```
 
 Per member this fetches diary pages (50 entries per page, newest first, stops
-at already-archived ids), downloads thumbnails + inline images with retries,
-and stores:
+at already-archived ids) and downloads thumbnails + inline images:
 
 ```
 media/blogs/<member>/blog/_blogs.json   entries, oldest first (title, html
@@ -178,108 +175,60 @@ media/blogs/<member>/blog/files/*       downloaded images (HTML rewritten to
                                         local `files/...` paths)
 ```
 
-`blogs/` is a sibling of the message archives (not inside them), so members
-without a message subscription still get blog directories. The grabber is
-incremental and resumable — re-running only picks up new posts.
+`blogs/` is a sibling of the message archives, so members without a message
+subscription still get blog directories. Incremental and resumable — re-running
+only picks up new posts.
 
-Member roster + generations: `--all` uses `GET /v2/blog-members` (token
-required the first time; the roster is cached under `logs/blog-members-<site>.json`)
-and joins it with `viewer/public/blog-generations.json` — a static
-`{<site>: {<member_uuid>: {name, gen, gen_num, graduated, ...}}}` map built
-from the official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
+Member roster + generations: `--all` uses `GET /v2/blog-members` (cached under
+`logs/blog-members-<site>.json`) joined with `viewer/public/blog-generations.json`
+— a static map (name, reading, romanization, generation) built from the
+official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
 (e.g. 四期生リレー) are skipped.
 
-### 3.1 Blog data in the viewer
+## 3. How the Message API works
 
-The Blog tab in the viewer (directory grouped by 期生 → member post list →
-post detail) is served by the same containers — see `viewer/README.md`. The
-index carries one entry per blog member (`blogs.members[]` in `index.json`);
-post bodies are fetched lazily from `/api/blog/...`.
-
-## 4. How it works
-
-- **Tokens**: access tokens are ~1 h JWTs (`{"exp", "sub"}`, HS256-ish). The
-  web app renews them via `POST /v2/update_token` with a long-lived refresh
-  token in the body — we store that body (`logs/<site>-refresh-token.txt`,
-  harvested once after login) and replay it from Python, so refreshes need no
-  browser. Token files hold the raw access token without the `Bearer ` prefix.
+- **Tokens**: access tokens are ~1 h JWTs. The web app renews them via
+  `POST /v2/update_token` with a long-lived refresh token — the session
+  cookie is accepted too and **rotates** on every renewal, which the tools
+  persist automatically.
 - **API**: same shape on both sites (`api.message.<site>.com/v2`) — full
   reference in **`docs/api.md`**. Endpoints used:
   - `GET /groups?organization_id=1` — member list
   - `GET /groups/{id}/timeline?count=200&order=desc` — newest 200
-  - `GET /groups/{id}/timeline?count=200&order=asc&updated_from=<ts>` — cursor
-    walk for `--full-history` (inclusive boundary; pages dedupe by message id)
-  - `GET /groups/{id}/past_messages` — fixed "previous-day preview" returned
-    when a subscription activates; identical on every call, does **not**
-    paginate (kept as a safety net for messages older than `--from`)
-- **Media URLs**: CloudFront-signed, ~10 min TTL — the script downloads each
-  page immediately after fetching it; on 403 (expired signature) it re-syncs
-  with a fresh token and retries.
+  - `GET /groups/{id}/timeline?...&updated_from=<ts>` — cursor walk for
+    `--full-history` (inclusive boundary; pages dedupe by message id)
+  - `GET /v2/blog-sources` / `GET /v2/blog-members` — blog URL templates and
+    roster (Bearer token needed once to discover)
+- **Media URLs**: CloudFront-signed, ~10 min TTL — pages are downloaded
+  immediately after being fetched; on 403 the tool re-syncs with a fresh token
+  and retries.
 
-## 5. Files reference
+## 4. Files reference
 
 | Path | Purpose |
 |---|---|
-| `tools/harvest-session.py` | browser-level cookie read: saves the session cookie after any login (run once per login) |
-| `tools/keep-alive.py` | renew access tokens via `/v2/update_token` + session cookie (no browser; `--loop 45m` for daemon mode; persists cookie rotation) |
-| `tools/grab-media.py` | the message sync/downloader (see above) |
-| `tools/grab-blog.py` | blog archiver — public official-site diary APIs, no session (see §3) |
-| `tools/cdp.py` | Chrome DevTools Protocol helper (desktop Chrome, auto-probes IPv4/IPv6 loopback) |
-| | `docs/api.md` | reverse-engineered API reference (auth, endpoints, message schema, pagination, blog APIs) |
-| `logs/` | tokens (`api-token.txt`, `sakura-token.txt`), session cookies (`<site>-session-cookie.txt`), blog roster cache (`blog-members-<site>.json`) |
-| `viewer/` | local Svelte+Vite web viewer for `media/` (see `viewer/README.md`) |
+| `tools/grab-media.py` | the message sync/downloader (§2.1) |
+| `tools/grab-blog.py` | the blog archiver (§2.2) |
+| `tools/harvest-session.py` | browser-level cookie read after a login (once per login) |
+| `tools/keep-alive.py` | token renewal via `/v2/update_token` (`--loop 45m` for daemon mode) |
+| `tools/session-upload.py` | push a fresh cookie into a running viewer's `/data/logs` volume |
+| `tools/cdp.py` | Chrome DevTools Protocol helper (auto-probes IPv4/IPv6 loopback) |
+| `viewer/` | the web viewer — **`viewer/README.md`** has the deep-dive |
+| `viewer/scripts/db.mjs` | derived SQLite search index (§1.1) |
+| `docs/api.md` | reverse-engineered API reference (auth, endpoints, schemas, pagination) |
+| `logs/` | tokens, session cookies, blog roster cache |
+| `deploy.sh` | push + rebuild + health-check (§1.2) |
+| `build/` | Dockerfiles (`viewer.Dockerfile`, `syncer.Dockerfile`) |
 
 The early emulator + mitmproxy setup that discovered the session-cookie
 mechanism was removed after the desktop path proved out — see git history.
 
-## 6. Troubleshooting
+## 5. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
 | 400 "api_major_version" from API | missing `X-Talk-App-ID` / `X-Talk-App-Platform` headers — grab-media.py sends them |
 | HTTP 400 on `update_token` | session cookie expired/revoked — re-login in the Chrome window, then `python tools/harvest-session.py` |
-
-## 7. Local viewer
-
-Browse what was synced without the app — `viewer/` is a Svelte 5 + Vite UI that
-looks like the real Message apps (Talk list → thread → photo/video/voice), plus
-the Blog tab (official-site diaries, §3), a media gallery, search and archive
-stats. It reads `media/` directly; nothing is copied or uploaded.
-
-```sh
-cd viewer && npm install && npm run dev   # http://localhost:5173
-```
-
-#### Docker
-
-The same stack runs as two containers — a viewer (serves the archive, builds
-the index at startup and re-indexes as the syncer lands files) and a syncer
-(`grab-media.py` on a loop, tokens/cookies on their own volume):
-
-```sh
-cp .env.example .env        # optional: port, sites, interval
-docker compose up -d viewer # viewer only, or `up -d` for viewer + syncer
-# → http://localhost:8080
-```
-
-#### Deploying to a server
-
-`./deploy.sh` pushes the repo to the server over git (the server's appdata
-directory is the `omv` remote, configured with
-`receive.denyCurrentBranch=updateInstead` so a push updates its working tree),
-rebuilds the images, recreates the containers and health-checks the viewer.
-One-time server setup: `raff` in the `docker` group, the directory registered
-as a safe.directory, and `git remote add omv ...` locally. Code changes deploy
-with `git commit && ./deploy.sh` — only changed files cross the wire.
-
-
-
-
-- `npm run index` (runs automatically before `dev`) turns `media/` into
-  `public/index.json` and generates video/photo posters with `ffmpeg`
-- media is streamed from `../media` with **Range support** — required for
-  seeking; `python -m http.server` will not work
-- new member folders: add one line to `viewer/archive.config.json`
-  (site + romanized name) — the archive folders themselves don't record the site
-- `%%%` in messages is the app's placeholder for *your* display name, replaced
-  by `display_name` from that config
+| Video seeking broken | the media server must support HTTP Range — use the shipped server/vite setup, not `python -m http.server` |
+| Blog member greyed out in the directory | their backfill hasn't run yet — `python tools/grab-blog.py --member <name>` |
+| Search index stale in Docker | the viewer re-indexes on media changes; if `fs.watch` is unavailable on the volume it falls back to a 6h rebuild — restart the viewer to force one |
