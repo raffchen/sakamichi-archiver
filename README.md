@@ -45,7 +45,8 @@ Per-site theming (nogizaka purple / sakurazaka pink) matches the official apps.
   (`#/media/<member>/<id>`); `←`/`→` step, `Esc` closes
 - **Blog tab** — directory of every blog member grouped by 期生 → member post
   list (thumbnail, pink title, lead, stamp) → post detail rendering the
-  archived HTML with an in-post image overlay. A search bar under the site
+  archived HTML — tapping an image opens the same shared lightbox viewer as
+  message media. A search bar under the site
   pills opens blog-post-only search; a `⇅` menu switches the directory sort
   (generation old→new / new→old, name A→Z / Z→A, newest/oldest posts across
   all members); site switcher pills and per-site shareable URLs

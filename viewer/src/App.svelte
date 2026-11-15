@@ -34,7 +34,9 @@
      whether it was opened from a thread or the gallery; without it the
      thread/gallery addresses carry the scroll focus */
   function hashFor(v: View, slug: string | null, focus: number | null) {
-    if (lightbox.open) {
+    /* only the message lightbox owns the address; blog post images keep the
+       post's own #/blog/<key>/<post> URL */
+    if (lightbox.open && lightbox.kind === 'message') {
       const cur = lightbox.items[lightbox.i]
       if (cur) return `#/media/${encodeURIComponent(lightbox.memberSlug ?? '')}/${cur.id}`
     }
@@ -51,8 +53,10 @@
     const hit = slug ? archive.members.find((m) => m.slug === slug) : null
     if (hit?.site) ui.site = hit.site
     /* Back/Forward or an edited URL: leaving the media route closes the
-       lightbox — its state is part of the address, not independent of it */
-    if (lightbox.open && route !== 'media') closeLightbox()
+       lightbox — its state is part of the address, not independent of it.
+       Blog-image lightboxes don't write the URL, so ANY hash change means the
+       user navigated — close them too */
+    if (lightbox.open && (lightbox.kind !== 'message' || route !== 'media')) closeLightbox()
     if (route === 'thread' && hit) {
       ui.view = 'thread'
       ui.slug = slug

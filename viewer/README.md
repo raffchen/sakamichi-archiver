@@ -154,8 +154,9 @@ a bottom player bar (leaving the tab stops playback)
   (`/api/blog?site=&limit=&order=`). Site switcher pills; the directory URL
   carries the site (`#/blog/sakurazaka46`) so each site's blogs are
   linkable. Member view is a thumbnail post list (pink title, two-line
-  lead, stamp). Post view renders the archived HTML with a simple in-post
-  image overlay.
+  lead, stamp). Post view renders the archived HTML; tapping an image opens
+  the same shared lightbox as message media (counter, download, Esc/backdrop
+  close) with the post title as the caption.
 
 News / Official remain decorative placeholders — that content isn't archived.
 
