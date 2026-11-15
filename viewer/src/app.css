@@ -964,10 +964,10 @@ img {
   width: 88%;
   margin: 0 auto;
 }
-/* side nav: whole half of the screen is a click zone; the glyph stays pinned
-   to the vertical center of the viewport and ignores the caption height.
-   Header, caption and the media itself sit above the zones so the close
-   button and video controls stay clickable. */
+/* side nav: an invisible click zone hugs each screen edge; the chevron chip
+   rides on it, pinned to the vertical center of the viewport and ignores the
+   caption height. Header, caption and the media itself sit above the zones
+   so the close button and video controls stay clickable. */
 .lb-nav {
   position: fixed;
   top: calc(50% - 50px);
@@ -980,10 +980,10 @@ img {
   background: none;
 }
 .lb-nav.l {
-  left: calc(19vw - 48px);
+  left: 0;
 }
 .lb-nav.r {
-  right: calc(19vw - 48px);
+  right: 0;
 }
 .lb-top,
 .lb-cap {
@@ -996,45 +996,43 @@ img {
   position: relative;
   z-index: 2;
 }
-/* the visible chevron: a small acrylic chip, fixed to the viewport center,
-   transparent to clicks (the .lb-nav zone under it does the work). Hovering
-   the zone lights the chip up — see the sibling selector below. */
+/* the visible chevron: a small bare arrow pinned to the screen edge — no
+   circle, nothing blurring the media underneath. Hovering the click zone
+   lights it up with the same faint round fill the header's ✕/download
+   buttons get. Transparent to clicks (.lb-nav under it does the work). */
 .lb-glyph {
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
-  width: 76px;
-  height: 76px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   font-size: 0;
   z-index: 3;
   pointer-events: none;
   color: #fff;
-  opacity: 0.5;
+  opacity: 0.65;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(6px);
-  transition: opacity 0.15s, background 0.15s, box-shadow 0.15s;
+  transition: opacity 0.15s, background 0.15s;
 }
 .lb-glyph svg {
-  width: 34px;
-  height: 34px;
-  filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.6));
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.7));
 }
 .lb-glyph.l {
-  left: calc(19vw - 38px);
+  left: 6px;
 }
 .lb-glyph.r {
-  right: calc(19vw - 38px);
+  right: 6px;
 }
-/* hovering anywhere in the click zone highlights that side's chip: brighter
-   fill and a soft outer glow — no hard ring around the edge */
+/* hovering anywhere in the click zone: full brightness + the round fill,
+   matching .lb-top .dl:hover / .lb-top .x:hover */
 .lb-nav.l:hover ~ .lb-glyph.l,
 .lb-nav.r:hover ~ .lb-glyph.r {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 0 32px 6px rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
 }
 /* touch devices and portrait-shaped screens navigate purely by swipe
    (Lightbox.svelte), so the whole arrow apparatus is display:none — the
