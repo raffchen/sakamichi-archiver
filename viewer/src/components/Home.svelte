@@ -58,8 +58,11 @@
     placeholder="Search messages"
     aria-label="search"
     value={ui.query}
-    onfocus={() => (ui.view = 'search')}
-    onkeydown={(e) => e.key === 'Enter' && (ui.view = 'search')}
+    onfocus={() => {
+      ui.searchBlog = false
+      ui.view = 'search'
+    }}
+    onkeydown={(e) => e.key === 'Enter' && ((ui.searchBlog = false), (ui.view = 'search'))}
     oninput={(e) => (ui.query = e.currentTarget.value)}
   />
 </div>

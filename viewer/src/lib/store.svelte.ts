@@ -14,6 +14,9 @@ export const ui = $state({
   focusId: null as number | null,
   site: 'nogizaka46',
   query: '',
+  /* search scope: the Talk page's bar searches everything, the Blog tab's
+     searches blog posts only (server filters with ?type=blog) */
+  searchBlog: false,
   /* blog tab: directory -> member post list -> post detail */
   blogMember: null as string | null, // directory key under media/blogs/
   blogPost: null as number | null,
@@ -46,6 +49,7 @@ export function goHome() {
 }
 export function openBlog(member: string | null = null, post: number | null = null) {
   ui.view = 'blog'
+  ui.searchBlog = false
   ui.blogMember = member
   ui.blogPost = post
 }
@@ -53,7 +57,10 @@ export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
   else if (ui.view === 'blog' && ui.blogPost != null) openBlog(ui.blogMember)
   else if (ui.view === 'blog' && ui.blogMember) openBlog()
-  else goHome()
+  else if (ui.view === 'search' && ui.searchBlog) {
+    ui.searchBlog = false
+    openBlog()
+  } else goHome()
 }
 
 /* ---- one media at a time ----------------------------------------------

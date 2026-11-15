@@ -44,7 +44,7 @@
 
   function parseHash() {
     const parts = location.hash.replace(/^#\/?/, '').split('/')
-    const route = (parts[0] || 'home') as View | 'site' | 'media'
+    const route = (parts[0] || 'home') as View | 'site' | 'media' | 'blog-search'
     const slug = parts[1] ? decodeURIComponent(parts[1]) : null
     const focus = parts[2] ? Number(parts[2]) : null
     const hit = slug ? archive.members.find((m) => m.slug === slug) : null
@@ -96,8 +96,10 @@
           if (bm?.site) ui.site = bm.site
         }
       }
-    } else if (route === 'search') {
+    } else if (route === 'search' || route === 'blog-search') {
       ui.view = 'search'
+      /* #/blog-search — the Blog tab's scoped search (back returns to Blogs) */
+      ui.searchBlog = window.location.hash.startsWith('#/blog-search')
       ui.slug = null
       ui.focusId = null
     } else {
@@ -123,7 +125,10 @@
 
   $effect(() => {
     if (!routed) return
-    const want = ui.view === 'blog' ? blogHash() : hashFor(ui.view, ui.slug, ui.focusId)
+    const want =
+      ui.view === 'blog'
+        ? blogHash()
+        : hashFor(ui.view === 'search' && ui.searchBlog ? 'blog-search' : ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
     /* on the media route, every change (next/prev, ✕/Back-close) edits the
        same history entry — Back exits the viewer in one step; opening the
