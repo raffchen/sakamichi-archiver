@@ -49,15 +49,16 @@ The ~180 MB archive is never copied into `public/`.
 Hash routes, so Back / reload / pasting a link all work:
 
 ```
-#/                                 Talk list (first site)
-#/site/sakurazaka46                Talk list for another site
+#/                                 → rewritten to #/talk/nogizaka46
+#/talk/<site-key>                  Talk list for a site (e.g. #/talk/nogizaka46)
+#/site/<site-key>                  legacy alias of #/talk/<site-key>
 #/thread/<member-slug>             chat thread (opens at the newest message)
 #/thread/<member-slug>/<msg-id>    jump to one message (deep link / search hit)
 #/gallery/<member-slug>            that member's media
 #/search                           two-section search (messages + blog posts)
 #/blog-search                      blog-only search (opened from the Blogs header)
-#/blog                             Blog directory (generation sections, first site)
-#/blog/<site-key>                  Blog directory for another site (e.g. #/blog/sakurazaka46)
+#/blog                             → rewritten to #/blog/<current-site>
+#/blog/<site-key>                  Blog directory for a site (e.g. #/blog/sakurazaka46)
 #/blog/<member-key>                one member's blog post list
 #/blog/<member-key>/<post-id>      one blog post (deep-linkable)
 ```
