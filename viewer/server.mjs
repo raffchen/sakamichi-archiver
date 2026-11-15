@@ -284,6 +284,56 @@ const app = http.createServer(async (req, res) => {
   // --- blog posts (tools/grab-blog.py output) — bodies stay on disk and are
   //     fetched lazily: the list strips content to a plain-text lead, the
   //     detail endpoint returns the full HTML for one post
+  const blogLead = (html) =>
+    html
+      ? html
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/&[a-z#0-9]+;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 140)
+      : null
+
+  // /api/blog — the official app's "sort by upload time" view: the newest
+  // posts across EVERY archived member in one feed. ?site=<key> filters to
+  // one site, ?limit= caps the response (default 60, max 200), ?order=asc
+  // flips to oldest-first. Reads each member's _blogs.json (small files;
+  // directory metadata only, no bodies).
+  if (p === '/api/blog' || p === '/api/blog/') {
+    const q = new URL(req.url, 'http://x').searchParams
+    const site = q.get('site')
+    const limit = Math.min(Number(q.get('limit')) || 60, 200)
+    const root = path.join(MEDIA, 'blogs')
+    const posts = []
+    if (fs.existsSync(root)) {
+      for (const key of fs.readdirSync(root)) {
+        let state = null
+        try {
+          state = JSON.parse(fs.readFileSync(path.join(root, key, 'blog', '_blogs.json'), 'utf8'))
+        } catch {}
+        if (!state?.entries?.length) continue
+        if (site && (state.site ?? '') !== site) continue
+        for (const e of state.entries)
+          posts.push({
+            key,
+            member: state.member ?? key.replace(/_/g, ' '),
+            site: state.site ?? null,
+            id: e.id,
+            title: e.title,
+            at: e.at,
+            thumbnail: e.thumbnail
+              ? `/media/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`
+              : null,
+            lead: blogLead(e.content),
+          })
+      }
+    }
+    // "YYYY/MM/DD HH:mm:ss" sorts lexicographically
+    const desc = q.get('order') !== 'asc'
+    posts.sort((a, b) => (a.at < b.at ? (desc ? 1 : -1) : a.at > b.at ? (desc ? -1 : 1) : 0))
+    return sendJson(res, 200, { posts: posts.slice(0, limit) })
+  }
+
   if (p.startsWith('/api/blog/')) {
     const safe = (s) => (s && !/[/\\]|^\.{1,2}$/.test(s) ? s : null)
     const key = safe(decodeURIComponent(p.split('/')[3] ?? ''))
@@ -313,15 +363,6 @@ const app = http.createServer(async (req, res) => {
     // HTML can be dropped straight into the page (thumbnails likewise)
     const prefixLocal = (html, key) =>
       html ? html.replace(/(["'])(files\/)/g, `$1/media/blogs/${encodeURIComponent(key)}/blog/$2`) : html
-    const lead = (html) =>
-      html
-        ? html
-            .replace(/<[^>]*>/g, ' ')
-            .replace(/&[a-z#0-9]+;/gi, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 140)
-        : null
     const parts = p.split('/').slice(3).map(decodeURIComponent)
     if (parts[1] != null) {
       const entry = (state.entries ?? []).find((e) => String(e.id) === parts[1])
@@ -330,14 +371,14 @@ const app = http.createServer(async (req, res) => {
         key,
         member: state.member,
         site: state.site,
-        entry: { ...entry, content: prefixLocal(entry.content, dir), lead: lead(entry.content) },
+        entry: { ...entry, content: prefixLocal(entry.content, dir), lead: blogLead(entry.content) },
       })
     }
     return sendJson(res, 200, {
       key,
       member: state.member,
       site: state.site,
-      entries: (state.entries ?? []).map(({ content, ...e }) => ({ ...e, lead: lead(content) })).reverse(),
+      entries: (state.entries ?? []).map(({ content, ...e }) => ({ ...e, lead: blogLead(content) })).reverse(),
     })
   }
 

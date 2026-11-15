@@ -34,6 +34,8 @@ export const icons: Record<string, string> = {
   kebab: `<svg ${S}><circle cx="5" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.9" fill="currentColor" stroke="none"/></svg>`,
   link: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.8 4.7a4 4 0 0 1 5.7 5.7L16.6 12.3"/><path d="M13 17.5 11.2 19.3a4 4 0 0 1-5.7-5.7L7.4 11.7"/></svg>`,
   check: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></svg>`,
+  /* the official Blogs ⇅ sort icon: up + down arrow pair */
+  sort: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20V5.5"/><path d="M4.5 9 8 5l3.5 4"/><path d="M16 4v14.5"/><path d="M12.5 15l3.5 4 3.5-4"/></svg>`,
 
 }
 

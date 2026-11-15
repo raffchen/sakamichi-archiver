@@ -689,187 +689,218 @@
    "name": "遠藤光莉",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "えんどう ひかり"
   },
   "54": {
    "name": "大園玲",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "おおぞの れい"
   },
   "55": {
    "name": "大沼晶保",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "おおぬま あきほ"
   },
   "56": {
    "name": "幸阪茉里乃",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "こうさか まりの"
   },
   "46": {
    "name": "田村保乃",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "たむら ほの"
   },
   "47": {
    "name": "藤吉夏鈴",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "ふじよし かりん"
   },
   "48": {
    "name": "松田里奈",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "まつだ りな"
   },
   "50": {
    "name": "森田ひかる",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "もりた ひかる"
   },
   "58": {
    "name": "守屋麗奈",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "もりや れな"
   },
   "51": {
    "name": "山﨑天",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "やまさき てん"
   },
   "59": {
    "name": "石森璃花",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "いしもり りか"
   },
   "60": {
    "name": "遠藤理子",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "えんどう りこ"
   },
   "61": {
    "name": "小田倉麗奈",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "おだくら れいな"
   },
   "62": {
    "name": "小島凪紗",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "こじま なぎさ"
   },
   "63": {
    "name": "谷口愛季",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "たにぐち あいり"
   },
   "64": {
    "name": "中嶋優月",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "なかしま ゆづき"
   },
   "65": {
    "name": "的野美青",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "まとの みお"
   },
   "66": {
    "name": "向井純葉",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "むかい いとは"
   },
   "67": {
    "name": "村井優",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "むらい ゆう"
   },
   "68": {
    "name": "村山美羽",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "むらやま みう"
   },
   "69": {
    "name": "山下瞳月",
    "gen": "三期生",
    "graduated": false,
-   "gen_num": 3
+   "gen_num": 3,
+   "kana": "やました しづき"
   },
   "70": {
    "name": "浅井恋乃未",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "あさい このみ"
   },
   "71": {
    "name": "稲熊ひな",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "いなぐま ひな"
   },
   "72": {
    "name": "勝又春",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "かつまた はる"
   },
   "73": {
    "name": "佐藤愛桜",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "さとう ねお"
   },
   "74": {
    "name": "中川智尋",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "なかがわ ちひろ"
   },
   "75": {
    "name": "松本和子",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "まつもと わこ"
   },
   "76": {
    "name": "目黒陽色",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "めぐろ ひいろ"
   },
   "77": {
    "name": "山川宇衣",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "やまかわ うい"
   },
   "78": {
    "name": "山田桃実",
    "gen": "四期生",
    "graduated": false,
-   "gen_num": 4
+   "gen_num": 4,
+   "kana": "やまだ ももみ"
   },
   "57": {
    "name": "増本 綺良",
    "gen": "二期生",
    "graduated": false,
-   "gen_num": 2
+   "gen_num": 2,
+   "kana": "ますもと きら"
   }
  }
 }
