@@ -95,13 +95,22 @@ overrides this file if present.
 
 ```
 src/App.svelte              hash router + which screen is mounted
-src/lib/store.svelte.ts     shared $state: view/slug/site, lightbox, "seen" markers
+src/lib/store.svelte.ts     shared $state: view/slug/site, lightbox, "seen" markers,
+                            full-text member cache (stage 4 on-demand threads)
 src/lib/format.ts           UTC archive stamps → local display
-scripts/build-index.mjs     media/ → public/index.json + public/thumbs/
+scripts/build-index.mjs     media/ → public/index.json + public/thumbs/ + the SQLite
+                            search index (FTS5 + readings + embeddings)
+scripts/db.mjs              schema + incremental sync for the search index
+scripts/tokenize.mjs        kuromoji readings (hiragana) for kana↔kanji search
+scripts/embed.mjs           local ONNX embedder (semantic related section)
 scripts/shot.mjs            optional: screenshot every screen in headless Chrome
 ```
 
-`public/index.json` and `public/thumbs/` are generated and gitignored.
+`public/index.json`, `public/thumbs/` and `public/index.sqlite` are generated
+and gitignored. Search-related env vars (container): `DB_PATH` (index
+location), `MODEL_DIR` (embedding-model cache volume), `EMBED_MODEL`
+(override the model), `SEMANTIC_MIN_COS`/`SEMANTIC_GAP` (related-section
+cutoffs), `SEMANTIC_LOG=1` (log per-query score distributions for tuning).
 
 ## Screens
 
@@ -119,20 +128,23 @@ duration badges on videos; the Voice tab is a flat list with unread dots and
 a bottom player bar (leaving the tab stops playback)
 - **Search** — two search bars, two scopes: the Talk page's bar searches
   **messages**; the Blog tab's search bar (under the site pills) searches
-  **blog posts** (`#/blog-search`, back returns to Blogs). Both hit the same
-  server search (`/api/search?type=message|blog`) and get two sections:
-  `完全一致 / exact matches` via FTS5 (trigram tokenizer — real substring
-  matching for Japanese; 1–2 char words go through an `instr()` path),
-  `<mark>`-highlighted snippets, Blog/Message type badges, debounced fetch
-  (~250 ms), ranked by bm25. **Reading-aware** (stage 3): hiragana queries
-  hit kanji text and vice versa — ひかり finds 光, さくら finds 桜.
-  **Semantic** (stage 5): a `おすすめ / related` section ranks blog posts by
-  embedding similarity (local ONNX e5-small via sqlite-vec) — English
-  queries surface Japanese posts; hits carry a % similarity chip, exact hits
-  are never duplicated, and the section hides when empty. The Talk-side
-  search falls back to the instant client-side scan (messages only) when the
-  served index still carries full texts (dev) — slimmed clients are
-  server-only
+  **blog posts** (`#/blog-search`, back returns to Blogs). The scope applies
+  to both sections — each bar searches its own corpus exactly and semantically.
+  Both hit the same server search (`/api/search?type=message|blog`) and get
+  two sections: `完全一致 / exact matches` via FTS5 (trigram tokenizer — real
+  substring matching for Japanese; 1–2 char words go through an `instr()`
+  path), `<mark>`-highlighted snippets, Blog/Message type badges, debounced
+  fetch (~250 ms), ranked by bm25. **Reading-aware** (stage 3): hiragana
+  queries hit kanji text and vice versa — ひかり finds 光, さくら finds 桜.
+  **Semantic** (stages 5/6): a `おすすめ / related` section ranks content by
+  embedding similarity (local ONNX e5-small via sqlite-vec, whole corpus —
+  messages too) — English queries surface Japanese content; hits carry a %
+  similarity chip, exact hits are never duplicated, and the section hides
+  when empty. In the unscoped API search both corpora appear as two labelled
+  subgroups (ブログ / blog posts, メッセージ / messages) since their scores
+  don't share a scale. The Talk-side search falls back to the instant
+  client-side scan (messages only) when the served index still carries full
+  texts (dev) — slimmed clients are server-only
 - **Info sheet** — per-member counts and date ranges
 - **Blog** — mirrors the official-site diaries (`tools/grab-blog.py`, see the
   root README). Directory groups every known member by 期生; members whose
