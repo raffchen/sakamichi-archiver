@@ -59,10 +59,10 @@
     aria-label="search"
     value={ui.query}
     onfocus={() => {
-      ui.searchBlog = false
+      ui.searchScope = 'message'
       ui.view = 'search'
     }}
-    onkeydown={(e) => e.key === 'Enter' && ((ui.searchBlog = false), (ui.view = 'search'))}
+    onkeydown={(e) => e.key === 'Enter' && ((ui.searchScope = 'message'), (ui.view = 'search'))}
     oninput={(e) => (ui.query = e.currentTarget.value)}
   />
 </div>

@@ -101,16 +101,6 @@
 {:else}
   <header class="head">
     <span class="title-left blog-title">Blogs</span>
-    <button
-      class="ic"
-      aria-label="search blog posts"
-      onclick={() => {
-        ui.searchBlog = true
-        ui.view = 'search'
-      }}
-    >
-      {@html icon('search')}
-    </button>
     <button class="ic" aria-label="sort" onclick={() => (menuOpen = !menuOpen)}>
       {@html icon('sort')}
     </button>
@@ -133,6 +123,21 @@
         {archive.sites[k]?.name ?? k}
       </button>
     {/each}
+  </div>
+
+  <div class="searchbar">
+    <input
+      type="search"
+      placeholder="Search blog posts"
+      aria-label="search blog posts"
+      value={ui.query}
+      onfocus={() => {
+        ui.searchScope = 'blog'
+        ui.view = 'search'
+      }}
+      onkeydown={(e) => e.key === 'Enter' && ((ui.searchScope = 'blog'), (ui.view = 'search'))}
+      oninput={(e) => (ui.query = e.currentTarget.value)}
+    />
   </div>
 
   <div class="screen blog-directory">
