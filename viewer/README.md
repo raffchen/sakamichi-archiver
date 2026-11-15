@@ -175,7 +175,8 @@ index from disk):
 |---|---|
 | `GET /api/health` | liveness (used by docker healthcheck + uptime monitor) |
 | `GET /api/version` | index build stamp — clients poll it and reload when the index changes |
-| `GET /api/index` | the built `index.json` (includes `blogs.members[]`) |
+| `GET /api/index` | the built `index.json`, **slimmed**: message texts for all but the 5 most recent messages per member are dropped (`textsTruncated` flags mark it) — keeps the payload flat as the archive grows |
+| `GET /api/member/<slug>` | one member, full texts — thread/gallery fetch this when the slim index says `textsTruncated` |
 | `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead` |
 | `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/blogs/...`) |
 | `POST /api/secrets/session` | syncer uploads rotated session cookies here (guarded by `UPLOAD_TOKEN`) |

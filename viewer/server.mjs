@@ -50,6 +50,10 @@ const getTokenizer = () =>
     .catch(() => null))
 const PORT = Number(process.env.PORT || 8080)
 const INDEX = path.join(PUB, 'index.json')
+/* stage 4: how many recent messages keep their text in the SLIM /api/index
+   payload (talk-list previews). Full texts stay on disk + /api/member/<slug>. */
+const SLIM_TEXT_KEEP = 5
+const slimCache = { mtime: 0, body: /** @type {string | null} */ (null) }
 
 // session-cookie upload (docs/deployment.md §3.7): site key → cookie file
 // (same names harvest-session.py writes, so grab-media.py needs no changes)
@@ -242,12 +246,60 @@ const app = http.createServer(async (req, res) => {
   if (p === '/api/index') {
     const raw = readIndexJson()
     if (!raw) return sendJson(res, 404, { error: 'no index yet (build-index pending or failed)' })
-    res.writeHead(200, {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-      'Access-Control-Allow-Origin': '*',
-    })
-    return res.end(raw)
+    // stage 4: clients get a SLIM index — message texts for all but the most
+    // recent few are dropped (talk-list previews only need the last one; deep
+    // history comes from /api/member/<slug> when a thread opens). Keeps the
+    // download flat as the archive grows; the disk index stays full (it's the
+    // source for /api/member). vite dev serves the raw file — dev keeps full
+    // texts + the client-scan search fallback.
+    try {
+      const st = fs.statSync(INDEX)
+      if (!slimCache.body || slimCache.mtime !== st.mtimeMs) {
+        const idx = JSON.parse(raw)
+        let truncated = false
+        for (const m of idx.members) {
+          if (m.messages.length > SLIM_TEXT_KEEP) {
+            for (let i = 0; i < m.messages.length - SLIM_TEXT_KEEP; i++) m.messages[i].text = null
+            m.textsTruncated = true
+            truncated = true
+          }
+        }
+        if (truncated) idx.textsTruncated = true
+        slimCache.mtime = st.mtimeMs
+        slimCache.body = JSON.stringify(idx)
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+      })
+      return res.end(slimCache.body)
+    } catch (e) {
+      say(`! slimming index failed (${e.message}) — serving raw`)
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+      })
+      return res.end(raw)
+    }
+  }
+
+  // --- one member, full texts (stage 4): thread/gallery fetch this on open
+  // when the slim index flagged textsTruncated
+  if (p.startsWith('/api/member/')) {
+    const raw = readIndexJson()
+    if (!raw) return sendJson(res, 404, { error: 'no index yet (build-index pending or failed)' })
+    let slug = decodeURIComponent(p.slice('/api/member/'.length))
+    slug = slug.replace(/\/$/, '')
+    let mem = null
+    try {
+      mem = JSON.parse(raw).members.find((m) => m.slug === slug) ?? null
+    } catch {
+      return sendJson(res, 500, { error: 'index unreadable' })
+    }
+    if (!mem) return sendJson(res, 404, { error: `unknown member: ${slug}` })
+    return sendJson(res, 200, mem)
   }
 
   // --- search (stage 2): exact matches over messages + blog posts via FTS5.

@@ -38,6 +38,9 @@ export interface Member {
   missing: number
   source: string
   messages: Msg[]
+  /* stage 4: set by the slim /api/index when older messages' texts were
+     dropped (full texts come from /api/member/<slug> on thread open) */
+  textsTruncated?: boolean
 }
 
 export interface Site {
@@ -80,4 +83,6 @@ export interface Archive {
   totals: { messages: number; media: number }
   members: Member[]
   blogs?: { members: BlogMemberInfo[] }
+  /* stage 4: true when the served index dropped old message texts */
+  textsTruncated?: boolean
 }
