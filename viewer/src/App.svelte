@@ -40,14 +40,17 @@
       const cur = lightbox.items[lightbox.i]
       if (cur) return `#/media/${encodeURIComponent(lightbox.memberSlug ?? '')}/${cur.id}`
     }
-    if (v === 'home') return ui.site === siteKeys[0] ? '#/' : `#/site/${encodeURIComponent(ui.site)}`
+    /* every screen names its site explicitly — no implicit default group */
+    if (v === 'home') return `#/talk/${encodeURIComponent(ui.site)}`
     const s = slug ? encodeURIComponent(slug) : ''
     return `#/${v}${s ? '/' + s : ''}${focus ? '/' + focus : ''}`
   }
 
   function parseHash() {
     const parts = location.hash.replace(/^#\/?/, '').split('/')
-    const route = (parts[0] || 'home') as View | 'site' | 'media' | 'blog-search'
+    /* 'site' is the pre-2026-02 name of the talk-directory route — kept as a
+       legacy alias so old shared links still resolve */
+    const route = (parts[0] || 'talk') as View | 'talk' | 'site' | 'media' | 'blog-search'
     const slug = parts[1] ? decodeURIComponent(parts[1]) : null
     const focus = parts[2] ? Number(parts[2]) : null
     const hit = slug ? archive.members.find((m) => m.slug === slug) : null
@@ -74,7 +77,7 @@
       } else {
         closeLightbox()
       }
-    } else if (route === 'site' && archive.sites[slug ?? '']) {
+    } else if ((route === 'talk' || route === 'site') && archive.sites[slug ?? '']) {
       ui.site = slug!
       ui.view = 'home'
       ui.slug = null
@@ -85,9 +88,9 @@
       ui.focusId = null   // the lightbox is addressed by #/media now
     } else if (route === 'blog') {
       ui.view = 'blog'
-      /* #/blog/<site> names a site directory (site keys are ASCII, member
-         keys are 日本語 — they can't collide); a member segment implies the
-         site by itself */
+      /* #/blog/<site> names a site directory, #/blog alone falls back to the
+         current site (the hash effect rewrites it to the explicit form);
+         site keys are ASCII, member keys are 日本語 — they can't collide */
       if (slug && archive.sites[slug]) {
         ui.site = slug
         ui.blogMember = null
@@ -150,10 +153,10 @@
   })
 
   function blogHash() {
-    /* directory URLs carry the site (like #/site/<site> on Talk) so a
-       Sakurazaka blogs link can be shared; member/post URLs imply the site */
-    if (!ui.blogMember)
-      return ui.site === siteKeys[0] ? '#/blog' : `#/blog/${encodeURIComponent(ui.site)}`
+    /* directory URLs carry the site explicitly (like #/talk/<site> on the
+       Talk tab) so a Sakurazaka blogs link can be shared; member/post URLs
+       imply the site */
+    if (!ui.blogMember) return `#/blog/${encodeURIComponent(ui.site)}`
     const m = encodeURIComponent(ui.blogMember)
     return `#/blog/${m}${ui.blogPost != null ? '/' + ui.blogPost : ''}`
   }
