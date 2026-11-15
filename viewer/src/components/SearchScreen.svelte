@@ -6,6 +6,10 @@
 
   let { archive }: { archive: Archive } = $props()
 
+  /* scope: the Talk page's bar searches messages + blogs; the Blog tab's
+     search icon opens the same screen filtered to blog posts (?type=blog) */
+  const blogOnly = $derived(ui.searchBlog)
+
   let input = $state<HTMLInputElement | undefined>()
   const q = $derived(ui.query.trim())
   const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -35,10 +39,11 @@
   const memberBySlug = $derived.by(() => new Map(archive.members.map((m) => [m.slug, m])))
   const blogByKey = $derived.by(() => new Map((archive.blogs?.members ?? []).map((m) => [m.key, m])))
 
-  /* client-side fallback scan (messages only — blog bodies aren't in index.json) */
+  /* client-side fallback scan (messages only — blog bodies aren't in index.json,
+     so in blog-scope mode there is no offline fallback at all) */
   type LocalHit = { m: Member; msg: Msg }
   const localHits = $derived.by(() => {
-    if (!q || results?.available) return [] as LocalHit[]
+    if (!q || blogOnly || results?.available) return [] as LocalHit[]
     const needle = q.toLowerCase()
     const out: LocalHit[] = []
     for (const mem of archive.members) {
@@ -56,6 +61,7 @@
   let seq = 0
   $effect(() => {
     const query = q
+    const scoped = blogOnly // re-run when the scope flips too
     seq++
     const mySeq = seq
     if (!query) {
@@ -66,7 +72,7 @@
     searching = true
     const ctrl = new AbortController()
     const timer = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal })
+      fetch(`/api/search?q=${encodeURIComponent(query)}${scoped ? '&type=blog' : ''}`, { signal: ctrl.signal })
         .then((r) => r.json())
         .then((reply: SearchReply) => {
           if (mySeq === seq) {
@@ -98,14 +104,21 @@
     }
   }
 
+  const goBack = () => {
+    if (blogOnly) {
+      ui.searchBlog = false
+      openBlog()
+    } else ui.view = 'home'
+  }
+
   onMount(() => input?.focus())
 </script>
 
 <header class="head">
-  <button class="ic back" aria-label="back" onclick={() => (ui.view = 'home')}>
+  <button class="ic back" aria-label="back" onclick={goBack}>
     <i class="fa-solid fa-chevron-left"></i>
   </button>
-  <span class="title-left">Search</span>
+  <span class="title-left">{blogOnly ? 'Blog search' : 'Search'}</span>
   <span class="sp"></span>
 </header>
 
@@ -114,7 +127,7 @@
     type="search"
     bind:this={input}
     bind:value={ui.query}
-    placeholder="キーワード / keyword"
+    placeholder={blogOnly ? 'ブログを検索 / search blog posts' : 'キーワード / keyword'}
     aria-label="search"
   />
 </div>
@@ -153,6 +166,8 @@
         {/each}
       {/if}
     {/if}
+  {:else if blogOnly}
+    <p class="muted-note">ブログ検索にはアーカイブサーバーが必要 / blog search needs the archive server</p>
   {:else if localHits.length}
     <p class="muted-note">{localHits.length}{localHits.length >= 300 ? '+' : ''} 件中</p>
     {#each localHits as h (`${h.m.slug}-${h.msg.id}`)}

@@ -259,6 +259,9 @@ const app = http.createServer(async (req, res) => {
     const qp = new URL(req.url, 'http://localhost').searchParams
     const raw = (qp.get('q') ?? '').trim()
     const limit = Math.min(Number(qp.get('limit')) || 30, 100)
+    // scope: ?type=blog (the Blog tab's search bar) or ?type=message — omit
+    // for the Talk page's everything-search
+    const scope = qp.get('type') === 'blog' || qp.get('type') === 'message' ? qp.get('type') : null
     const t0 = Date.now()
     // stage 3: match readings, not just surface text. Normalize the query the
     // same way the indexer normalized the readings: katakana → hiragana (incl.
@@ -324,7 +327,8 @@ const app = http.createServer(async (req, res) => {
         // trigram phrase == exact substring; quotes doubled for FTS safety.
         // Column weights (title, body, reading / text, reading): surface hits
         // rank well above reading-only hits.
-        const posts = db
+        if (scope !== 'message') {
+          const posts = db
           .prepare(
             `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member,
                     p.at, p.body, bm25(posts_fts, 10.0, 10.0, 1.0) AS score,
@@ -333,11 +337,13 @@ const app = http.createServer(async (req, res) => {
              WHERE posts_fts MATCH ? ORDER BY score LIMIT ?`,
           )
           .all(`"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`, limit)
-        for (const r of posts) {
-          r.snippet = realSnippet(r.snippet, `${r.title ?? ''} ${r.body ?? ''}`)
-          results.push({ type: 'blog', ...r })
+          for (const r of posts) {
+            r.snippet = realSnippet(r.snippet, `${r.title ?? ''} ${r.body ?? ''}`)
+            results.push({ type: 'blog', ...r })
+          }
         }
-        const msgs = db
+        if (scope !== 'blog') {
+          const msgs = db
           .prepare(
             `SELECT m.slug, m.msg_id AS id, m.at, m.type, bm25(messages_fts, 10.0, 1.0) AS score,
                     snippet(messages_fts, 0, '<mark>', '</mark>', '…', 16) AS snippet
@@ -345,79 +351,84 @@ const app = http.createServer(async (req, res) => {
              WHERE messages_fts MATCH ? ORDER BY score LIMIT ?`,
           )
           .all(`"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`, limit)
-        // slug → display name/site comes from the JSON index (search DB stays name-free)
-        const members = new Map(
-          (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
-        )
-        for (const r of msgs) {
-          const mem = members.get(r.slug)
-          const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
-          results.push({
-            type: 'message',
-            slug: r.slug,
-            id: r.id,
-            at: r.at,
-            mtype: r.type,
-            member: mem ? (mem.roman ?? mem.name) : r.slug.replace(/_/g, ' '),
-            site: mem?.site ?? null,
-            avatar: mem?.avatar ?? null,
-            score: r.score,
-            snippet: realSnippet(r.snippet, text),
-          })
+          // slug → display name/site comes from the JSON index (search DB stays name-free)
+          const members = new Map(
+            (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
+          )
+          for (const r of msgs) {
+            const mem = members.get(r.slug)
+            const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
+            results.push({
+              type: 'message',
+              slug: r.slug,
+              id: r.id,
+              at: r.at,
+              mtype: r.type,
+              member: mem ? (mem.roman ?? mem.name) : r.slug.replace(/_/g, ' '),
+              site: mem?.site ?? null,
+              avatar: mem?.avatar ?? null,
+              score: r.score,
+              snippet: realSnippet(r.snippet, text),
+            })
+          }
         }
       } else {
         // <3 code points: below the trigram minimum — instr() scan instead
         // (over surface AND reading columns)
-        const posts = db
-          .prepare(
-            `SELECT member_key AS "key", site, post_id AS id, title, member_name AS member, at, body, reading
-             FROM posts WHERE instr(title, ?) > 0 OR instr(body, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
-          )
-          .all(raw, raw, normalized, limit)
-        for (const r of posts) {
-          const hay = r.title.includes(raw) ? r.title : r.body
-          const i = hay.indexOf(raw)
-          const start = Math.max(0, i - 30)
-          results.push({
-            type: 'blog',
-            ...r,
-            score: 0,
-            snippet: i < 0
-              ? (r.reading ?? '').slice(0, 60)
-              : (start > 0 ? '…' : '') +
-                hay.slice(start, i + raw.length + 60).replace(raw, () => `<mark>${raw}</mark>`) +
-                (i + raw.length + 60 < hay.length ? '…' : ''),
-          })
+        if (scope !== 'message') {
+          const posts = db
+            .prepare(
+              `SELECT member_key AS "key", site, post_id AS id, title, member_name AS member, at, body, reading
+               FROM posts WHERE instr(title, ?) > 0 OR instr(body, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
+            )
+            .all(raw, raw, normalized, limit)
+          for (const r of posts) {
+            const hay = r.title.includes(raw) ? r.title : r.body
+            const i = hay.indexOf(raw)
+            const start = Math.max(0, i - 30)
+            results.push({
+              type: 'blog',
+              ...r,
+              score: 0,
+              snippet: i < 0
+                ? (r.reading ?? '').slice(0, 60)
+                : (start > 0 ? '…' : '') +
+                  hay.slice(start, i + raw.length + 60).replace(raw, () => `<mark>${raw}</mark>`) +
+                  (i + raw.length + 60 < hay.length ? '…' : ''),
+            })
+          }
         }
-        const msgs = db
-          .prepare(
-            `SELECT slug, msg_id AS id, at, type, reading FROM messages WHERE instr(text, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
+        if (scope !== 'blog') {
+          const msgs = db
+            .prepare(
+              `SELECT slug, msg_id AS id, at, type, reading FROM messages WHERE instr(text, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
+            )
+            .all(raw, normalized, limit)
+          const members = new Map(
+            (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
           )
-          .all(raw, normalized, limit)
-        const members = new Map(
-          (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
-        )
-        for (const r of msgs) {
-          const mem = members.get(r.slug)
-          const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
-          const i = text.indexOf(raw)
-          const start = Math.max(0, i - 30)
-          results.push({
-            type: 'message',
-            slug: r.slug,
-            id: r.id,
-            at: r.at,
-            mtype: r.type,
-            member: mem ? (mem.roman ?? mem.name) : r.slug.replace(/_/g, ' '),
-            site: mem?.site ?? null,
-            avatar: mem?.avatar ?? null,
-            score: 0,
-            snippet: i < 0
-              ? text.slice(0, 80) + (text.length > 80 ? '…' : '')
-              : (start > 0 ? '…' : '') +
-                text.slice(start, i + raw.length + 60).replace(raw, () => `<mark>${raw}</mark>`) +
-                (i + raw.length + 60 < text.length ? '…' : ''),
-          })
+          for (const r of msgs) {
+            const mem = members.get(r.slug)
+            const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
+            const i = text.indexOf(raw)
+            const start = Math.max(0, i - 30)
+            results.push({
+              type: 'message',
+              slug: r.slug,
+              id: r.id,
+              at: r.at,
+              mtype: r.type,
+              member: mem ? (mem.roman ?? mem.name) : r.slug.replace(/_/g, ' '),
+              site: mem?.site ?? null,
+              avatar: mem?.avatar ?? null,
+              score: 0,
+              snippet: i < 0
+                ? text.slice(0, 80) + (text.length > 80 ? '…' : '')
+                : (start > 0 ? '…' : '') +
+                  text.slice(start, i + raw.length + 60).replace(raw, () => `<mark>${raw}</mark>`) +
+                  (i + raw.length + 60 < text.length ? '…' : ''),
+            })
+          }
         }
       }
       results.sort((a, b) => a.score - b.score) // bm25: lower (more negative) = better

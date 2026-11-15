@@ -55,6 +55,7 @@ Hash routes, so Back / reload / pasting a link all work:
 #/thread/<member-slug>/<msg-id>    jump to one message (deep link / search hit)
 #/gallery/<member-slug>            that member's media
 #/search                           two-section search (messages + blog posts)
+#/blog-search                      blog-only search (opened from the Blogs header)
 #/blog                             Blog directory (generation sections, first site)
 #/blog/<site-key>                  Blog directory for another site (e.g. #/blog/sakurazaka46)
 #/blog/<member-key>                one member's blog post list
@@ -116,18 +117,21 @@ thing; the whole UI renders at a 125% app zoom, `--app-zoom` in `app.css`).
   are a 4-per-row square grid grouped in ascending month sections, with
 duration badges on videos; the Voice tab is a flat list with unread dots and
 a bottom player bar (leaving the tab stops playback)
-- **Search** — server-backed two-section search over **messages and blog
-  posts**: `完全一致 / exact matches` via FTS5 (trigram tokenizer — real
-  substring matching for Japanese; 1–2 char words go through an `instr()`
-  path), `<mark>`-highlighted snippets, Blog/Message type badges, debounced
-  fetch (~250 ms) against `/api/search`, ranked by bm25. **Reading-aware**
-  (stage 3): hiragana queries hit kanji text and vice versa — ひかり finds
-  光, さくら finds 桜, half-width katakana is normalized too; the reading
-  columns come from kuromoji tokenization at index time, and reading-only
-  matches are re-marked onto the kanji surface word in the snippet. Falls
-  back to the instant client-side scan (messages only) when the search DB is
-  missing or the endpoint fails. A `おすすめ / related` (semantic) section is
-  reserved for stage 5 and stays hidden while empty
+- **Search** — two search bars, two scopes: the Talk page's bar searches
+  **messages and blog posts**; the Blogs header's 🔍 opens a **blog-only**
+  search (`#/blog-search`, back returns to Blogs). Both hit the same server
+  search (`/api/search`, the blog one with `?type=blog`): `完全一致 / exact
+  matches` via FTS5 (trigram tokenizer — real substring matching for
+  Japanese; 1–2 char words go through an `instr()` path), `<mark>`-highlighted
+  snippets, Blog/Message type badges, debounced fetch (~250 ms), ranked by
+  bm25. **Reading-aware** (stage 3): hiragana queries hit kanji text and vice
+  versa — ひかり finds 光, さくら finds 桜, half-width katakana is normalized
+  too; reading columns come from kuromoji tokenization at index time, and
+  reading-only matches are re-marked onto the kanji surface word in the
+  snippet. The Talk-side search falls back to the instant client-side scan
+  (messages only) when the search DB is missing or the endpoint fails; the
+  blog-side search is server-only. A `おすすめ / related` (semantic) section
+  is reserved for stage 5 and stays hidden while empty
 - **Info sheet** — per-member counts and date ranges
 - **Blog** — mirrors the official-site diaries (`tools/grab-blog.py`, see the
   root README). Directory groups every known member by 期生; members whose

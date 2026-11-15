@@ -101,6 +101,16 @@
 {:else}
   <header class="head">
     <span class="title-left blog-title">Blogs</span>
+    <button
+      class="ic"
+      aria-label="search blog posts"
+      onclick={() => {
+        ui.searchBlog = true
+        ui.view = 'search'
+      }}
+    >
+      {@html icon('search')}
+    </button>
     <button class="ic" aria-label="sort" onclick={() => (menuOpen = !menuOpen)}>
       {@html icon('sort')}
     </button>
