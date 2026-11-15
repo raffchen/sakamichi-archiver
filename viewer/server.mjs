@@ -613,7 +613,9 @@ const app = http.createServer(async (req, res) => {
               if (related.length >= BLOG_CAP + MSG_CAP) break
               related.push(c)
             }
-            related.sort((a, b) => b.score - a.score) // cosine: higher is better
+            /* group order is preserved (blog first, then messages) — the client
+               renders them as separate subsections; no cross-corpus merge sort,
+               the scores aren't comparable */
             if (SEMANTIC_LOG && dists.length) {
               const sorted = [...dists].sort((a, b) => a - b).map((d) => (1 - d).toFixed(3))
               say(`semantic: "${raw}" n=${dists.length} cos ${sorted[0]}…${sorted.slice(0, 20).join(' ')} min=${sorted.at(-1)}`)
