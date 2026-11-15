@@ -12,11 +12,10 @@ Per member we fetch pages (newest first) until we hit already-archived ids,
 download thumbnails + inline images, and rewrite the HTML to local paths.
 
 Storage (group-first layout, mirrors grab-media.py):
-    <BLOGS_DIR>/<site>/<member_name>/blog/_blogs.json   entries, oldest first
-    <BLOGS_DIR>/<site>/<member_name>/blog/files/*       images
-BLOGS_DIR defaults to <MEDIA_DIR>/blogs and each member lands under its
-site (so members without a message subscription get archive dirs too; the
-viewer serves the tree under /media).
+    <MEDIA_DIR>/<site>/<member_name>/blog/_blogs.json   entries, oldest first
+    <MEDIA_DIR>/<site>/<member_name>/blog/files/*       images
+Every member lands under its site (so members without a message
+subscription get archive dirs too; the viewer serves the tree under /media).
 
 Member identity: --all archives EVERY blog member (GET /v2/blog-members,
 token required — cached under LOGS so later runs work without a token).
@@ -46,7 +45,9 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
 MEDIA = Path(os.environ.get("MEDIA_DIR") or ROOT / "media")
-BLOGS = Path(os.environ.get("BLOGS_DIR") or MEDIA / "blogs")
+# per-member roots are MEDIA/<site>/blogs/<member>/blog — site first, then
+# the blogs segment (grab_member adds both)
+BLOGS = MEDIA
 LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 CONFIG = Path(os.environ.get("BLOG_CONFIG") or ROOT / "viewer" / "archive.config.json")
 # viewer/public — the wiki-sourced generation map lives there (committed);
@@ -233,7 +234,7 @@ def download_images(member_dir: Path, content: str, thumbnail: str) -> tuple[str
 def grab_member(site_key: str, site: dict, members: dict[str, dict],
                 member_key: str, info: dict, only_new: bool = True) -> None:
     print(f"  {member_key}: blog member {info['name']} (uuid {info['uuid']})")
-    member_dir = BLOGS / site_key / member_key / "blog"
+    member_dir = BLOGS / site_key / "blogs" / member_key / "blog"
     state_file = member_dir / "_blogs.json"
     state = {"site": site_key, "member": info.get("display") or member_key,
              "member_uuid": info["uuid"], "updated": None, "entries": []}
