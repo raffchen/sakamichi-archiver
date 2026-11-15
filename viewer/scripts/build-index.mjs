@@ -317,9 +317,12 @@ const blogMembers = []
 const archivedBlogs = new Map() // uuid -> archived state
 const blogRows = new Map() // member_key -> full-post mirror for the search DB
 /* search text: HTML out (tags → spaces), the common entities decoded, whitespace
-   collapsed — the DB mirrors what a reader sees, not the markup */
+   collapsed — the DB mirrors what a reader sees, not the markup. <style>/<script>
+   blocks lose their CONTENT too (official blogs embed mail-app CSS like
+   `p.p1 {margin: ...}` — searchable, it pollutes every hit) */
 const stripHtml = (html) =>
   (html ?? '')
+    .replace(/<(style|script)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
