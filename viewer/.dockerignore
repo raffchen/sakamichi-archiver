@@ -3,3 +3,4 @@ dist/
 public/index.json
 public/thumbs/
 *.log
+model-cache/

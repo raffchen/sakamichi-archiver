@@ -20,6 +20,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { openSearchDb } from './db.mjs'
 import { buildTokenizer } from './tokenize.mjs'
+import { buildEmbedder } from './embed.mjs'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -432,21 +433,24 @@ fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
 say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
 say(`thumbs: ${thumbNote}`)
 
-// ---- search DB mirror (stage 1/3) ---------------------------------------
+// ---- search DB mirror (stage 1/3/5) --------------------------------------
 // Runs after index.json is written so a DB problem can never block serving.
 // Derived + rebuildable: delete the file and the next build recreates it.
 {
   const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
-  const db = openSearchDb(process.env.DB_PATH || path.join(PUB, 'index.sqlite'), say, tokenize)
+  const embedder = await buildEmbedder(say) // null ⇒ exact-only search
+  const db = await openSearchDb(process.env.DB_PATH || path.join(PUB, 'index.sqlite'), say, tokenize, embedder)
   if (db) {
     const t0 = Date.now()
     try {
       const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
-      const ps = db.syncBlogPosts(blogRows)
+      const ps = await db.syncBlogPosts(blogRows)
       const ms = db.syncMessages(msgRows)
       say(
         `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
-          `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged) — ${Date.now() - t0}ms`,
+          `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +
+          (embedder ? `, ${ps.embedded} chunks embedded` : '') +
+          ` — ${Date.now() - t0}ms`,
       )
     } catch (e) {
       say(`! search DB sync failed (${e.message}) — continuing without it`)
