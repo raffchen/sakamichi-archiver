@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { fade, fly } from 'svelte/transition'
+  import { fade, type TransitionConfig } from 'svelte/transition'
+import { cubicOut } from 'svelte/easing'
   import { keynav } from '../lib/actions'
   import { closeLightbox, claimMedia, releaseMedia, lightbox, stepLightbox } from '../lib/store.svelte'
   import { fmtDateTime } from '../lib/format'
@@ -8,15 +9,40 @@
   const m = $derived(lightbox.items[lightbox.i])
   const n = $derived(lightbox.items.length)
 
-  /* direction of the last step — the incoming media slides in from that side
-     while the old one fades out in place (a push would need them side by
-     side; overlapping, slide-in-over-fade reads cleaner). Every entry point
-     (swipe, arrows, keys) goes through step() so dir is always right. */
-  let dir = $state(1)
+  /* direction of the last step — a push transition: the outgoing media slides
+     out one way while the incoming slides in from the other, in sync, like a
+     carousel. Every entry point (swipe, arrows, keys) goes through step() so
+     dir is always right. dir starts 0 = "not a step": the lightbox just opens
+     with the overlay fade, no slide. */
+  let dir = $state(0)
   function step(d: number) {
     dir = d
     stepLightbox(d)
   }
+
+  /* percent-based push halves (translateX(±100%) of the full-width overlay),
+     so both layers move together and their edges stay glued — no fade. */
+  function pushIn(node: Element, { dir: d }: { dir: number }): TransitionConfig {
+    return d
+      ? { duration: 260, easing: cubicOut, css: (t: number) => `transform: translateX(${d * 100 * (1 - t)}%)` }
+      : { duration: 0, css: () => '' } /* dir 0 = the box just opened — no slide */
+  }
+  function pushOut(node: Element, { dir: d }: { dir: number }): TransitionConfig {
+    return d
+      ? { duration: 260, easing: cubicOut, css: (t: number) => `transform: translateX(${-d * 100 * (1 - t)}%)` }
+      : { duration: 0, css: () => '' }
+  }
+
+  /* decode the neighbours ahead of the step — otherwise the sliding-in layer
+     is blank until its image loads and the push shows nothing arriving */
+  $effect(() => {
+    const { items, i } = lightbox
+    for (const k of [i - 1, i + 1]) {
+      const it = items[k]
+      const src = it && (it.type === 'picture' ? (it.file ?? it.thumb) : (it.poster ?? it.thumb))
+      if (src) new Image().src = src
+    }
+  })
 
   /* the lightbox media (video/audio) is ephemeral — pause its own element on
      teardown, otherwise a removed-but-playing video keeps playing in the
@@ -93,7 +119,7 @@
         <!-- the wrapper is an absolutely-positioned overlay (see .lb-media) so
              the outgoing media fades out underneath the incoming one instead
              of both briefly stacking as separate grid rows -->
-        <div class="lb-media" in:fly={{ x: 60 * dir, duration: 200 }} out:fade={{ duration: 150 }}>
+        <div class="lb-media" in:pushIn={{ dir }} out:pushOut={{ dir }}>
         {#if m.type === 'picture'}
           <img src={m.file ?? m.thumb ?? ''} alt="" />
         {:else if m.type === 'video'}

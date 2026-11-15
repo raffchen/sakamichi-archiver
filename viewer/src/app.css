@@ -921,6 +921,10 @@ img {
   min-height: 0;
   padding: 0 8px;
   position: relative;
+  /* the push transition slides layers through here — clip them at the body
+     bounds so they never paint over the header/caption. The nav buttons are
+     position:fixed, so clipping doesn't touch them. */
+  overflow: hidden;
 }
 /* keyed per-item overlay: during a step the outgoing media fades out here
    while the incoming one slides in on top — both occupy the same box, so
