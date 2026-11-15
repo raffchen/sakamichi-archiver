@@ -161,10 +161,21 @@
       {/if}
 
       {#if results.related.length}
+        {@const relBlog = results.related.filter((h) => h.type === 'blog')}
+        {@const relMsg = results.related.filter((h) => h.type === 'message')}
         <p class="section-label">おすすめ / related</p>
-        {#each results.related as h (`${h.type}-${h.key ?? h.slug}-${h.id}`)}
-          {@render hitCard(h, true)}
-        {/each}
+        {#if relBlog.length}
+          <p class="sub-label">ブログ / blog posts</p>
+          {#each relBlog as h (`${h.type}-${h.key ?? h.slug}-${h.id}`)}
+            {@render hitCard(h, true)}
+          {/each}
+        {/if}
+        {#if relMsg.length}
+          <p class="sub-label">メッセージ / messages</p>
+          {#each relMsg as h (`${h.type}-${h.slug}-${h.id}`)}
+            {@render hitCard(h, true)}
+          {/each}
+        {/if}
       {/if}
     {/if}
   {:else if searching && (blogOnly || archive.textsTruncated)}
@@ -238,6 +249,12 @@
     letter-spacing: 0.05em;
     text-transform: uppercase;
     opacity: 0.55;
+  }
+  .sub-label {
+    margin: 8px 14px 2px;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.45;
   }
   .badge {
     display: inline-block;
