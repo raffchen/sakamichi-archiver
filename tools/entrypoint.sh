@@ -7,6 +7,11 @@
 #   SYNC_SITES     sites to sync, space-separated ("nogizaka46 sakurazaka46")
 #   SYNC_FLAGS     extra grab-media flags, e.g. "--full-history" for the very
 #                  first sync of a long archive (removed afterwards)
+#   SYNC_BLOG      1 (default) = also grab blogs each round:
+#                  grab-blog.py --all --site <site>, whose generation-map
+#                  filter reduces that to current members (graduated members'
+#                  blogs are erased upstream and unranked accounts like
+#                  運営スタッフ/期生リレー are out of scope)
 #   PUSH_URL       optional Uptime Kuma push monitor URL — one heartbeat per
 #                  site round: status=up on success, status=down on failure;
 #                  a dead container simply stops pushing (Kuma marks it down)
@@ -18,6 +23,7 @@ set -u
 INTERVAL="${SYNC_INTERVAL:-6h}"
 SITES="${SYNC_SITES:-nogizaka46}"
 FLAGS="${SYNC_FLAGS:-}"
+BLOG="${SYNC_BLOG:-1}"
 PUSH_BASE="${PUSH_URL:-}"
 PUSH_BASE="${PUSH_BASE%%\?*}"   # strip the sample query string from the URL
 
@@ -51,6 +57,16 @@ while :; do
       rc=$?
       echo "[syncer] $site: sync FAILED rc=$rc (see log above)"
       kuma down "$site sync failed (exit $rc)"
+    fi
+    # blogs ride along after the media round.grab-media refreshes the API
+    # token as a side effect, so the blog grab inherits a fresh one; failures
+    # are loud but do not flip the heartbeat (media is the paging signal)
+    if [ "$BLOG" = "1" ]; then
+      if python grab-blog.py --all --site "$site"; then
+        echo "[syncer] $site: blogs OK"
+      else
+        echo "[syncer] $site: blog sync FAILED (non-fatal) — media heartbeat unaffected"
+      fi
     fi
   done
   echo "[syncer] sleeping $INTERVAL"
