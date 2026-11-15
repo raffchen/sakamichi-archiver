@@ -35,7 +35,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = Path(__file__).resolve().parent.parent
 LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 
-HOSTS = ("http://127.0.0.1:9222", "http://[::1]:9222")
+HOSTS = ("http://127.0.0.1:{port}", "http://[::1]:{port}")
 SITES = {
     "nogizaka46": ".message.nogizaka46.com",
     "sakurazaka46": ".message.sakurazaka46.com",
@@ -46,22 +46,35 @@ COOKIE_FILES = {
 }
 
 
-def browser_ws_url() -> str:
-    for host in HOSTS:
+def browser_ws_url(port: int = 9222) -> str:
+    last_err = None
+    for host in (h.format(port=port) for h in HOSTS):
         try:
             ver = json.load(urllib.request.urlopen(host + "/json/version", timeout=5))
             return ver["webSocketDebuggerUrl"]
-        except Exception:
-            continue
+        except Exception as e:
+            last_err = e
     raise SystemExit(
-        "no DevTools endpoint on :9222 — start desktop Chrome with "
-        "--remote-debugging-port=9222 and log in to the expired site(s)"
+        f"no DevTools endpoint on :{port} ({last_err}) — start desktop Chrome with "
+        f"--remote-debugging-port={port} and log in to the expired site(s), "
+        "or use --from-files"
     )
 
 
-def read_browser_session_cookies() -> dict[str, str]:
+def read_files_session_cookies() -> dict[str, str]:
+    """site → cookie value, from the local logs/ files (as written by
+    harvest-session.py or a previous upload from another browser)"""
+    out = {}
+    for site, fname in COOKIE_FILES.items():
+        f = LOGS / fname
+        if f.exists() and f.read_text().strip():
+            out[site] = f.read_text().strip()
+    return out
+
+
+def read_browser_session_cookies(port: int = 9222) -> dict[str, str]:
     """domain → cookie value, for every `session` cookie in the browser jar"""
-    ws = websocket.create_connection(browser_ws_url(), timeout=15, suppress_origin=True)
+    ws = websocket.create_connection(browser_ws_url(port), timeout=15, suppress_origin=True)
     ws.send(json.dumps({"id": 1, "method": "Storage.getCookies", "params": {}}))
     res = None
     deadline = time.time() + 20
@@ -125,6 +138,10 @@ def main() -> None:
     ap.add_argument("--server", metavar="URL", help="viewer base URL, e.g. http://nas:8080")
     ap.add_argument("--site", choices=sorted(SITES), help="upload only this site (default: all found in Chrome)")
     ap.add_argument("--check", action="store_true", help="print session status and exit")
+    ap.add_argument("--from-files", action="store_true",
+                    help="upload cookies from local logs/ files instead of a live browser")
+    ap.add_argument("--port", type=int, default=9222,
+                    help="browser DevTools port (e.g. 9339 for the local recorder profile)")
     ap.add_argument("--token", help="UPLOAD_TOKEN (default: $UPLOAD_TOKEN or prompt)")
     args = ap.parse_args()
 
@@ -156,7 +173,7 @@ def main() -> None:
             sites[site] = entry
         sys.exit(0 if print_status(sites) else 2)
 
-    cookies = read_browser_session_cookies()
+    cookies = read_files_session_cookies() if args.from_files else read_browser_session_cookies(args.port)
     if not cookies:
         raise SystemExit("no session cookies found — log in to the site(s) in desktop Chrome first")
     if args.site:
