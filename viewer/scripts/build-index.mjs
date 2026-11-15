@@ -349,6 +349,7 @@ for (const site of Object.keys(sites)) {
          wiki-sourced generation map is only a fallback */
       name: m.name ?? g.name ?? uuid,
       kana: g.kana ?? null,
+      roman: g.roman ?? null,
       gen: g.gen ?? null,
       gen_num: g.gen_num ?? genNum(g.gen),
       graduated: !!g.graduated,
@@ -365,7 +366,7 @@ for (const site of Object.keys(sites)) {
     const g = gens[site]?.[uuid2] ?? {}
     blogMembers.push({
       key: arch.key, site, uuid: uuid2, name: g.name ?? arch.name, kana: g.kana ?? null,
-      gen: g.gen ?? null, gen_num: g.gen_num ?? genNum(g.gen),
+      roman: g.roman ?? null, gen: g.gen ?? null, gen_num: g.gen_num ?? genNum(g.gen),
       graduated: !!g.graduated, count: arch.count,
       first: arch.first, last: arch.last, thumb: arch.thumb,
     })
