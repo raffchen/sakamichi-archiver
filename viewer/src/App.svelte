@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { Archive, Member } from './lib/types'
-  import { closeLightbox, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
+  import { closeLightbox, getMember, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
   import Blog from './components/Blog.svelte'
   import Home from './components/Home.svelte'
@@ -16,7 +16,8 @@
 
   const siteKeys = $derived(Object.keys(archive.sites))
   const members = $derived(archive.members.filter((m) => (m.site ?? 'nogizaka46') === ui.site))
-  const current = $derived(archive.members.find((m) => m.slug === ui.slug) ?? null)
+  /* stage 4: the thread/gallery member upgrades to the full-text fetch once it lands */
+  const current = $derived(getMember(archive, ui.slug))
 
   let routed = $state(false)
 
@@ -128,7 +129,7 @@
     const want =
       ui.view === 'blog'
         ? blogHash()
-        : hashFor(ui.view === 'search' && ui.searchScope === 'blog' ? 'blog-search' : ui.view, ui.slug, ui.focusId)
+        : hashFor((ui.view === 'search' && ui.searchScope === 'blog' ? 'blog-search' : ui.view) as View, ui.slug, ui.focusId)
     if (location.hash === want) return
     /* on the media route, every change (next/prev, ✕/Back-close) edits the
        same history entry — Back exits the viewer in one step; opening the

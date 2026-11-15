@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Member, Msg } from '../lib/types'
-  import { openMember, showLightbox, seen, ui } from '../lib/store.svelte'
+  import { openMember, showLightbox, seen, ui, ensureFullTexts } from '../lib/store.svelte'
   import { fmtDur, fmtMediaStamp, fmtMonth } from '../lib/format'
   import { disp } from '../lib/display'
   import { icon } from '../lib/icons'
@@ -18,6 +18,9 @@
   ] as const
 
   let filter = $state<'all' | 'picture' | 'video' | 'voice'>('all')
+
+  /* stage 4: lightbox captions live in message texts — fetch the full member */
+  $effect(() => ensureFullTexts(member))
 
   /* official media list: oldest at the top, newest at the bottom, so sort
      ascending and let the month sections build themselves in order */

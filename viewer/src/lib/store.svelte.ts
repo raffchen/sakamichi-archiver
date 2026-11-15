@@ -1,4 +1,4 @@
-import type { Msg } from './types'
+import type { Archive, Member, Msg } from './types'
 
 /* Shared app state (Svelte 5 runes in a .svelte.ts module). */
 
@@ -61,6 +61,38 @@ export function back(archiveMembers: { slug: string }[] | null) {
     ui.searchScope = 'message'
     openBlog()
   } else goHome()
+}
+
+/* ---- stage 4: full texts on demand ------------------------------------
+   The served index is slim (old message texts dropped). Thread/Gallery fetch
+   the full member from /api/member/<slug> once and cache it here; the page
+   reload that a reindex triggers clears it naturally. */
+const fullMembers = new Map<string, Member>()
+const fullInflight = new Map<string, Promise<void>>()
+let fullTick = $state(0)
+
+export function getMember(archive: Archive, slug: string | null): Member | null {
+  if (!slug) return null
+  void fullTick // track cache fills so callers re-derive
+  return fullMembers.get(slug) ?? archive.members.find((m) => m.slug === slug) ?? null
+}
+
+export function ensureFullTexts(member: Member) {
+  if (!member.textsTruncated || fullMembers.has(member.slug) || fullInflight.has(member.slug)) return
+  fullInflight.set(
+    member.slug,
+    fetch(`/api/member/${encodeURIComponent(member.slug)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((m: Member) => {
+        fullMembers.set(m.slug, m)
+        fullTick++
+      })
+      .catch(() => {
+        /* offline / old server: thread renders with slim texts (media still
+           shows; old text bubbles empty) — same graceful stance as ever */
+      })
+      .finally(() => fullInflight.delete(member.slug)),
+  )
 }
 
 /* ---- one media at a time ----------------------------------------------

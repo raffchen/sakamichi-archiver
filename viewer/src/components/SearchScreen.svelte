@@ -39,11 +39,12 @@
   const memberBySlug = $derived.by(() => new Map(archive.members.map((m) => [m.slug, m])))
   const blogByKey = $derived.by(() => new Map((archive.blogs?.members ?? []).map((m) => [m.key, m])))
 
-  /* client-side fallback scan (messages only — blog bodies aren't in index.json,
-     so in blog-scope mode there is no offline fallback at all) */
+  /* client-side fallback scan (messages only — blog bodies aren't in index.json).
+     Only valid while the index still carries full texts (vite dev); once the
+     server slims it, old texts aren't on the client and search is server-only. */
   type LocalHit = { m: Member; msg: Msg }
   const localHits = $derived.by(() => {
-    if (!q || blogOnly || results?.available) return [] as LocalHit[]
+    if (!q || blogOnly || results?.available || archive.textsTruncated) return [] as LocalHit[]
     const needle = q.toLowerCase()
     const out: LocalHit[] = []
     for (const mem of archive.members) {
@@ -166,8 +167,12 @@
         {/each}
       {/if}
     {/if}
+  {:else if searching && (blogOnly || archive.textsTruncated)}
+    <p class="muted-note">検索中…</p>
   {:else if blogOnly}
     <p class="muted-note">ブログ検索にはアーカイブサーバーが必要 / blog search needs the archive server</p>
+  {:else if archive.textsTruncated}
+    <p class="muted-note">検索にはアーカイブサーバーが必要 / search needs the archive server</p>
   {:else if localHits.length}
     <p class="muted-note">{localHits.length}{localHits.length >= 300 ? '+' : ''} 件中</p>
     {#each localHits as h (`${h.m.slug}-${h.msg.id}`)}

@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { fade } from 'svelte/transition'
   import type { Archive, Member, Msg } from '../lib/types'
-  import { markSeen, openGallery, seenAt, showLightbox, ui } from '../lib/store.svelte'
+  import { markSeen, openGallery, seenAt, showLightbox, ui, ensureFullTexts } from '../lib/store.svelte'
   import { dayKey, fmtDayLabel } from '../lib/format'
   import { disp } from '../lib/display'
   import { sentinel } from '../lib/actions'
@@ -18,6 +18,9 @@
   let shown = $state(PAGE)
   let el = $state<HTMLElement | undefined>()
   let boundary = $state('') // "new" divider position, snapshotted before we mark read
+
+  /* stage 4: the slim index dropped old texts — fetch the full member once */
+  $effect(() => ensureFullTexts(member))
 
   const visible = $derived(member.messages.slice(-shown))
   const atStart = $derived(visible.length === member.messages.length)
