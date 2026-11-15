@@ -45,13 +45,20 @@ Per-site theming (nogizaka purple / sakurazaka pink) matches the official apps.
   (`#/media/<member>/<id>`); `←`/`→` step, `Esc` closes
 - **Blog tab** — directory of every blog member grouped by 期生 → member post
   list (thumbnail, pink title, lead, stamp) → post detail rendering the
-  archived HTML with an in-post image overlay. A `⇅` menu switches the
-  directory sort (generation old→new / new→old, name A→Z / Z→A, newest/oldest
-  posts across all members); site switcher pills and per-site shareable URLs
+  archived HTML with an in-post image overlay. A search bar under the site
+  pills opens blog-post-only search; a `⇅` menu switches the directory sort
+  (generation old→new / new→old, name A→Z / Z→A, newest/oldest posts across
+  all members); site switcher pills and per-site shareable URLs
   (`#/blog/sakurazaka46`)
 - **Gallery** — per-member photos/videos as a month-grouped grid + voice list
   with a bottom player bar
-- **Search** — full-text over every archived message (works offline, in-memory)
+- **Search** — two scoped search bars: the Talk page's searches **messages**,
+  the Blog tab's (under the site pills) searches **blog posts**. Both are
+  server-backed (`/api/search`) with two sections — `完全一致 / exact matches`
+  (FTS5 substring search, reading-aware: ひかり finds 光, さくら finds 桜) and
+  `おすすめ / related` (semantic: local ONNX embeddings rank posts/messages by
+  meaning, so English queries surface Japanese content, with % similarity
+  chips)
 - **Info sheet** — per-member counts and date ranges
 
 Hash routing throughout, so Back / reload / pasting a link all work. The full
@@ -80,11 +87,15 @@ docker compose up -d     # viewer + syncer; `up -d viewer` for viewer only
 # → http://localhost:8080
 ```
 
-Alongside `public/index.json` the indexer now maintains a derived **SQLite**
-search index (`viewer/scripts/db.mjs` — posts + messages, rebuildable from the
-files alone). It's unused by the UI yet; it's the foundation for server-side
-search. On the server it lives in the `viewer-db` volume so it stays warm
-across deploys.
+Alongside `public/index.json` the indexer maintains a derived **SQLite**
+search index (`viewer/scripts/db.mjs` — posts + messages with FTS5, kuromoji
+reading columns and local ONNX embeddings via sqlite-vec, all rebuildable
+from the files alone). The UI's search runs against it via `/api/search`:
+exact matches are FTS5 with reading-aware matching, and the おすすめ / related
+section ranks posts and messages by embedding similarity (fully local — no
+API, content never leaves the box). The index lives in the `viewer-db`
+volume (stays warm across deploys) and the embedding model in `viewer-model`
+(downloads ~120 MB once).
 
 ### 1.2 Deploy to a server
 
@@ -215,6 +226,8 @@ official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
 | `tools/cdp.py` | Chrome DevTools Protocol helper (auto-probes IPv4/IPv6 loopback) |
 | `viewer/` | the web viewer — **`viewer/README.md`** has the deep-dive |
 | `viewer/scripts/db.mjs` | derived SQLite search index (§1.1) |
+| `viewer/scripts/tokenize.mjs` | kuromoji wrapper — hiragana readings for the reading columns |
+| `viewer/scripts/embed.mjs` | local ONNX embedder (multilingual-e5-small q8) for the semantic section |
 | `docs/api.md` | reverse-engineered API reference (auth, endpoints, schemas, pagination) |
 | `logs/` | tokens, session cookies, blog roster cache |
 | `deploy.sh` | push + rebuild + health-check (§1.2) |
