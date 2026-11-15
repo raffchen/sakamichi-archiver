@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { Archive, Member, Msg } from '../lib/types'
-  import { openMember, ui } from '../lib/store.svelte'
+  import { openMember, openBlog, ui } from '../lib/store.svelte'
   import { fmtDateTime } from '../lib/format'
-  import { disp } from '../lib/display'
 
   let { archive }: { archive: Archive } = $props()
 
@@ -11,11 +10,37 @@
   const q = $derived(ui.query.trim())
   const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-  type Hit = { m: Member; msg: Msg }
-  const hits = $derived.by(() => {
-    if (!q) return [] as Hit[]
+  /* ---- server search (stage 2): exact section from the SQLite FTS index.
+     Debounced, abortable; any failure (no DB, endpoint missing, network)
+     drops back to the instant client-side scan over index.json messages. */
+  type Hit = {
+    type: 'blog' | 'message'
+    key?: string // blog: directory key under media/blogs/
+    slug?: string // message: member slug
+    id: string | number
+    title?: string | null
+    member: string
+    at: string | null
+    mtype?: string | null
+    site?: string | null
+    avatar?: string | null
+    snippet: string
+    score: number
+  }
+  type SearchReply = { available: boolean; exact: Hit[]; related: Hit[]; took_ms: number }
+
+  let results = $state<SearchReply | null>(null)
+  let searching = $state(false)
+
+  const memberBySlug = $derived.by(() => new Map(archive.members.map((m) => [m.slug, m])))
+  const blogByKey = $derived.by(() => new Map((archive.blogs?.members ?? []).map((m) => [m.key, m])))
+
+  /* client-side fallback scan (messages only — blog bodies aren't in index.json) */
+  type LocalHit = { m: Member; msg: Msg }
+  const localHits = $derived.by(() => {
+    if (!q || results?.available) return [] as LocalHit[]
     const needle = q.toLowerCase()
-    const out: Hit[] = []
+    const out: LocalHit[] = []
     for (const mem of archive.members) {
       for (const msg of mem.messages) {
         if (msg.text && msg.text.toLowerCase().includes(needle)) out.push({ m: mem, msg })
@@ -25,8 +50,53 @@
     return out
   })
 
-  const parts = (text: string) =>
+  const localParts = (text: string) =>
     text.split(new RegExp(`(${escRe(q)})`, 'ig')).map((s) => ({ s, hit: q ? s.toLowerCase() === q.toLowerCase() : false }))
+
+  let seq = 0
+  $effect(() => {
+    const query = q
+    seq++
+    const mySeq = seq
+    if (!query) {
+      results = null
+      searching = false
+      return
+    }
+    searching = true
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal })
+        .then((r) => r.json())
+        .then((reply: SearchReply) => {
+          if (mySeq === seq) {
+            results = reply
+            searching = false
+          }
+        })
+        .catch(() => {
+          if (mySeq === seq) {
+            results = { available: false, exact: [], related: [], took_ms: 0 }
+            searching = false
+          }
+        })
+    }, 250)
+    return () => {
+      clearTimeout(timer)
+      ctrl.abort()
+    }
+  })
+
+  const openHit = (h: Hit) => {
+    if (h.type === 'blog' && h.key) {
+      if (h.site) ui.site = h.site
+      openBlog(h.key, Number(h.id))
+    } else if (h.slug) {
+      const mem = memberBySlug.get(h.slug)
+      if (mem?.site) ui.site = mem.site
+      openMember(h.slug, Number(h.id))
+    }
+  }
 
   onMount(() => input?.focus())
 </script>
@@ -51,12 +121,41 @@
 
 <div class="screen">
   {#if !q}
-    <p class="muted-note">{archive.totals.messages} 件のメッセージから検索 / searching {archive.totals.messages} messages</p>
-  {:else if !hits.length}
-    <p class="muted-note">該当なし / no matches for “{q}”</p>
-  {:else}
-    <p class="muted-note">{hits.length}{hits.length >= 300 ? '+' : ''} 件中</p>
-    {#each hits as h (`${h.m.slug}-${h.msg.id}`)}
+    <p class="muted-note">
+      {#if results?.available}
+        メッセージとブログから検索 / searching messages and blog posts
+      {:else}
+        {archive.totals.messages} 件のメッセージから検索 / searching {archive.totals.messages} messages
+      {/if}
+    </p>
+  {:else if results?.available}
+    {#if !results.exact.length && !results.related.length}
+      <p class="muted-note">該当なし / no matches for “{q}”</p>
+    {:else}
+      <p class="muted-note">
+        {results.exact.length} 件 · {results.took_ms}ms
+        {#if searching}<span class="spin">⋯</span>{/if}
+      </p>
+
+      {#if results.exact.length}
+        <p class="section-label">完全一致 / exact matches</p>
+        {#each results.exact as h (`${h.type}-${h.key ?? h.slug}-${h.id}`)}
+          {@render hitCard(h)}
+        {/each}
+      {:else if results.related.length}
+        <p class="muted-note">完全一致なし / showing related</p>
+      {/if}
+
+      {#if results.related.length}
+        <p class="section-label">おすすめ / related</p>
+        {#each results.related as h (`${h.type}-${h.key ?? h.slug}-${h.id}`)}
+          {@render hitCard(h, true)}
+        {/each}
+      {/if}
+    {/if}
+  {:else if localHits.length}
+    <p class="muted-note">{localHits.length}{localHits.length >= 300 ? '+' : ''} 件中</p>
+    {#each localHits as h (`${h.m.slug}-${h.msg.id}`)}
       <button
         class="hit"
         onclick={() => {
@@ -68,12 +167,77 @@
         <span>
           <span class="m">{h.m.roman ?? h.m.name} · {fmtDateTime(h.msg.at)} · {h.msg.type}</span>
           <span class="t">
-            {#each parts(h.msg.text ?? '') as p}
+            {#each localParts(h.msg.text ?? '') as p}
               {#if p.hit}<mark>{p.s}</mark>{:else}{p.s}{/if}
             {/each}
           </span>
         </span>
       </button>
     {/each}
+  {:else}
+    <p class="muted-note">該当なし / no matches for “{q}”</p>
   {/if}
 </div>
+
+{#snippet hitCard(h: Hit, related = false)}
+  <button class="hit" onclick={() => openHit(h)}>
+    <img
+      class="ava"
+      src={
+        h.type === 'blog'
+          ? (blogByKey.get(h.key ?? '')?.thumb ?? '')
+          : (memberBySlug.get(h.slug ?? '')?.avatar ?? h.avatar ?? '')
+      }
+      alt=""
+      loading="lazy"
+    />
+    <span>
+      <span class="m">
+        <span class="badge" class:blog={h.type === 'blog'}>{h.type === 'blog' ? 'Blog' : 'Message'}</span>
+        {(h.type === 'blog' ? blogByKey.get(h.key ?? '')?.name : memberBySlug.get(h.slug ?? '')?.name) ?? h.member}
+        · {h.type === 'blog' ? (h.at ?? '').slice(0, 10) : h.at ? fmtDateTime(h.at) : ''}{#if h.type === 'message'} · {h.mtype}{/if}
+      </span>
+      {#if h.type === 'blog' && h.title}
+        <span class="t">{h.title}</span>
+      {/if}
+      <span class="t"><!-- safe: server-controlled snippet over stripped plain text -->
+        {@html h.snippet}
+      </span>
+      {#if related}
+        <span class="sim">{Math.round((1 - Math.min(h.score, 1)) * 100)}%</span>
+      {/if}
+    </span>
+  </button>
+{/snippet}
+
+<style>
+  .section-label {
+    margin: 10px 14px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.55;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0 5px;
+    margin-right: 4px;
+    border-radius: 4px;
+    background: var(--bubble);
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    vertical-align: 1px;
+  }
+  .spin {
+    opacity: 0.5;
+  }
+  .t :global(mark) {
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+</style>

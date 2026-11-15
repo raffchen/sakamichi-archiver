@@ -314,6 +314,20 @@ const genNum = (gen) => {
 const blogMembers = []
 const archivedBlogs = new Map() // uuid -> archived state
 const blogRows = new Map() // member_key -> full-post mirror for the search DB
+/* search text: HTML out (tags → spaces), the common entities decoded, whitespace
+   collapsed — the DB mirrors what a reader sees, not the markup */
+const stripHtml = (html) =>
+  (html ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 const blogsRoot = path.join(MEDIA, 'blogs')
 if (fs.existsSync(blogsRoot)) {
   for (const key of fs.readdirSync(blogsRoot)) {
@@ -340,7 +354,7 @@ if (fs.existsSync(blogsRoot)) {
       uuid: String(state.member_uuid),
       name: state.member ?? key.replace(/_/g, ' '),
       src_mtime: srcMtime,
-      posts: entries.map((e) => ({ id: e.id, title: e.title, at: e.at, body: e.content ?? '' })),
+      posts: entries.map((e) => ({ id: e.id, title: e.title, at: e.at, body: stripHtml(e.content) })),
     })
   }
 }

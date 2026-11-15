@@ -29,6 +29,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { DatabaseSync } from 'node:sqlite'
 import sirv from 'sirv'
 
 const VIEWER = path.dirname(fileURLToPath(import.meta.url))
@@ -37,6 +38,7 @@ const MEDIA = path.resolve(process.env.MEDIA_DIR || path.join(ROOT, 'media'))
 const DIST = path.resolve(process.env.DIST_DIR || path.join(VIEWER, 'dist'))
 const PUB = path.resolve(process.env.PUBLIC_DIR || path.join(VIEWER, 'public'))
 const LOGS = path.resolve(process.env.LOGS_DIR || path.join(ROOT, 'logs'))
+const DB_PATH = process.env.DB_PATH || path.join(PUB, 'index.sqlite')
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || ''
 const PORT = Number(process.env.PORT || 8080)
 const INDEX = path.join(PUB, 'index.json')
@@ -238,6 +240,129 @@ const app = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*',
     })
     return res.end(raw)
+  }
+
+  // --- search (stage 2): exact matches over messages + blog posts via FTS5.
+  // Reads the indexer's derived SQLite (WAL → concurrent with rebuilds); when
+  // the DB is absent/corrupt the endpoint reports available:false and the
+  // client falls back to its in-memory scan. The `related` (semantic) section
+  // arrives in stage 5 — the shape is final today so the client won't change.
+  if (p === '/api/search') {
+    const qp = new URL(req.url, 'http://localhost').searchParams
+    const query = (qp.get('q') ?? '').trim()
+    const limit = Math.min(Number(qp.get('limit')) || 30, 100)
+    const t0 = Date.now()
+    const empty = { available: false, exact: [], related: [], took_ms: 0 }
+    if (!query) return sendJson(res, 200, { ...empty, available: true })
+    let db = null
+    try {
+      if (fs.existsSync(DB_PATH)) db = new DatabaseSync(DB_PATH, { readOnly: true })
+    } catch (e) {
+      say(`! search DB unreadable (${e.message}) — client falls back`)
+    }
+    if (!db) return sendJson(res, 200, empty)
+
+    try {
+      const results = []
+      const cps = [...query]
+      if (cps.length >= 3) {
+        // trigram phrase == exact substring; quotes doubled for FTS safety
+        const match = `"${query.replaceAll('"', '""')}"`
+        const posts = db
+          .prepare(
+            `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member,
+                    p.at, bm25(posts_fts) AS score,
+                    snippet(posts_fts, -1, '<mark>', '</mark>', '…', 16) AS snippet
+             FROM posts_fts JOIN posts p ON p.rowid = posts_fts.rowid
+             WHERE posts_fts MATCH ? ORDER BY score LIMIT ?`,
+          )
+          .all(match, limit)
+        for (const r of posts) results.push({ type: 'blog', ...r })
+        const msgs = db
+          .prepare(
+            `SELECT m.slug, m.msg_id AS id, m.at, m.type, bm25(messages_fts) AS score,
+                    snippet(messages_fts, 0, '<mark>', '</mark>', '…', 16) AS snippet
+             FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid
+             WHERE messages_fts MATCH ? ORDER BY score LIMIT ?`,
+          )
+          .all(match, limit)
+        // slug → display name/site comes from the JSON index (search DB stays name-free)
+        const members = new Map(
+          (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
+        )
+        for (const r of msgs) {
+          const mem = members.get(r.slug)
+          results.push({
+            type: 'message',
+            slug: r.slug,
+            id: r.id,
+            at: r.at,
+            mtype: r.type,
+            member: mem ? (mem.roman ?? mem.name) : r.slug.replace(/_/g, ' '),
+            site: mem?.site ?? null,
+            avatar: mem?.avatar ?? null,
+            score: r.score,
+            snippet: r.snippet,
+          })
+        }
+      } else {
+        // <3 code points: below the trigram minimum — instr() scan instead
+        const posts = db
+          .prepare(
+            `SELECT member_key AS "key", site, post_id AS id, title, member_name AS member, at, body
+             FROM posts WHERE instr(title, ?) > 0 OR instr(body, ?) > 0 LIMIT ?`,
+          )
+          .all(query, query, limit)
+        for (const r of posts) {
+          const hay = r.title.includes(query) ? r.title : r.body
+          const i = hay.indexOf(query)
+          const start = Math.max(0, i - 30)
+          results.push({
+            type: 'blog',
+            ...r,
+            score: 0,
+            snippet:
+              (start > 0 ? '…' : '') +
+              hay.slice(start, i + query.length + 60).replace(query, () => `<mark>${query}</mark>`) +
+              (i + query.length + 60 < hay.length ? '…' : ''),
+          })
+        }
+        const msgs = db
+          .prepare(
+            `SELECT slug, msg_id AS id, at, type FROM messages WHERE instr(text, ?) > 0 LIMIT ?`,
+          )
+          .all(query, limit)
+        const members = new Map(
+          (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
+        )
+        for (const r of msgs) {
+          const mem = members.get(r.slug)
+          const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
+          const i = text.indexOf(query)
+          const start = Math.max(0, i - 30)
+          results.push({
+            type: 'message',
+            slug: r.slug,
+            id: r.id,
+            at: r.at,
+            mtype: r.type,
+            member: mem ? (mem.roman ?? mem.name) : r.slug.replace(/_/g, ' '),
+            site: mem?.site ?? null,
+            avatar: mem?.avatar ?? null,
+            score: 0,
+            snippet:
+              (start > 0 ? '…' : '') +
+              text.slice(start, i + query.length + 60).replace(query, () => `<mark>${query}</mark>`) +
+              (i + query.length + 60 < text.length ? '…' : ''),
+          })
+        }
+      }
+      results.sort((a, b) => a.score - b.score) // bm25: lower (more negative) = better
+      return sendJson(res, 200, { available: true, exact: results.slice(0, limit), related: [], took_ms: Date.now() - t0 })
+    } catch (e) {
+      say(`! /api/search failed (${e.message})`)
+      return sendJson(res, 200, empty)
+    }
   }
 
   // --- session-cookie upload + status (bearer-gated; 404 unless configured) ---

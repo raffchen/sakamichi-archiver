@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 const md5 = (s) => createHash('md5').update(s ?? '').digest('hex')
 
 const SCHEMA = `
@@ -39,6 +39,23 @@ CREATE TABLE IF NOT EXISTS messages (
   PRIMARY KEY (slug, msg_id)
 );`
 
+/* v2: FTS for stage-2 search. Tokenizer decision (bake-off on the real
+   archive, 2026-11-15): unicode61 treats a whole CJK run as ONE token, so
+   歌合戦 finds zero hits inside 紅白歌合戦 — useless for Japanese. trigram
+   gives real substring search (歌合戦への出 → 3 hits) but cannot match
+   2-code-point words (卒業, 桜); those go through an instr() path in
+   server.mjs instead. Content is duplicated into the FTS tables (external
+   content was rejected: node:sqlite's delete path for it is fiddly and the
+   corpus is only a few MB). FTS rowid mirrors the base-table rowid. */
+const SCHEMA_FTS = `
+CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts    USING fts5(title, body, tokenize='trigram');
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, tokenize='trigram');`
+const BACKFILL_FTS = `
+INSERT INTO posts_fts (rowid, title, body)
+  SELECT rowid, title, body FROM posts WHERE rowid NOT IN (SELECT rowid FROM posts_fts);
+INSERT INTO messages_fts (rowid, text)
+  SELECT rowid, text FROM messages WHERE rowid NOT IN (SELECT rowid FROM messages_fts);`
+
 /**
  * Open (and migrate) the search DB. Returns null when the DB is disabled —
  * missing DB_PATH is fine (defaults to public/index.sqlite for local dev),
@@ -52,9 +69,16 @@ export function openSearchDb(dbPath, log = () => {}) {
     db.exec('PRAGMA journal_mode = WAL')
     db.exec(SCHEMA)
     const ver = db.prepare('PRAGMA user_version').get().user_version
+    if (ver < 2) {
+      // v1 DBs carry raw-HTML bodies and no FTS — rebuild the text side once
+      db.exec('DROP TABLE IF EXISTS posts_fts; DROP TABLE IF EXISTS messages_fts')
+    }
+    db.exec(SCHEMA_FTS)
+    // cheap, idempotent safety net: any base row missing from FTS gets indexed
+    db.exec(BACKFILL_FTS)
     if (ver < SCHEMA_VERSION) {
-      // future migrations go here (stage 2 adds the FTS tables, stage 3 the
-      // reading columns, stage 5 the vec table) — bump SCHEMA_VERSION per step
+      // future migrations go here (stage 3 the reading columns, stage 5 the
+      // vec table) — bump SCHEMA_VERSION per step
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
     }
     const counts = {
@@ -62,6 +86,12 @@ export function openSearchDb(dbPath, log = () => {}) {
       messages: db.prepare('SELECT COUNT(*) c FROM messages').get().c,
     }
     log(`db open: ${dbPath} (v${SCHEMA_VERSION}, ${counts.posts} posts, ${counts.messages} messages)`)
+    const fts = {
+      postsIns: db.prepare('INSERT INTO posts_fts (rowid, title, body) VALUES (?, ?, ?)'),
+      postsDel: db.prepare('DELETE FROM posts_fts WHERE rowid = ?'),
+      msgsIns: db.prepare('INSERT INTO messages_fts (rowid, text) VALUES (?, ?)'),
+      msgsDel: db.prepare('DELETE FROM messages_fts WHERE rowid = ?'),
+    }
     return {
       path: dbPath,
       /**
@@ -75,7 +105,7 @@ export function openSearchDb(dbPath, log = () => {}) {
         const run = db.transaction ?? null // (node:sqlite has no helper; exec BEGIN/COMMIT below)
         db.exec('BEGIN')
         try {
-          const sel = db.prepare('SELECT post_id, body_md5 FROM posts WHERE member_key = ?')
+          const sel = db.prepare('SELECT post_id, body_md5, rowid FROM posts WHERE member_key = ?')
           const ins = db.prepare(
             'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
@@ -84,23 +114,30 @@ export function openSearchDb(dbPath, log = () => {}) {
           )
           const del = db.prepare('DELETE FROM posts WHERE member_key = ? AND post_id = ?')
           for (const [memberKey, m] of rowsByMember) {
-            const existing = new Map(sel.all(memberKey).map((r) => [r.post_id, r.body_md5]))
+            const existing = new Map(sel.all(memberKey).map((r) => [r.post_id, { md5: r.body_md5, rowid: r.rowid }]))
             const seen = new Set()
             for (const p of m.posts) {
               seen.add(String(p.id))
               const digest = md5(p.body)
-              if (!existing.has(String(p.id))) {
-                ins.run(memberKey, m.site, String(p.id), m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime)
+              const prev = existing.get(String(p.id))
+              if (!prev) {
+                const { lastInsertRowid } = ins.run(
+                  memberKey, m.site, String(p.id), m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime,
+                )
+                fts.postsIns.run(lastInsertRowid, p.title, p.body)
                 stat.added++
-              } else if (existing.get(String(p.id)) !== digest) {
+              } else if (prev.md5 !== digest) {
                 upd.run(m.site, m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, memberKey, String(p.id))
+                fts.postsDel.run(prev.rowid)
+                fts.postsIns.run(prev.rowid, p.title, p.body)
                 stat.updated++
               } else {
                 stat.unchanged++
               }
             }
-            for (const gone of existing.keys()) {
+            for (const [gone, prev] of existing) {
               if (!seen.has(gone)) {
+                fts.postsDel.run(prev.rowid)
                 del.run(memberKey, gone)
                 stat.removed++
               }
@@ -114,8 +151,10 @@ export function openSearchDb(dbPath, log = () => {}) {
             .map((r) => r.member_key)
             .filter((k) => !keys.includes(k))
           if (stale.length) {
+            const rowids = db.prepare('SELECT rowid FROM posts WHERE member_key = ?')
             const delMember = db.prepare('DELETE FROM posts WHERE member_key = ?')
             for (const k of stale) {
+              for (const r of rowids.all(k)) fts.postsDel.run(r.rowid)
               stat.removed += Number(db.prepare('SELECT COUNT(*) c FROM posts WHERE member_key = ?').get(k).c)
               delMember.run(k)
             }
@@ -132,7 +171,7 @@ export function openSearchDb(dbPath, log = () => {}) {
         const stat = { added: 0, updated: 0, removed: 0, unchanged: 0 }
         db.exec('BEGIN')
         try {
-          const sel = db.prepare('SELECT msg_id, body_md5 FROM messages WHERE slug = ?')
+          const sel = db.prepare('SELECT msg_id, body_md5, rowid FROM messages WHERE slug = ?')
           const ins = db.prepare(
             'INSERT INTO messages (slug, msg_id, at, type, text, body_md5) VALUES (?, ?, ?, ?, ?, ?)',
           )
@@ -141,23 +180,28 @@ export function openSearchDb(dbPath, log = () => {}) {
           )
           const del = db.prepare('DELETE FROM messages WHERE slug = ? AND msg_id = ?')
           for (const [slug, msgs] of rowsBySlug) {
-            const existing = new Map(sel.all(slug).map((r) => [r.msg_id, r.body_md5]))
+            const existing = new Map(sel.all(slug).map((r) => [r.msg_id, { md5: r.body_md5, rowid: r.rowid }]))
             const seen = new Set()
             for (const msg of msgs) {
               seen.add(Number(msg.id))
               const digest = md5(msg.text)
-              if (!existing.has(Number(msg.id))) {
-                ins.run(slug, Number(msg.id), msg.at, msg.type, msg.text, digest)
+              const prev = existing.get(Number(msg.id))
+              if (!prev) {
+                const { lastInsertRowid } = ins.run(slug, Number(msg.id), msg.at, msg.type, msg.text, digest)
+                fts.msgsIns.run(lastInsertRowid, msg.text)
                 stat.added++
-              } else if (existing.get(Number(msg.id)) !== digest) {
+              } else if (prev.md5 !== digest) {
                 upd.run(msg.at, msg.type, msg.text, digest, slug, Number(msg.id))
+                fts.msgsDel.run(prev.rowid)
+                fts.msgsIns.run(prev.rowid, msg.text)
                 stat.updated++
               } else {
                 stat.unchanged++
               }
             }
-            for (const gone of existing.keys()) {
+            for (const [gone, prev] of existing) {
               if (!seen.has(gone)) {
+                fts.msgsDel.run(prev.rowid)
                 del.run(slug, gone)
                 stat.removed++
               }
@@ -170,8 +214,10 @@ export function openSearchDb(dbPath, log = () => {}) {
             .map((r) => r.slug)
             .filter((s) => !slugs.includes(s))
           if (stale.length) {
+            const rowids = db.prepare('SELECT rowid FROM messages WHERE slug = ?')
             const delMember = db.prepare('DELETE FROM messages WHERE slug = ?')
             for (const s of stale) {
+              for (const r of rowids.all(s)) fts.msgsDel.run(r.rowid)
               stat.removed += Number(db.prepare('SELECT COUNT(*) c FROM messages WHERE slug = ?').get(s).c)
               delMember.run(s)
             }
