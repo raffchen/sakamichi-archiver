@@ -27,9 +27,6 @@ server; nothing is uploaded anywhere.
 - **`viewer/`** — the web viewer (Svelte 5 + Vite; detailed docs in
   **`viewer/README.md`**)
 - **`docs/api.md`** — the reverse-engineered Message API reference
-- **`docs/runbook.md`** — operational how-to: daily loop, deploys, server
-  access, gotchas (start here when working on the project)
-- **`AGENTS.md`** — one-page pointer to the runbook + house rules
 
 ## 1. The viewer
 
