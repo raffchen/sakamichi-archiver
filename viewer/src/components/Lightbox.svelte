@@ -56,7 +56,9 @@
   }
 
   /* touch drag — vertical drags stay with the caption scroll, and touches
-     that begin on a button/link/video/audio never drag the track */
+     that begin on a button/link never drag the track. Videos DO drag, except
+     over their own controls strip (bottom edge of the element): that area is
+     the seek bar, and horizontal drags there must keep seeking. */
   let mode: '' | 'x' | 'y' = ''
   let startX = 0
   let startY = 0
@@ -64,9 +66,17 @@
   let lastT = 0
   let vel = 0 /* px/ms, for flick detection */
   function onTouchStart(e: TouchEvent) {
-    if (settling || (e.target as HTMLElement)?.closest('button, a, video, audio')) {
+    if (settling || (e.target as HTMLElement)?.closest('button, a')) {
       mode = 'y'
       return
+    }
+    const media = (e.target as HTMLElement)?.closest('video, audio')
+    if (media) {
+      const r = media.getBoundingClientRect()
+      if (e.touches[0].clientY > r.bottom - Math.max(48, r.height * 0.18)) {
+        mode = 'y'
+        return
+      }
     }
     startX = e.touches[0].clientX
     startY = e.touches[0].clientY
@@ -221,7 +231,9 @@
         <!-- click zones are full-height screen halves (see .lb-nav); the visible
              chevrons are separate so they can sit above the media, pinned to the
              viewport center instead of riding on the caption height.
-             Clamped stepping means an end has no further item — hide that chip. -->
+             Clamped stepping means an end has no further item — hide that chip.
+             On touch/portrait screens both are display:none (CSS below): swipe
+             is the only navigation there. -->
         {#if lightbox.i > 0}
           <button class="lb-nav l" aria-label="previous" onclick={() => step(-1)}></button>
           <span class="lb-glyph l" aria-hidden="true">{@html icon('back')}</span>
