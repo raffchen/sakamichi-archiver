@@ -162,13 +162,14 @@ News / Official remain decorative placeholders — that content isn't archived.
 
 ## Blog data
 
-`blogs/` is a sibling of the message archives (`media/blogs/<member>/blog/`),
+`blogs/` lives inside each site's tree (`media/<site>/blogs/<member>/blog/`),
 indexed into `index.json` as `blogs.members[]`:
 
 ```json
 { "key": "川﨑_桜", "site": "nogizaka46", "uuid": "55400",
   "name": "川﨑 桜", "gen": "5期生", "gen_num": 5, "graduated": false,
-  "count": 95, "first": "...", "last": "...", "thumb": "/media/blogs/..." }
+  "count": 95, "first": "...", "last": "...",
+  "thumb": "/media/nogizaka46/blogs/..." }
 ```
 
 - the **full roster** comes from `logs/blog-members-<site>.json` (grabbed once
@@ -194,7 +195,7 @@ index from disk):
 | `GET /api/search` | two-section search (`?q=&limit=&type=message\|blog`) — FTS5 exact + semantic `related` (stage 5/6); `SEMANTIC_LOG=1` logs score distributions |
 | `GET /api/blog` | newest-posts feed — served from the search DB when present (O(1); thumbs + lead included), file-scan fallback otherwise |
 | `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead` |
-| `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/blogs/...`) |
+| `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/<site>/blogs/...`) |
 | `POST /api/secrets/session` | syncer uploads rotated session cookies here (guarded by `UPLOAD_TOKEN`) |
 | `GET /api/secrets/status` | token/cookie freshness for monitoring |
 

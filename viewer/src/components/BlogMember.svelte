@@ -43,7 +43,13 @@
     {#each entries as e (e.id)}
       <button class="blog-post-row" onclick={() => open(e.id)}>
         {#if e.thumbnail}
-          <img src={`/media/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`} loading="lazy" alt="" />
+          <img
+            src={info?.site
+              ? `/media/${info.site}/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`
+              : `/media/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`}
+            loading="lazy"
+            alt=""
+          />
         {:else}
           <div class="ph"></div>
         {/if}

@@ -155,18 +155,43 @@ const config = readJson(CONFIG) ?? { members: {} }
 const displayName = config.display_name ?? 'raff'
 const sites = config.sites ?? {}
 
-const slugs = fs.existsSync(MEDIA)
-  ? fs
-      .readdirSync(MEDIA, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'blogs')
-      .map((d) => d.name)
+/* group-first layout: media/<site>/messages/<member>… and media/<site>/blogs/
+   <member>…. Legacy flat trees (media/<member> with _member.json, media/blogs/
+   <member>) are still indexed — their /media URLs keep resolving wherever the
+   dirs physically are, so indexing works before and after a migration. */
+const siteScan = fs.existsSync(MEDIA)
+  ? fs.readdirSync(MEDIA, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith('.'))
   : []
+const slugs = [] // { slug, siteHint } — siteHint is layout-derived, meta wins
+const legacyBlogRoots = [] // { root, siteHint }
+for (const d of siteScan) {
+  if (d.name === 'blogs') {
+    legacyBlogRoots.push({ root: path.join(MEDIA, d.name), siteHint: null }) // legacy flat blogs tree
+    continue
+  }
+  if (fs.existsSync(path.join(MEDIA, d.name, '_member.json'))) {
+    slugs.push({ slug: d.name, siteHint: null }) // legacy flat message member
+    continue
+  }
+  for (const sub of ['messages', 'blogs']) {
+    const root = path.join(MEDIA, d.name, sub)
+    if (sub === 'messages') {
+      if (fs.existsSync(root))
+        for (const m of fs.readdirSync(root, { withFileTypes: true }))
+          if (m.isDirectory() && !m.name.startsWith('.')) slugs.push({ slug: m.name, siteHint: d.name })
+    } else if (fs.existsSync(root)) {
+      legacyBlogRoots.push({ root, siteHint: d.name })
+    }
+  }
+}
 
 const members = []
 const thumbJobs = []
 
-for (const slug of slugs) {
-  const dir = path.join(MEDIA, slug)
+for (const { slug, siteHint } of slugs) {
+  const dir = siteHint
+    ? path.join(MEDIA, siteHint, 'messages', slug)
+    : path.join(MEDIA, slug)
   let messages = readJson(path.join(dir, '_messages.json'))
   let source = '_messages.json'
   if (!messages) {
@@ -179,11 +204,12 @@ for (const slug of slugs) {
   }
 
   // site attribution: _member.json (written by grab-media.py) wins over config
+  // then the layout-derived site (media/<site>/messages/<slug>)
   const meta = readJson(path.join(dir, '_member.json')) ?? {}
   const conf = config.members?.[slug] ?? {}
-  // a folder that isn't in archive.config.json still gets indexed — under the first site
-  const site = meta.site ?? conf.site ?? Object.keys(sites)[0] ?? null
-  if (!meta.site && !conf.site)
+  // a folder that isn't anywhere attributable still gets indexed — under the first site
+  const site = meta.site ?? conf.site ?? siteHint ?? Object.keys(sites)[0] ?? null
+  if (!meta.site && !conf.site && !siteHint)
     console.warn(`  ! ${slug}: not in archive.config.json — assuming site "${site}" (add it if that's wrong)`)
 
   const files = filesByMessageId(dir)
@@ -216,7 +242,7 @@ for (const slug of slugs) {
       entry.ratio = +(m.thumbnail_width / m.thumbnail_height).toFixed(4)
     }
     if (hit) {
-      const rel = `${slug}/${hit.type}/${hit.name}`
+      const rel = `${siteHint ? `${siteHint}/messages/` : ''}${slug}/${hit.type}/${hit.name}`
       entry.file = `/media/${enc(rel)}`
       const tRel = `${thumbDirName}/${m.id}.jpg`
       entry.thumb = `/thumbs/${enc(tRel)}`
@@ -251,8 +277,12 @@ for (const slug of slugs) {
     member_id: memberId,
     // home grid uses the single artwork, the thread uses the chat avatar
     // (two independent image systems — see docs/api.md)
-    home: home ? `/media/${enc(`${slug}/single/${home}`)}` : null,
-    avatar: profile ? `/media/${enc(`${slug}/profile/${profile}`)}` : null,
+    home: home
+      ? `/media/${enc(`${siteHint ? `${siteHint}/messages/` : ''}${slug}/single/${home}`)}`
+      : null,
+    avatar: profile
+      ? `/media/${enc(`${siteHint ? `${siteHint}/messages/` : ''}${slug}/profile/${profile}`)}`
+      : null,
     first: msgs[0]?.at ?? null,
     last: msgs.at(-1)?.at ?? null,
     counts,
@@ -333,21 +363,26 @@ const stripHtml = (html) =>
     .replace(/&[a-z#0-9]+;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-const blogsRoot = path.join(MEDIA, 'blogs')
-if (fs.existsSync(blogsRoot)) {
+/* blogs: one pass per root found above (site-scoped trees, then the legacy
+   flat tree if it still exists); site comes from the layout hint with
+   _blogs.json as tiebreak/authority */
+for (const { root: blogsRoot, siteHint } of legacyBlogRoots) {
   for (const key of fs.readdirSync(blogsRoot)) {
     const state = readJson(path.join(blogsRoot, key, 'blog', '_blogs.json'))
     if (!state?.entries?.length) continue
+    const blogSite = siteHint ?? state.site ?? null
     const entries = state.entries // oldest-first (grab-blog sorts on write)
     const lastWithThumb = [...entries].reverse().find((e) => e.thumbnail)
     archivedBlogs.set(String(state.member_uuid), {
       key,
-      site: state.site ?? null,
+      site: blogSite,
       name: state.member ?? key.replace(/_/g, ' '),
       count: entries.length,
       first: entries[0]?.at ?? null,
       last: entries.at(-1)?.at ?? null,
-      thumb: lastWithThumb ? `/media/${enc(`blogs/${key}/blog/${lastWithThumb.thumbnail}`)}` : null,
+      thumb: lastWithThumb
+        ? `/media/${enc(`${blogSite ? `${blogSite}/blogs/` : 'blogs/'}${key}/blog/${lastWithThumb.thumbnail}`)}`
+        : null,
     })
     /* mirror for the search DB (stage 1): full bodies, keyed per member */
     let srcMtime = null
@@ -355,7 +390,7 @@ if (fs.existsSync(blogsRoot)) {
       srcMtime = Math.floor(fs.statSync(path.join(blogsRoot, key, 'blog', '_blogs.json')).mtimeMs)
     } catch {}
     blogRows.set(key, {
-      site: state.site ?? null,
+      site: blogSite,
       uuid: String(state.member_uuid),
       name: state.member ?? key.replace(/_/g, ' '),
       src_mtime: srcMtime,

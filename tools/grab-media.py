@@ -36,6 +36,12 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(os.environ.get("MEDIA_DIR") or ROOT / "media")
 LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 
+
+def msg_dir(site: dict, slug: str) -> Path:
+    """media/<site>/messages/<slug> — group-first layout; grab-blog.py mirrors
+    it with media/<site>/blogs/<member> (see docs/deployment.md)."""
+    return OUT / site.get("key", "?") / "messages" / slug
+
 SITES = {
     "nogizaka46": {
         "key": "nogizaka46",
@@ -269,7 +275,7 @@ def fetch_member_media(member_id: int, token: str, site: dict, full_history: boo
     entries = {}
     if slug:
         try:
-            prev = json.loads((OUT / slug / "_messages.json").read_text(encoding="utf-8"))
+            prev = json.loads((msg_dir(site, slug) / "_messages.json").read_text(encoding="utf-8"))
             entries = {m["id"]: m for m in prev}
         except (OSError, ValueError, KeyError, TypeError):
             pass
@@ -346,6 +352,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
                    from_date: str) -> tuple[int, int]:
     mid, name = member["id"], member["name"]
     slug = slugify(name)
+    mroot = msg_dir(site, slug)
     print(f"[{mid}] {name}")
     got = skipped = 0
     try:
@@ -358,7 +365,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
     for m in media:
         url = m["file"]
         fname = f"{m['id']}_{m['published_at'].replace(':', '-')}.{ext_of(url)}"
-        dest = OUT / slug / m["type"] / fname
+        dest = mroot / m["type"] / fname
         try:
             if download(url, dest):
                 got += 1
@@ -373,7 +380,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
             all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date, slug)
             for m2 in media:  # retry the member's media once with new signatures
                 u2 = m2["file"]
-                d2 = OUT / slug / m2["type"] / f"{m2['id']}_{m2['published_at'].replace(':', '-')}.{ext_of(u2)}"
+                d2 = mroot / m2["type"] / f"{m2['id']}_{m2['published_at'].replace(':', '-')}.{ext_of(u2)}"
                 if download(u2, d2):
                     got += 1
             break
@@ -394,13 +401,13 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
                 if not url:
                     continue
                 base = url.split("?")[0].rsplit("/", 1)[-1]
-                if download(url, OUT / slug / "profile" / base):
+                if download(url, mroot / "profile" / base):
                     prof_got += 1
         if prof_got:
             print(f"    profile pictures: {prof_got}")
         # _atomic_write mkdirs — the profile dir only exists when a thumbnail
         # was downloaded (e.g. the org accounts 乃木坂46/櫻坂46 have none)
-        _atomic_write(OUT / slug / "profile" / "_profile.json",
+        _atomic_write(mroot / "profile" / "_profile.json",
                       json.dumps(members, ensure_ascii=False, indent=1))
     except urllib.error.HTTPError as e:
         print(f"    profile HTTP {e.code}")
@@ -414,7 +421,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
             if not url:
                 continue
             base = url.split("?")[0].rsplit("/", 1)[-1]
-            if download(url, OUT / slug / "single" / base):
+            if download(url, mroot / "single" / base):
                 single_got += 1
         if single_got:
             print(f"    single artwork: {single_got}")
@@ -423,17 +430,17 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
 
     # manifest (media only) + full message archive + readable transcript —
     # atomic so the viewer's index builder never reads a half-written file
-    _atomic_write(OUT / slug / "_manifest.json",
+    _atomic_write(mroot / "_manifest.json",
                   json.dumps(media, ensure_ascii=False, indent=1))
-    _atomic_write(OUT / slug / "_messages.json",
+    _atomic_write(mroot / "_messages.json",
                   json.dumps(all_msgs, ensure_ascii=False, indent=1))
-    _atomic_write(OUT / slug / "_transcript.md",
+    _atomic_write(mroot / "_transcript.md",
                   f"# {name}\n\n" + "\n---\n\n".join(transcript_line(m) for m in all_msgs))
     # which site this folder belongs to — nothing else in media/ records it, and
     # the viewer needs it to put the member under the right site tab
     gid = member.get("group_id") or (all_msgs[0].get("group_id") if all_msgs else None)
     _atomic_write(
-        OUT / slug / "_member.json",
+        mroot / "_member.json",
         json.dumps(
             {
                 "site": site.get("key", "?"),

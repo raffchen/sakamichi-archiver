@@ -11,11 +11,12 @@ expose a PUBLIC JSON API (no auth, no session — safe to run anywhere):
 Per member we fetch pages (newest first) until we hit already-archived ids,
 download thumbnails + inline images, and rewrite the HTML to local paths.
 
-Storage:
-    <BLOGS_DIR>/<member_name>/blog/_blogs.json   entries, oldest first
-    <BLOGS_DIR>/<member_name>/blog/files/*       images
-BLOGS_DIR defaults to <MEDIA_DIR>/blogs (a sibling tree, so members without a
-message subscription get archive dirs too; the viewer serves it under /media).
+Storage (group-first layout, mirrors grab-media.py):
+    <BLOGS_DIR>/<site>/<member_name>/blog/_blogs.json   entries, oldest first
+    <BLOGS_DIR>/<site>/<member_name>/blog/files/*       images
+BLOGS_DIR defaults to <MEDIA_DIR>/blogs and each member lands under its
+site (so members without a message subscription get archive dirs too; the
+viewer serves the tree under /media).
 
 Member identity: --all archives EVERY blog member (GET /v2/blog-members,
 token required — cached under LOGS so later runs work without a token).
@@ -232,7 +233,7 @@ def download_images(member_dir: Path, content: str, thumbnail: str) -> tuple[str
 def grab_member(site_key: str, site: dict, members: dict[str, dict],
                 member_key: str, info: dict, only_new: bool = True) -> None:
     print(f"  {member_key}: blog member {info['name']} (uuid {info['uuid']})")
-    member_dir = BLOGS / member_key / "blog"
+    member_dir = BLOGS / site_key / member_key / "blog"
     state_file = member_dir / "_blogs.json"
     state = {"site": site_key, "member": info.get("display") or member_key,
              "member_uuid": info["uuid"], "updated": None, "entries": []}

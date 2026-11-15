@@ -9,11 +9,12 @@ full-text search and archive stats. Everything runs locally or on your own
 server; nothing is uploaded anywhere.
 
 ```
-              ┌─ tools/grab-media.py ──►  media/<member>/…        messages,
- desktop      │   (session cookie → API)                          media, voice
- Chrome ──────┤                                                   (subscription)
+              ┌─ tools/grab-media.py ──►  media/<site>/messages/    messages,
+ desktop      │   (session cookie → API)      <member>/…            media, voice
+ Chrome ──────┤                                                     (subscription)
  (login once) │
-              └─ tools/grab-blog.py ───►  media/blogs/<member>/…  official-site
+              └─ tools/grab-blog.py ───►  media/<site>/blogs/       official-site
+                  (public JSON API)         <member>/…               diaries (free)
                   (public JSON API)                               diaries (free)
                                           │
                               ┌───────────┴────────────┐
@@ -151,7 +152,8 @@ If both fail: re-login and re-run `harvest-session.py`.
 | `--full-history` | walk the entire timeline via the `updated_from` cursor (needed when history > 200 msgs) |
 | `--from <ISO date>` | start date for the full-history walk (default `2024-01-01T00:00:00Z`) |
 
-What lands per member under `media/<member>/`:
+What lands per member under `media/<site>/messages/<member>/` (site is
+`nogizaka46` or `sakurazaka46` — group-first layout):
 
 | File | Contents |
 |---|---|
@@ -181,10 +183,10 @@ Per member this fetches diary pages (50 entries per page, newest first, stops
 at already-archived ids) and downloads thumbnails + inline images:
 
 ```
-media/blogs/<member>/blog/_blogs.json   entries, oldest first (title, html
-                                        content, timestamps, thumbnails)
-media/blogs/<member>/blog/files/*       downloaded images (HTML rewritten to
-                                        local `files/...` paths)
+media/<site>/blogs/<member>/blog/_blogs.json   entries, oldest first (title,
+                                        html content, timestamps, thumbnails)
+media/<site>/blogs/<member>/blog/files/*  downloaded images (HTML rewritten
+                                        to local `files/...` paths)
 ```
 
 `blogs/` is a sibling of the message archives, so members without a message
