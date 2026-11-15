@@ -29,6 +29,9 @@ export const lightbox = $state({
   items: [] as Msg[],
   i: 0,
   memberSlug: null as string | null,
+  /* message lightboxes are deep-linkable (App maps them onto #/media/...);
+     blog-image ones keep the post's own address instead */
+  kind: 'message' as 'message' | 'blog',
 })
 
 export const info = $state({ open: false })
@@ -116,6 +119,7 @@ export function showLightbox(items: Msg[], index: number, slug: string) {
   lightbox.items = items
   lightbox.i = index
   lightbox.memberSlug = slug
+  lightbox.kind = 'message'
   lightbox.open = true
   /* the URL follows via App.svelte's hash effect: an open lightbox is its
      own #/media/<slug>/<id> route, whatever screen it was opened from */
@@ -126,6 +130,31 @@ export function closeLightbox() {
 export function stepLightbox(d: number) {
   /* clamp instead of wrap — the ends of the media list are hard stops */
   lightbox.i = Math.min(Math.max(lightbox.i + d, 0), lightbox.items.length - 1)
+}
+
+/* blog post images reuse the same viewer as message media — synthetic
+   picture items, no deep-link (the post itself owns the address) */
+export function showBlogLightbox(srcs: string[], index: number, at: string, caption: string | null) {
+  lightbox.items = srcs.map((src, n) => ({
+    id: -1 - n,
+    type: 'picture',
+    at,
+    updated: at,
+    text: caption,
+    silent: false,
+    fav: false,
+    mime: null,
+    file: src,
+    thumb: null,
+    poster: null,
+    ratio: null,
+    dur: null,
+    missing: false,
+  }))
+  lightbox.i = index
+  lightbox.memberSlug = null
+  lightbox.kind = 'blog'
+  lightbox.open = true
 }
 
 /* "last read" markers -> the unread pill on the home grid + the "New" divider. */

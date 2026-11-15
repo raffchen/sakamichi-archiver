@@ -1,9 +1,9 @@
 <script lang="ts">
   /* one blog post — the app's article view: pink title, gray stamp, then the
-     post HTML with locally archived images. Tapping an image opens a simple
-     in-post overlay (self-contained; the global lightbox is message-bound). */
+     post HTML with locally archived images. Tapping an image opens the shared
+     global lightbox (same viewer as message media). */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { back, ui } from '../lib/store.svelte'
+  import { back, showBlogLightbox, ui } from '../lib/store.svelte'
   import { fmtFull } from '../lib/format'
 
   let { archive }: { archive: Archive } = $props()
@@ -15,10 +15,6 @@
   let error = $state('')
   let body = $state<HTMLElement | null>(null)
 
-  /* in-post image overlay: tap any image -> fullscreen, swipe/stepped by the
-     same key handler shape the gallery uses */
-  let overlay = $state<{ srcs: string[]; i: number } | null>(null)
-
   $effect(() => {
     entry = null
     error = ''
@@ -28,7 +24,8 @@
       .catch((e) => (error = String(e)))
   })
 
-  /* wire up image taps once the HTML lands */
+  /* wire up image taps once the HTML lands — the shared lightbox shows the
+     post's images as one swipeable set, captioned by the post title */
   $effect(() => {
     if (!entry || !body) return
     const imgs = [...body.querySelectorAll('img')]
@@ -37,29 +34,13 @@
     if (!imgs.length) return
     const handlers = imgs.map((src, i) => {
       const el = [...body!.querySelectorAll('img')].find((x) => x.getAttribute('src') === src)
-      const fn = () => (overlay = { srcs: imgs, i })
+      const fn = () => showBlogLightbox(imgs, i, entry!.at, entry!.title || null)
       el?.addEventListener('click', fn)
       return { el, fn }
     })
     return () => handlers.forEach(({ el, fn }) => el?.removeEventListener('click', fn))
   })
-
-  const stepOverlay = (d: number) => {
-    if (!overlay) return
-    const i = overlay.i + d
-    if (i < 0 || i >= overlay.srcs.length) return
-    overlay = { ...overlay, i }
-  }
-
-  function onKey(e: KeyboardEvent) {
-    if (!overlay) return
-    if (e.key === 'ArrowRight') stepOverlay(1)
-    else if (e.key === 'ArrowLeft') stepOverlay(-1)
-    else if (e.key === 'Escape') overlay = null
-  }
 </script>
-
-<svelte:window onkeydown={onKey} />
 
 <header class="head">
   <button class="ic back" aria-label="back" onclick={() => back(null)}>
@@ -81,17 +62,3 @@
     <div class="bp-end">— end —</div>
   {/if}
 </div>
-
-{#if overlay}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions, a11y_no_interactive_element_to_noninteractive_role -->
-  <div class="bp-overlay" onclick={() => (overlay = null)}>
-    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <img src={overlay.srcs[overlay.i]} alt="" onclick={(e) => e.stopPropagation()} />
-    {#if overlay.srcs.length > 1}
-      <button class="bp-nav prev" aria-label="previous" onclick={(e) => { e.stopPropagation(); stepOverlay(-1) }}>‹</button>
-      <button class="bp-nav next" aria-label="next" onclick={(e) => { e.stopPropagation(); stepOverlay(1) }}>›</button>
-      <span class="bp-count">{overlay.i + 1} / {overlay.srcs.length}</span>
-    {/if}
-    <button class="bp-close" aria-label="close" onclick={() => (overlay = null)}>✕</button>
-  </div>
-{/if}
