@@ -11,16 +11,21 @@ expose a PUBLIC JSON API (no auth, no session — safe to run anywhere):
 Per member we fetch pages (newest first) until we hit already-archived ids,
 download thumbnails + inline images, and rewrite the HTML to local paths.
 
-Storage (mirrors grab-media's per-member layout):
-    <MEDIA_DIR>/<member_dir>/blog/_blogs.json   entries, oldest first
-    <MEDIA_DIR>/<member_dir>/blog/files/*       images
+Storage:
+    <BLOGS_DIR>/<member_name>/blog/_blogs.json   entries, oldest first
+    <BLOGS_DIR>/<member_name>/blog/files/*       images
+BLOGS_DIR defaults to <MEDIA_DIR>/blogs (a sibling tree, so members without a
+message subscription get archive dirs too; the viewer serves it under /media).
 
-Member identity: viewer/archive.config.json keys are <name_with_underscore>;
-blog members (GET /v2/blog-members, token required) are matched by `roman`
-name. A cached copy under LOGS keeps later runs working without a token.
+Member identity: --all archives EVERY blog member (GET /v2/blog-members,
+token required — cached under LOGS so later runs work without a token).
+Default (no flags) archives the members configured in
+viewer/archive.config.json, matched by `roman` name. Nogizaka display names
+come from the official site's public JSONP (romaji -> kanji).
 
 Usage:
-    python3 tools/grab-blog.py                 # all configured members
+    python3 tools/grab-blog.py                 # configured members only
+    python3 tools/grab-blog.py --all           # every blog member, both sites
     python3 tools/grab-blog.py --member 山川_宇衣
     python3 tools/grab-blog.py --full          # refetch everything (no skip)
 """
@@ -39,6 +44,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
 MEDIA = Path(os.environ.get("MEDIA_DIR") or ROOT / "media")
+BLOGS = Path(os.environ.get("BLOGS_DIR") or MEDIA / "blogs")
 LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 CONFIG = Path(os.environ.get("BLOG_CONFIG") or ROOT / "viewer" / "archive.config.json")
 
@@ -102,6 +108,19 @@ def norm_name(s: str) -> str:
     return s.replace("_", " ").replace("﨑", "崎").replace(" ", "").casefold()
 
 
+def nogi_official_names() -> dict[str, str]:
+    """code (== member_uuid) -> kanji name, from the official site's public
+    JSONP — blog-members returns romaji for nogizaka, and the archive dirs
+    should be kanji like the messages tree"""
+    try:
+        raw = fetch("https://www.nogizaka46.com/s/n46/api/list/member?callback=res")
+        data = json.loads(re.search(r"res\((.*)\)\s*;?\s*$", raw.decode("utf-8", "replace"), re.S).group(1))["data"]
+        return {str(x["code"]): x["name"] for x in data if x.get("name")}
+    except Exception as e:
+        print(f"  [names] official JSONP unavailable ({e}) — romaji dirs will be used")
+        return {}
+
+
 def load_members(site_key: str, site: dict) -> dict[str, dict]:
     """name key (romaji or japanese, normalized) -> {member_uuid, group_id};
     cached so later runs work without a token"""
@@ -115,11 +134,17 @@ def load_members(site_key: str, site: dict) -> dict[str, dict]:
             raise SystemExit(f"  [members] no token and no cache ({e}) — run once with a valid token")
         members = json.loads(cache.read_text())
         print(f"  [members] API unavailable ({e}) — using cached {len(members)}")
+    jp_names = nogi_official_names() if site_key == "nogizaka46" else {}
     out = {}
     for m in members:
-        info = {"uuid": str(m["member_uuid"]), "blog_id": m["id"],
-                "group_id": m.get("group_id"), "name": m.get("name")}
-        out[norm_name(m.get("name") or "")] = info
+        if (m.get("name") or "").endswith("リレー"):
+            continue  # relay accounts, not real members
+        uuid = str(m["member_uuid"])
+        display = jp_names.get(uuid) or m.get("name") or uuid
+        out[norm_name(m.get("name") or "")] = {
+            "uuid": uuid, "blog_id": m["id"], "group_id": m.get("group_id"),
+            "name": m.get("name"), "display": display,
+        }
     return out
 
 
@@ -174,17 +199,13 @@ def download_images(member_dir: Path, content: str, thumbnail: str) -> tuple[str
     return content, saved
 
 
-def grab_member(cfg: dict, site_key: str, site: dict, members: dict[str, dict],
-                member_key: str, only_new: bool = True) -> None:
-    info = members.get(norm_name(cfg["roman"])) or members.get(norm_name(member_key))
-    if info is None:
-        print(f"  {member_key}: no blog member match ({cfg['roman']!r} / {member_key!r}) — skipped")
-        return
+def grab_member(site_key: str, site: dict, members: dict[str, dict],
+                member_key: str, info: dict, only_new: bool = True) -> None:
     print(f"  {member_key}: blog member {info['name']} (uuid {info['uuid']})")
-    member_dir = MEDIA / member_key / "blog"
+    member_dir = BLOGS / member_key / "blog"
     state_file = member_dir / "_blogs.json"
-    state = {"site": site_key, "member": member_key, "member_uuid": info["uuid"],
-             "updated": None, "entries": []}
+    state = {"site": site_key, "member": info.get("display") or member_key,
+             "member_uuid": info["uuid"], "updated": None, "entries": []}
     if state_file.exists():
         try:
             state = json.loads(state_file.read_text())
@@ -250,28 +271,49 @@ def main() -> None:
     if "--member" in sys.argv:
         only = sys.argv[sys.argv.index("--member") + 1]
     full = "--full" in sys.argv
+    grab_all = "--all" in sys.argv
 
-    cfg = json.loads(CONFIG.read_text())
-    members_cfg = cfg.get("members", {})
-    by_site: dict[str, list[str]] = {}
-    for name, m in members_cfg.items():
-        by_site.setdefault(m.get("site"), []).append(name)
-
-    for site_key, names in by_site.items():
-        if only:
-            names = [n for n in names if n == only]
-            if not names:
+    if grab_all:
+        for site_key, site in SITES.items():
+            try:
+                members = load_members(site_key, site)
+            except SystemExit as e:
+                print(e)
                 continue
-        site = SITES[site_key]
-        print(f"=== {site_key}: {len(names)} member(s) ===")
-        try:
-            members = load_members(site_key, site)
-        except SystemExit as e:
-            print(e)
-            continue
-        for name in names:
-            grab_member(members_cfg[name], site_key, site, members, name, only_new=not full)
-            time.sleep(SLEEP)
+            print(f"=== {site_key}: {len(members)} blog member(s) ===")
+            for info in members.values():
+                key = info["display"].replace(" ", "_")
+                try:
+                    grab_member(site_key, site, members, key, info, only_new=not full)
+                except Exception as e:
+                    print(f"  {key}: FAILED ({e}) — continuing")
+                time.sleep(SLEEP)
+    else:
+        cfg = json.loads(CONFIG.read_text())
+        members_cfg = cfg.get("members", {})
+        by_site: dict[str, list[str]] = {}
+        for name, m in members_cfg.items():
+            by_site.setdefault(m.get("site"), []).append(name)
+
+        for site_key, names in by_site.items():
+            if only:
+                names = [n for n in names if n == only]
+                if not names:
+                    continue
+            site = SITES[site_key]
+            print(f"=== {site_key}: {len(names)} member(s) ===")
+            try:
+                members = load_members(site_key, site)
+            except SystemExit as e:
+                print(e)
+                continue
+            for name in names:
+                info = members.get(norm_name(members_cfg[name]["roman"])) or members.get(norm_name(name))
+                if info is None:
+                    print(f"  {name}: no blog member match — skipped")
+                    continue
+                grab_member(site_key, site, members, name, info, only_new=not full)
+                time.sleep(SLEEP)
     print("done.")
 
 
