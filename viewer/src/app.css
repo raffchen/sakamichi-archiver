@@ -1034,12 +1034,14 @@ img {
   opacity: 1;
   background: rgba(255, 255, 255, 0.12);
 }
-/* touch devices and portrait-shaped screens navigate purely by swipe
-   (Lightbox.svelte), so the whole arrow apparatus is display:none — the
-   acrylic chips (which smeared the photo) AND their invisible click zones,
-   so a stray tap near the edge can no longer jump items mid-swipe. Keyboard
-   navigation is unaffected. */
-@media (pointer: coarse), (max-aspect-ratio: 4/5) {
+/* touch devices navigate purely by swipe (Lightbox.svelte), so the whole
+   arrow apparatus is display:none — the chips (which smeared the photo) AND
+   their invisible click zones, so a stray tap near the edge can no longer
+   jump items mid-swipe. Deliberately keyed on the POINTER only, not the
+   aspect ratio: a desktop with a vertical monitor is portrait-shaped but
+   mouse-driven, and must keep its buttons. Keyboard navigation is
+   unaffected everywhere. */
+@media (pointer: coarse) {
   .lb-glyph,
   .lb-nav {
     display: none;
