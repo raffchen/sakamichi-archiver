@@ -224,7 +224,7 @@
         {@html h.snippet}
       </span>
       {#if related}
-        <span class="sim">{Math.round((1 - Math.min(h.score, 1)) * 100)}%</span>
+        <span class="sim">{Math.round(Math.max(0, Math.min(1, h.score)) * 100)}%</span>
       {/if}
     </span>
   </button>
@@ -250,6 +250,16 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     vertical-align: 1px;
+  }
+  .sim {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
   }
   .spin {
     opacity: 0.5;

@@ -48,6 +48,20 @@ const getTokenizer = () =>
   (tokenizerPromise ??= import(path.join(VIEWER, 'scripts', 'tokenize.mjs'))
     .then((m) => m.buildTokenizer(say))
     .catch(() => null))
+
+/* stage 5: embedding model, lazy — ~5 s model load + a few hundred MB RAM on
+   the first search; null ⇒ related stays empty and search stays exact-only */
+let embedderPromise = null
+const getEmbedder = () =>
+  (embedderPromise ??= import(path.join(VIEWER, 'scripts', 'embed.mjs'))
+    .then((m) => m.buildEmbedder(say))
+    .catch(() => null))
+
+/* semantic cutoffs: e5-small's absolute cosines run high (anisotropy), so the
+   floor alone can't separate — hits must also be within GAP of the best hit.
+   Both tunable per env (stage 6 tunes them with logged distributions). */
+const SEMANTIC_MIN_COS = Number(process.env.SEMANTIC_MIN_COS) || 0.65
+const SEMANTIC_GAP = Number(process.env.SEMANTIC_GAP) || 0.06
 const PORT = Number(process.env.PORT || 8080)
 const INDEX = path.join(PUB, 'index.json')
 /* stage 4: how many recent messages keep their text in the SLIM /api/index
@@ -329,7 +343,15 @@ const app = http.createServer(async (req, res) => {
     if (!raw) return sendJson(res, 200, { ...empty, available: true })
     let db = null
     try {
-      if (fs.existsSync(DB_PATH)) db = new DatabaseSync(DB_PATH, { readOnly: true })
+      if (fs.existsSync(DB_PATH)) {
+        db = new DatabaseSync(DB_PATH, { readOnly: true, allowExtension: true })
+        try {
+          const vec = await import('sqlite-vec')
+          vec.load(db)
+        } catch (e) {
+          say(`! sqlite-vec unavailable on the server (${e.message}) — related stays empty`)
+        }
+      }
     } catch (e) {
       say(`! search DB unreadable (${e.message}) — client falls back`)
     }
@@ -484,7 +506,59 @@ const app = http.createServer(async (req, res) => {
         }
       }
       results.sort((a, b) => a.score - b.score) // bm25: lower (more negative) = better
-      return sendJson(res, 200, { available: true, exact: results.slice(0, limit), related: [], took_ms: Date.now() - t0 })
+      // stage 5: the related (semantic) section — blog posts near the query in
+      // embedding space, chunked + KNN'd in vec_posts. Never fused with exact;
+      // exact hits are deduped out.
+      const related = []
+      const embedder = await getEmbedder()
+      if (embedder) {
+        const qv = await embedder.query(raw).catch(() => null)
+        if (qv) {
+          try {
+            const knn = db
+              .prepare(
+                `SELECT rowid, distance FROM vec_posts WHERE embedding MATCH ? ORDER BY distance LIMIT 60`,
+              )
+              .all(Buffer.from(qv.buffer, qv.byteOffset, qv.byteLength))
+            const resolve = db.prepare(
+              `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member, p.at, p.body
+               FROM post_chunks c JOIN posts p ON p.rowid = c.post_rowid WHERE c.vec_rowid = ?`,
+            )
+            const byPost = new Map()
+            for (const k of knn) {
+              const p = resolve.get(k.rowid)
+              if (!p) continue
+              const cos = 1 - k.distance
+              const kkey = `${p.key}/${p.id}`
+              const cur = byPost.get(kkey)
+              if (!cur || cos > cur.score) byPost.set(kkey, { ...p, score: cos })
+            }
+            const exactKeys = new Set(results.filter((r) => r.type === 'blog').map((r) => `${r.key}/${r.id}`))
+            const cand = [...byPost.values()]
+              .filter((c) => !exactKeys.has(`${c.key}/${c.id}`) && c.score >= SEMANTIC_MIN_COS)
+              .sort((a, b) => b.score - a.score)
+            const best = cand[0]?.score ?? 0
+            for (const c of cand) {
+              if (c.score < best - SEMANTIC_GAP) break
+              if (related.length >= 20) break
+              related.push({
+                type: 'blog',
+                key: c.key,
+                site: c.site,
+                id: c.id,
+                title: c.title,
+                member: c.member,
+                at: c.at,
+                score: c.score,
+                snippet: (c.body ?? '').slice(0, 120) + ((c.body ?? '').length > 120 ? '…' : ''),
+              })
+            }
+          } catch (e) {
+            say(`! related search failed (${e.message}) — exact section unaffected`)
+          }
+        }
+      }
+      return sendJson(res, 200, { available: true, exact: results.slice(0, limit), related, took_ms: Date.now() - t0 })
     } catch (e) {
       say(`! /api/search failed (${e.message})`)
       return sendJson(res, 200, empty)

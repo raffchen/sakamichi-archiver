@@ -120,18 +120,19 @@ a bottom player bar (leaving the tab stops playback)
 - **Search** — two search bars, two scopes: the Talk page's bar searches
   **messages**; the Blog tab's search bar (under the site pills) searches
   **blog posts** (`#/blog-search`, back returns to Blogs). Both hit the same
-  server search (`/api/search?type=message|blog`): `完全一致 / exact
-  matches` via FTS5 (trigram tokenizer — real substring matching for
-  Japanese; 1–2 char words go through an `instr()` path), `<mark>`-highlighted
-  snippets, Blog/Message type badges, debounced fetch (~250 ms), ranked by
-  bm25. **Reading-aware** (stage 3): hiragana queries hit kanji text and vice
-  versa — ひかり finds 光, さくら finds 桜, half-width katakana is normalized
-  too; reading columns come from kuromoji tokenization at index time, and
-  reading-only matches are re-marked onto the kanji surface word in the
-  snippet. The Talk-side search falls back to the instant client-side scan
-  (messages only) when the search DB is missing or the endpoint fails; the
-  blog-side search is server-only. A `おすすめ / related` (semantic) section
-  is reserved for stage 5 and stays hidden while empty
+  server search (`/api/search?type=message|blog`) and get two sections:
+  `完全一致 / exact matches` via FTS5 (trigram tokenizer — real substring
+  matching for Japanese; 1–2 char words go through an `instr()` path),
+  `<mark>`-highlighted snippets, Blog/Message type badges, debounced fetch
+  (~250 ms), ranked by bm25. **Reading-aware** (stage 3): hiragana queries
+  hit kanji text and vice versa — ひかり finds 光, さくら finds 桜.
+  **Semantic** (stage 5): a `おすすめ / related` section ranks blog posts by
+  embedding similarity (local ONNX e5-small via sqlite-vec) — English
+  queries surface Japanese posts; hits carry a % similarity chip, exact hits
+  are never duplicated, and the section hides when empty. The Talk-side
+  search falls back to the instant client-side scan (messages only) when the
+  served index still carries full texts (dev) — slimmed clients are
+  server-only
 - **Info sheet** — per-member counts and date ranges
 - **Blog** — mirrors the official-site diaries (`tools/grab-blog.py`, see the
   root README). Directory groups every known member by 期生; members whose
