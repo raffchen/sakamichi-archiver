@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { fade, type TransitionConfig } from 'svelte/transition'
-import { cubicOut } from 'svelte/easing'
+  import { fade } from 'svelte/transition'
   import { keynav } from '../lib/actions'
   import { closeLightbox, claimMedia, releaseMedia, lightbox, stepLightbox } from '../lib/store.svelte'
   import { fmtDateTime } from '../lib/format'
@@ -9,32 +8,111 @@ import { cubicOut } from 'svelte/easing'
   const m = $derived(lightbox.items[lightbox.i])
   const n = $derived(lightbox.items.length)
 
-  /* direction of the last step — a push transition: the outgoing media slides
-     out one way while the incoming slides in from the other, in sync, like a
-     carousel. Every entry point (swipe, arrows, keys) goes through step() so
-     dir is always right. dir starts 0 = "not a step": the lightbox just opens
-     with the overlay fade, no slide. */
-  let dir = $state(0)
+  /* The media strip is a carousel of up to three slides — previous, current,
+     next — that follows the finger 1:1 while dragging (Twitter/X style) and
+     settles onto the nearest slide on release. Arrows and keyboard ride the
+     same settle animation, so every entry point looks identical. */
+
+  /* neighbours of the current index, keeping their absolute index k so each
+     slide can be placed at (k - i) * 100% of the track */
+  const slides = $derived.by(() => {
+    const out: { it: (typeof lightbox.items)[number]; k: number }[] = []
+    for (let k = Math.max(0, lightbox.i - 1); k <= Math.min(n - 1, lightbox.i + 1); k++) {
+      out.push({ it: lightbox.items[k], k })
+    }
+    return out
+  })
+
+  /* the track's own width — NOT the body's: slide offsets are percentages of
+     the track (body minus the 8px side padding), so the settle target must be
+     in the same units or the spring overshoots before the index flip */
+  let bodyW = $state(0)
+  let dragPx = $state(0) /* finger offset from the current slide, px */
+  let settling = $state(false) /* the track is animating to its target */
+
+  /* a programmatic step (arrow chip / keyboard): animate the track a full
+     slide over, then flip the index underneath — visually identical to a
+     committed drag, and clamped ends do nothing */
   function step(d: number) {
-    dir = d
-    stepLightbox(d)
+    if (settling) return
+    if (d < 0 ? lightbox.i === 0 : lightbox.i === n - 1) return
+    beginSettle(-d * bodyW)
   }
 
-  /* percent-based push halves (translateX(±100%) of the full-width overlay),
-     so both layers move together and their edges stay glued — no fade. */
-  function pushIn(node: Element, { dir: d }: { dir: number }): TransitionConfig {
-    return d
-      ? { duration: 260, easing: cubicOut, css: (t: number) => `transform: translateX(${d * 100 * (1 - t)}%)` }
-      : { duration: 0, css: () => '' } /* dir 0 = the box just opened — no slide */
-  }
-  function pushOut(node: Element, { dir: d }: { dir: number }): TransitionConfig {
-    return d
-      ? { duration: 260, easing: cubicOut, css: (t: number) => `transform: translateX(${-d * 100 * (1 - t)}%)` }
-      : { duration: 0, css: () => '' }
+  function beginSettle(target: number) {
+    settling = true
+    dragPx = target
+    setTimeout(flip, 280)
   }
 
-  /* decode the neighbours ahead of the step — otherwise the sliding-in layer
-     is blank until its image loads and the push shows nothing arriving */
+  /* the settle animation ends here: with the track now parked one full slide
+     over, swapping i (and zeroing the offset) recomputes every slide's
+     position to the exact same pixels — no visible jump */
+  function flip() {
+    const d = Math.round(-dragPx / bodyW)
+    settling = false
+    dragPx = 0
+    if (d) stepLightbox(d)
+  }
+
+  /* touch drag — vertical drags stay with the caption scroll, and touches
+     that begin on a button/link/video/audio never drag the track */
+  let mode: '' | 'x' | 'y' = ''
+  let startX = 0
+  let startY = 0
+  let lastX = 0
+  let lastT = 0
+  let vel = 0 /* px/ms, for flick detection */
+  function onTouchStart(e: TouchEvent) {
+    if (settling || (e.target as HTMLElement)?.closest('button, a, video, audio')) {
+      mode = 'y'
+      return
+    }
+    startX = e.touches[0].clientX
+    startY = e.touches[0].clientY
+    lastX = startX
+    lastT = performance.now()
+    vel = 0
+    mode = ''
+  }
+  function onTouchMove(e: TouchEvent) {
+    if (settling || mode === 'y') return
+    const t = e.touches[0]
+    const dx = t.clientX - startX
+    const dy = t.clientY - startY
+    if (!mode) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+      mode = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'
+      if (mode === 'y') return
+    }
+    /* rubber-band past the ends — there is nothing to slide in from there */
+    let x = dx
+    if ((lightbox.i === 0 && x > 0) || (lightbox.i === n - 1 && x < 0)) x *= 0.25
+    dragPx = x
+    const now = performance.now()
+    if (now > lastT) {
+      vel = (t.clientX - lastX) / (now - lastT)
+      lastX = t.clientX
+      lastT = now
+    }
+  }
+  function onTouchEnd() {
+    if (mode !== 'x' || settling) {
+      mode = ''
+      return
+    }
+    mode = ''
+    /* commit when the drag passes a quarter of the track, or on a quick flick
+       in the drag direction even from a short distance */
+    const towards = dragPx < 0 ? 1 : -1
+    const canCommit = towards === 1 ? lightbox.i < n - 1 : lightbox.i > 0
+    const far = Math.abs(dragPx) > bodyW * 0.25
+    const flick = Math.abs(vel) > 0.5 && Math.abs(dragPx) > 24 && Math.sign(vel) === Math.sign(dragPx)
+    beginSettle(canCommit && (far || flick) ? -towards * bodyW : 0)
+  }
+
+  /* decode the neighbours ahead of the drag — otherwise the incoming slide is
+     blank until its image loads and the drag shows nothing arriving */
   $effect(() => {
     const { items, i } = lightbox
     for (const k of [i - 1, i + 1]) {
@@ -65,32 +143,6 @@ import { cubicOut } from 'svelte/easing'
     const p = m.file ?? m.thumb ?? ''
     return decodeURIComponent(p.split('/').pop() || '') || 'media'
   }
-
-  /* touch swipe navigation — on phones the arrow chips are hidden (CSS below:
-     they sat on top of the photo and blurred it), so a horizontal flick steps
-     prev/next. Vertical drags (caption scroll) and anything starting on a
-     button/link/video/audio are left alone — those have their own gestures. */
-  let touchX = 0
-  let touchY = 0
-  let swiping = false
-  function onTouchStart(e: TouchEvent) {
-    if ((e.target as HTMLElement)?.closest('button, a, video, audio')) {
-      swiping = false
-      return
-    }
-    touchX = e.touches[0].clientX
-    touchY = e.touches[0].clientY
-    swiping = true
-  }
-  function onTouchEnd(e: TouchEvent) {
-    if (!swiping) return
-    swiping = false
-    const dx = e.changedTouches[0].clientX - touchX
-    const dy = e.changedTouches[0].clientY - touchY
-    /* 48px minimum flick, and clearly more horizontal than vertical */
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return
-    step(dx < 0 ? 1 : -1)
-  }
 </script>
 
 <!-- the backdrop click is a convenience; Esc (use:keynav) and ✕ are the
@@ -102,7 +154,9 @@ import { cubicOut } from 'svelte/easing'
   use:keynav={{ onLeft: () => step(-1), onRight: () => step(1), onEsc: closeLightbox }}
   onclick={onBackdrop}
   ontouchstart={onTouchStart}
+  ontouchmove={onTouchMove}
   ontouchend={onTouchEnd}
+  ontouchcancel={onTouchEnd}
 >
   <div class="lb-top">
     <span>{lightbox.i + 1} / {n}</span>
@@ -115,45 +169,54 @@ import { cubicOut } from 'svelte/easing'
 
   <div class="lb-body">
     {#if m}
-      {#key m.id}
-        <!-- the wrapper is an absolutely-positioned overlay (see .lb-media) so
-             the outgoing media fades out underneath the incoming one instead
-             of both briefly stacking as separate grid rows -->
-        <div class="lb-media" in:pushIn={{ dir }} out:pushOut={{ dir }}>
-        {#if m.type === 'picture'}
-          <img src={m.file ?? m.thumb ?? ''} alt="" />
-        {:else if m.type === 'video'}
-          <!-- no caption track exists for these clips; the message text is shown below -->
-          <!-- svelte-ignore a11y_media_has_caption -->
-          <!-- is_silent means the app autoplays it muted; muted playback is also the
-               only thing browsers allow without a user gesture -->
-          <video
-            bind:this={mediaEl}
-            src={m.file ?? ''}
-            poster={m.poster ?? undefined}
-            controls
-            autoplay
-            playsinline
-            muted={m.silent}
-            onplay={(e) => claimMedia(e.currentTarget)}
-            onpause={(e) => releaseMedia(e.currentTarget)}
-            onended={(e) => releaseMedia(e.currentTarget)}
-          ></video>
-        {:else if m.type === 'voice'}
-          <!-- svelte-ignore a11y_media_has_caption -->
-          <audio
-            bind:this={mediaEl}
-            class="lb-audio"
-            src={m.file ?? ''}
-            controls
-            autoplay
-            onplay={(e) => claimMedia(e.currentTarget)}
-            onpause={(e) => releaseMedia(e.currentTarget)}
-            onended={(e) => releaseMedia(e.currentTarget)}
-          ></audio>
-        {/if}
-        </div>
-      {/key}
+      <div class="lb-track" bind:clientWidth={bodyW} class:settle={settling} style:transform={`translateX(${dragPx}px)`}>
+        {#each slides as s (s.it.id)}
+          <div class="lb-media" style:transform={`translateX(${(s.k - lightbox.i) * 100}%)`}>
+            {#if s.k === lightbox.i}
+              {#if s.it.type === 'picture'}
+                <img src={s.it.file ?? s.it.thumb ?? ''} alt="" />
+              {:else if s.it.type === 'video'}
+                <!-- no caption track exists for these clips; the message text is shown below -->
+                <!-- svelte-ignore a11y_media_has_caption -->
+                <!-- is_silent means the app autoplays it muted; muted playback is also the
+                     only thing browsers allow without a user gesture -->
+                <video
+                  bind:this={mediaEl}
+                  src={s.it.file ?? ''}
+                  poster={s.it.poster ?? undefined}
+                  controls
+                  autoplay
+                  playsinline
+                  muted={s.it.silent}
+                  onplay={(e) => claimMedia(e.currentTarget)}
+                  onpause={(e) => releaseMedia(e.currentTarget)}
+                  onended={(e) => releaseMedia(e.currentTarget)}
+                ></video>
+              {:else if s.it.type === 'voice'}
+                <!-- svelte-ignore a11y_media_has_caption -->
+                <audio
+                  bind:this={mediaEl}
+                  class="lb-audio"
+                  src={s.it.file ?? ''}
+                  controls
+                  autoplay
+                  onplay={(e) => claimMedia(e.currentTarget)}
+                  onpause={(e) => releaseMedia(e.currentTarget)}
+                  onended={(e) => releaseMedia(e.currentTarget)}
+                ></audio>
+              {/if}
+            <!-- neighbours show a still instead of live media: a video sliding
+                 by must not autoplay, an audio clip has nothing to show -->
+            {:else if s.it.type === 'picture'}
+              <img src={s.it.file ?? s.it.thumb ?? ''} alt="" />
+            {:else if s.it.type === 'video'}
+              <img src={s.it.poster ?? s.it.thumb ?? ''} alt="" />
+            {:else}
+              <span class="lb-voice-ph">{@html icon('voice')}</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
       {#if n > 1}
         <!-- click zones are full-height screen halves (see .lb-nav); the visible
              chevrons are separate so they can sit above the media, pinned to the

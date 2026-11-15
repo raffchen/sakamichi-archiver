@@ -926,14 +926,32 @@ img {
      position:fixed, so clipping doesn't touch them. */
   overflow: hidden;
 }
-/* keyed per-item overlay: during a step the outgoing media fades out here
-   while the incoming one slides in on top — both occupy the same box, so
-   they must stack (absolute) rather than flow as two grid rows */
-.lb-media {
+/* the media carousel: a track holding up to three slides (prev/current/next)
+   that follows the finger 1:1 while dragging (Lightbox.svelte). The settle
+   class switches on the spring-to-slide animation; without it the transform
+   updates every touchmove for exact 1:1 tracking. */
+.lb-track {
   position: absolute;
   inset: 0 8px;
+  will-change: transform;
+}
+.lb-track.settle {
+  transition: transform 260ms cubic-bezier(0.25, 1, 0.4, 1);
+}
+.lb-media {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
+}
+/* placeholder on a voice slide sliding by — the real audio bar mounts only
+   when the slide becomes current */
+.lb-voice-ph {
+  color: rgba(255, 255, 255, 0.35);
+}
+.lb-voice-ph svg {
+  width: 44px;
+  height: 44px;
 }
 .lb-body img,
 .lb-body video {
