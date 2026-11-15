@@ -697,6 +697,25 @@ const app = http.createServer(async (req, res) => {
   // one site, ?limit= caps the response (default 60, max 200), ?order=asc
   // flips to oldest-first. Reads each member's _blogs.json (small files;
   // directory metadata only, no bodies).
+  /* blog member dirs live at media/<site>/blogs/<key>/blog (group-first
+     layout); the legacy flat tree media/blogs/<key> is still honored so the
+     server works before and after a migration. blogMedia() builds /media URLs
+     that match wherever the member's dir physically is. */
+  const blogRoots = () => {
+    const roots = []
+    try {
+      for (const d of fs.readdirSync(MEDIA, { withFileTypes: true }))
+        if (d.isDirectory() && d.name !== 'blogs' && !d.name.startsWith('.'))
+          roots.push({ root: path.join(MEDIA, d.name, 'blogs'), site: d.name })
+    } catch {}
+    roots.push({ root: path.join(MEDIA, 'blogs'), site: null }) // legacy flat tree
+    return roots.filter((r) => fs.existsSync(r.root))
+  }
+  const blogMedia = (site, key, rest) =>
+    site
+      ? `/media/${site}/blogs/${encodeURIComponent(key)}/blog/${rest}`
+      : `/media/blogs/${encodeURIComponent(key)}/blog/${rest}`
+
   if (p === '/api/blog' || p === '/api/blog/') {
     const q = new URL(req.url, 'http://x').searchParams
     const site = q.get('site')
@@ -721,7 +740,7 @@ const app = http.createServer(async (req, res) => {
             id: r.id,
             title: r.title,
             at: r.at,
-            thumbnail: r.thumb ? `/media/blogs/${encodeURIComponent(r.key)}/blog/${r.thumb}` : null,
+            thumbnail: r.thumb ? blogMedia(r.site, r.key, r.thumb) : null,
             lead: (r.body ?? '').slice(0, 140) || null, // body is stored HTML-stripped
           }))
       }
@@ -729,27 +748,24 @@ const app = http.createServer(async (req, res) => {
       feed = null // corrupt DB / missing member dir — fall back below
     }
     if (feed) return sendJson(res, 200, { posts: feed })
-    const root = path.join(MEDIA, 'blogs')
     const posts = []
-    if (fs.existsSync(root)) {
+    for (const { root, site: rootSite } of blogRoots()) {
       for (const key of fs.readdirSync(root)) {
         let state = null
         try {
           state = JSON.parse(fs.readFileSync(path.join(root, key, 'blog', '_blogs.json'), 'utf8'))
         } catch {}
         if (!state?.entries?.length) continue
-        if (site && (state.site ?? '') !== site) continue
+        if (site && (state.site ?? rootSite ?? '') !== site) continue
         for (const e of state.entries)
           posts.push({
             key,
             member: state.member ?? key.replace(/_/g, ' '),
-            site: state.site ?? null,
+            site: state.site ?? rootSite ?? null,
             id: e.id,
             title: e.title,
             at: e.at,
-            thumbnail: e.thumbnail
-              ? `/media/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`
-              : null,
+            thumbnail: e.thumbnail ? blogMedia(rootSite, key, e.thumbnail) : null,
             lead: blogLead(e.content),
           })
       }
@@ -767,18 +783,18 @@ const app = http.createServer(async (req, res) => {
     // 川﨑/崎: U+FA11 has no NFKC decomposition in V8, so fold it manually —
     // some keyboards/URL bars hand back the plain 崎 form
     const fold = (s) => s.normalize('NFKC').replace(/\uFA11/g, '\u5D0E')
-    let dir = key
-    const exact = fs.existsSync(path.join(MEDIA, 'blogs', key))
-    if (!exact) {
-      const hit = fs.existsSync(path.join(MEDIA, 'blogs'))
-        ? fs
-            .readdirSync(path.join(MEDIA, 'blogs'))
-            .find((d) => fold(d) === fold(key))
-        : null
-      if (!hit) return sendJson(res, 404, { error: 'no such blog' })
-      dir = hit
-    }
-    const file = path.join(MEDIA, 'blogs', dir, 'blog', '_blogs.json')
+    // resolve the member across site-scoped trees first, legacy flat tree last
+    const found = (() => {
+      for (const { root, site } of blogRoots()) {
+        if (fs.existsSync(path.join(root, key))) return { root, dir: key, site }
+        const hit = fs.readdirSync(root).find((d) => fold(d) === fold(key))
+        if (hit) return { root, dir: hit, site }
+      }
+      return null
+    })()
+    if (!found) return sendJson(res, 404, { error: 'no such blog' })
+    const dir = found.dir
+    const file = path.join(found.root, dir, 'blog', '_blogs.json')
     let state
     try {
       state = JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -788,7 +804,9 @@ const app = http.createServer(async (req, res) => {
     // grab-blog stores post images as bare "files/<n>" — prefix them so the
     // HTML can be dropped straight into the page (thumbnails likewise)
     const prefixLocal = (html, key) =>
-      html ? html.replace(/(["'])(files\/)/g, `$1/media/blogs/${encodeURIComponent(key)}/blog/$2`) : html
+      html
+        ? html.replace(/(["'])(files\/)/g, `$1${blogMedia(found.site, key, '')}$2`)
+        : html
     const parts = p.split('/').slice(3).map(decodeURIComponent)
     if (parts[1] != null) {
       const entry = (state.entries ?? []).find((e) => String(e.id) === parts[1])
@@ -796,14 +814,14 @@ const app = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         key,
         member: state.member,
-        site: state.site,
+        site: state.site ?? found.site,
         entry: { ...entry, content: prefixLocal(entry.content, dir), lead: blogLead(entry.content) },
       })
     }
     return sendJson(res, 200, {
       key,
       member: state.member,
-      site: state.site,
+      site: state.site ?? found.site,
       entries: (state.entries ?? []).map(({ content, ...e }) => ({ ...e, lead: blogLead(content) })).reverse(),
     })
   }
