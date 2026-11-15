@@ -1036,13 +1036,14 @@ img {
   background: rgba(255, 255, 255, 0.2);
   box-shadow: 0 0 32px 6px rgba(255, 255, 255, 0.28);
 }
-/* touch devices and portrait-shaped screens navigate by swipe instead
-   (Lightbox.svelte), so the acrylic chips go — on a phone they sat right on
-   top of the photo and their backdrop blur smeared the image. The invisible
-   click zones stay on every form factor: a tap near the edge still steps,
-   and being invisible they never cover the picture. */
+/* touch devices and portrait-shaped screens navigate purely by swipe
+   (Lightbox.svelte), so the whole arrow apparatus is display:none — the
+   acrylic chips (which smeared the photo) AND their invisible click zones,
+   so a stray tap near the edge can no longer jump items mid-swipe. Keyboard
+   navigation is unaffected. */
 @media (pointer: coarse), (max-aspect-ratio: 4/5) {
-  .lb-glyph {
+  .lb-glyph,
+  .lb-nav {
     display: none;
   }
 }
