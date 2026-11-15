@@ -51,6 +51,7 @@ export interface BlogMemberInfo {
   site: string | null
   uuid: string // message/blog member_uuid (joins blog-generations.json)
   name: string
+  kana: string | null // reading (blog-generations.json) — the reliable sort key
   gen: string | null
   gen_num: number | null
   graduated: boolean

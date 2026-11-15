@@ -205,6 +205,7 @@ img {
 .screen {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden; /* zoomed layouts can phantom-overflow horizontally */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -1122,6 +1123,56 @@ img {
   font-size: 21px;
   font-weight: 700;
 }
+
+/* ⇅ sort menu (official app: sort icon top-right of the Blogs header) */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: none;
+  border: 0;
+  cursor: default;
+}
+.blog-sort-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 10px;
+  z-index: 31;
+  min-width: 180px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.blog-sort-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 14px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.blog-sort-menu button:active {
+  background: var(--bubble);
+}
+.blog-sort-menu button.on {
+  color: var(--accent);
+  font-weight: 700;
+}
+.blog-sort-menu button svg {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+  flex: none;
+}
 .blog-directory {
   padding: 6px 14px 28px;
   background: var(--page); /* the app's blog screens are all-white */
@@ -1243,6 +1294,22 @@ img {
   font-size: 11.5px;
   text-align: right;
   margin-top: auto;
+}
+/* latest feed: member name rides next to the stamp, both right-aligned */
+.blog-post-row .by {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+}
+.blog-post-row .by .nm {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.blog-post-row .by .dt {
+  margin-top: 0;
 }
 
 /* post detail */

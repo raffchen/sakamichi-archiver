@@ -4,6 +4,10 @@ import type { Msg } from './types'
 
 export type View = 'home' | 'thread' | 'gallery' | 'search' | 'blog'
 
+/* the Blogs ⇅ menu: every mode ascends/descends — generation, name, or the
+   cross-member newest-posts feed */
+export type BlogSort = 'gen-asc' | 'gen-desc' | 'name-asc' | 'name-desc' | 'latest' | 'oldest'
+
 export const ui = $state({
   view: 'home' as View,
   slug: null as string | null,
@@ -13,6 +17,8 @@ export const ui = $state({
   /* blog tab: directory -> member post list -> post detail */
   blogMember: null as string | null, // directory key under media/blogs/
   blogPost: null as number | null,
+  /* directory sort (the official ⇅ menu) */
+  blogSort: 'gen-asc' as BlogSort,
 })
 
 export const lightbox = $state({

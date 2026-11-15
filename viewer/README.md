@@ -119,10 +119,15 @@ a bottom player bar (leaving the tab stops playback)
 - **Search** — full-text across every member, highlighted
 - **Info sheet** — per-member counts and date ranges
 - **Blog** — mirrors the official-site diaries (`tools/grab-blog.py`, see the
-  root README). Directory groups every known member by 期生 (newest first);
-  members whose backfill hasn't landed yet are greyed out. Member view is a
-  thumbnail post list (pink title, two-line lead, stamp). Post view renders
-  the archived HTML with a simple in-post image overlay.
+  root README). Directory groups every known member by 期生; members whose
+  backfill hasn't landed yet are greyed out. The ⇅ menu (official app
+  parity) switches the directory sort, asc/desc for all of them:
+  generation order, flat by name, or the cross-member posts feed
+  (`/api/blog?site=&limit=&order=`). Site switcher pills; the directory URL
+  carries the site (`#/blog/sakurazaka46`) so each site's blogs are
+  linkable. Member view is a thumbnail post list (pink title, two-line
+  lead, stamp). Post view renders the archived HTML with a simple in-post
+  image overlay.
 
 News / Official remain decorative placeholders — that content isn't archived.
 

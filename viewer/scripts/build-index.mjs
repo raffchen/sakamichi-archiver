@@ -345,7 +345,10 @@ for (const site of Object.keys(sites)) {
       key: arch?.key ?? null,
       site,
       uuid,
-      name: g.name ?? m.name ?? uuid,
+      /* the roster name is the official app's own display (spaced) — the
+         wiki-sourced generation map is only a fallback */
+      name: m.name ?? g.name ?? uuid,
+      kana: g.kana ?? null,
       gen: g.gen ?? null,
       gen_num: g.gen_num ?? genNum(g.gen),
       graduated: !!g.graduated,
@@ -361,7 +364,7 @@ for (const site of Object.keys(sites)) {
     seen.add(uuid2)
     const g = gens[site]?.[uuid2] ?? {}
     blogMembers.push({
-      key: arch.key, site, uuid: uuid2, name: g.name ?? arch.name,
+      key: arch.key, site, uuid: uuid2, name: g.name ?? arch.name, kana: g.kana ?? null,
       gen: g.gen ?? null, gen_num: g.gen_num ?? genNum(g.gen),
       graduated: !!g.graduated, count: arch.count,
       first: arch.first, last: arch.last, thumb: arch.thumb,
@@ -369,11 +372,14 @@ for (const site of Object.keys(sites)) {
   }
 }
 const siteOrder = Object.keys(sites)
+/* members sort by kana reading when we have it — Intl.Collator('ja') can't
+   reliably order bare-kanji names */
+const blogSortKey = (b) => b.kana ?? b.name ?? ''
 blogMembers.sort(
   (a, b) =>
     siteOrder.indexOf(a.site) - siteOrder.indexOf(b.site) ||
     (b.gen_num ?? 0) - (a.gen_num ?? 0) ||
-    collator.compare(a.name, b.name),
+    collator.compare(blogSortKey(a), blogSortKey(b)),
 )
 
 const index = {
