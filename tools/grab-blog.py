@@ -26,6 +26,7 @@ come from the official site's public JSONP (romaji -> kanji).
 Usage:
     python3 tools/grab-blog.py                 # configured members only
     python3 tools/grab-blog.py --all           # every blog member, both sites
+    python3 tools/grab-blog.py --all --site sakurazaka46
     python3 tools/grab-blog.py --member 山川_宇衣
     python3 tools/grab-blog.py --full          # refetch everything (no skip)
 """
@@ -272,9 +273,16 @@ def main() -> None:
         only = sys.argv[sys.argv.index("--member") + 1]
     full = "--full" in sys.argv
     grab_all = "--all" in sys.argv
+    site_filter = None
+    if "--site" in sys.argv:
+        site_filter = sys.argv[sys.argv.index("--site") + 1]
+        if site_filter not in SITES:
+            raise SystemExit(f"--site must be one of: {', '.join(SITES)}")
 
     if grab_all:
         for site_key, site in SITES.items():
+            if site_filter and site_key != site_filter:
+                continue
             try:
                 members = load_members(site_key, site)
             except SystemExit as e:
