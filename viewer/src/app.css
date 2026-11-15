@@ -253,7 +253,7 @@ img {
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px 6px;
   padding: 14px 10px 26px;
 }
@@ -1112,4 +1112,226 @@ img {
   background: #f1f1f4;
   padding: 2px 6px;
   border-radius: 5px;
+}
+
+/* ---------- blog tab (directory / member list / post) */
+.blog-title {
+  /* the app paints the tab title in the header's own fg (white on nogi, pink
+     on saka) — NOT the accent color */
+  color: inherit;
+  font-size: 21px;
+  font-weight: 700;
+}
+.blog-directory {
+  padding: 6px 14px 28px;
+  background: var(--page); /* the app's blog screens are all-white */
+}
+.blog-gen {
+  text-align: center;
+  color: var(--accent);
+  font-size: 15.5px;
+  font-weight: 700;
+  margin: 24px 0 14px;
+}
+.blog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 10px;
+}
+.blog-card {
+  background: none;
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  min-width: 0;
+}
+.blog-card img,
+.blog-card .ph {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--bubble);
+  display: block;
+}
+.blog-card .nm {
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.blog-card.grad .nm {
+  color: var(--muted);
+}
+.blog-card .dt {
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.blog-card:disabled {
+  cursor: default;
+}
+.blog-card.empty img,
+.blog-card.empty .ph {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+.blog-card.empty .nm {
+  color: var(--muted);
+}
+
+/* member post list */
+.blog-member {
+  padding: 12px 14px 28px;
+  background: var(--page);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.blog-post-row {
+  display: flex;
+  gap: 12px;
+  background: var(--bubble); /* gray cards on the white screen */
+  border: 0;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  align-items: stretch;
+  min-width: 0;
+}
+.blog-post-row img,
+.blog-post-row .ph {
+  width: 106px;
+  height: 106px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex: none;
+  background: var(--line);
+}
+.blog-post-row .tx {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.blog-post-row .ttl {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.blog-post-row .lead {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.blog-post-row .dt {
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: right;
+  margin-top: auto;
+}
+
+/* post detail */
+.blog-post {
+  padding: 16px 18px 40px;
+  background: var(--page);
+}
+.bp-title {
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 2px 0 6px;
+}
+.bp-date {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+.blog-post p {
+  margin: 0 0 10px;
+  font-size: 14.5px;
+  line-height: 1.8;
+}
+.blog-post img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 10px auto;
+  cursor: zoom-in;
+}
+.bp-end {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-top: 28px;
+}
+
+/* in-post image overlay */
+.bp-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: rgba(10, 10, 12, 0.94);
+  display: grid;
+  place-items: center;
+}
+.bp-overlay > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.bp-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+.bp-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bp-nav.prev { left: 10px; }
+.bp-nav.next { right: 10px; }
+.bp-nav:disabled { opacity: 0.25; cursor: default; }
+.bp-count {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
 }

@@ -155,7 +155,7 @@ const sites = config.sites ?? {}
 const slugs = fs.existsSync(MEDIA)
   ? fs
       .readdirSync(MEDIA, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+      .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'blogs')
       .map((d) => d.name)
   : []
 
@@ -292,12 +292,97 @@ const totals = members.reduce(
   { messages: 0, media: 0 },
 )
 
+// ---------------------------------------------------------------- blogs
+/* media/blogs/<name>/blog/_blogs.json — written by tools/grab-blog.py for ALL
+   blog members (the official blog is public, no subscription needed). The
+   index carries directory metadata only (who, generation, count, latest);
+   post bodies are fetched lazily via /api/blog/<key>. Generation labels come
+   from public/blog-generations.json (keyed by member_uuid); the full member
+   universe (greyed cards until their backfill lands) from the blog-members
+   API cache that grab-blog writes under LOGS. */
+const gens = readJson(path.join(PUB, 'blog-generations.json')) ?? { nogizaka46: {}, sakurazaka46: {} }
+const LOGS = path.resolve(process.env.LOGS_DIR || path.join(ROOT, 'logs'))
+const KANJI_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 }
+const genNum = (gen) => {
+  const m = /([0-9０-９]+)期生/.exec(gen ?? '')
+  if (m) return parseInt(m[1].replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)), 10)
+  const k = /([一二三四五六七八九十])期生/.exec(gen ?? '')
+  return k ? KANJI_NUM[k[1]] : null
+}
+
+const blogMembers = []
+const archivedBlogs = new Map() // uuid -> archived state
+const blogsRoot = path.join(MEDIA, 'blogs')
+if (fs.existsSync(blogsRoot)) {
+  for (const key of fs.readdirSync(blogsRoot)) {
+    const state = readJson(path.join(blogsRoot, key, 'blog', '_blogs.json'))
+    if (!state?.entries?.length) continue
+    const entries = state.entries // oldest-first (grab-blog sorts on write)
+    const lastWithThumb = [...entries].reverse().find((e) => e.thumbnail)
+    archivedBlogs.set(String(state.member_uuid), {
+      key,
+      site: state.site ?? null,
+      name: state.member ?? key.replace(/_/g, ' '),
+      count: entries.length,
+      first: entries[0]?.at ?? null,
+      last: entries.at(-1)?.at ?? null,
+      thumb: lastWithThumb ? `/media/${enc(`blogs/${key}/blog/${lastWithThumb.thumbnail}`)}` : null,
+    })
+  }
+}
+
+/* the universe: every member the app's Blog tab knows about */
+for (const site of Object.keys(sites)) {
+  const cache = readJson(path.join(LOGS, `blog-members-${site}.json`)) ?? []
+  const seen = new Set()
+  for (const m of cache) {
+    const uuid = String(m.member_uuid)
+    if (seen.has(uuid)) continue
+    seen.add(uuid)
+    const g = gens[site]?.[uuid] ?? {}
+    const arch = archivedBlogs.get(uuid)
+    blogMembers.push({
+      key: arch?.key ?? null,
+      site,
+      uuid,
+      name: g.name ?? m.name ?? uuid,
+      gen: g.gen ?? null,
+      gen_num: g.gen_num ?? genNum(g.gen),
+      graduated: !!g.graduated,
+      count: arch?.count ?? 0,
+      first: arch?.first ?? null,
+      last: arch?.last ?? null,
+      thumb: arch?.thumb ?? null,
+    })
+  }
+  /* anything archived but absent from the cache still gets its card */
+  for (const [uuid2, arch] of archivedBlogs) {
+    if (arch.site !== site || seen.has(uuid2)) continue
+    seen.add(uuid2)
+    const g = gens[site]?.[uuid2] ?? {}
+    blogMembers.push({
+      key: arch.key, site, uuid: uuid2, name: g.name ?? arch.name,
+      gen: g.gen ?? null, gen_num: g.gen_num ?? genNum(g.gen),
+      graduated: !!g.graduated, count: arch.count,
+      first: arch.first, last: arch.last, thumb: arch.thumb,
+    })
+  }
+}
+const siteOrder = Object.keys(sites)
+blogMembers.sort(
+  (a, b) =>
+    siteOrder.indexOf(a.site) - siteOrder.indexOf(b.site) ||
+    (b.gen_num ?? 0) - (a.gen_num ?? 0) ||
+    collator.compare(a.name, b.name),
+)
+
 const index = {
   generated_at: new Date().toISOString(),
   display_name: displayName,
   sites,
   totals,
   members,
+  blogs: { members: blogMembers },
 }
 
 // index.json is written atomically (tmp + rename): the server may serve it to
@@ -308,7 +393,7 @@ const indexTmp = path.join(PUB, 'index.json.tmp')
 fs.writeFileSync(indexTmp, JSON.stringify(index))
 fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
 
-say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media`)
+say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
 say(`thumbs: ${thumbNote}`)
 for (const m of members) {
   const c = m.counts

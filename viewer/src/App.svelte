@@ -3,6 +3,7 @@
   import type { Archive, Member } from './lib/types'
   import { closeLightbox, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
+  import Blog from './components/Blog.svelte'
   import Home from './components/Home.svelte'
   import InfoSheet from './components/InfoSheet.svelte'
   import Lightbox from './components/Lightbox.svelte'
@@ -77,6 +78,24 @@
       ui.view = 'gallery'
       ui.slug = slug
       ui.focusId = null   // the lightbox is addressed by #/media now
+    } else if (route === 'blog') {
+      ui.view = 'blog'
+      /* #/blog/<site> names a site directory (site keys are ASCII, member
+         keys are 日本語 — they can't collide); a member segment implies the
+         site by itself */
+      if (slug && archive.sites[slug]) {
+        ui.site = slug
+        ui.blogMember = null
+        ui.blogPost = null
+      } else {
+        ui.blogMember = slug
+        ui.blogPost = parts[2] ? Number(parts[2]) : null
+        /* a deep link names the member — adopt their site so the theme matches */
+        if (slug) {
+          const bm = archive.blogs?.members.find((b) => b.key === slug)
+          if (bm?.site) ui.site = bm.site
+        }
+      }
     } else if (route === 'search') {
       ui.view = 'search'
       ui.slug = null
@@ -85,6 +104,8 @@
       ui.view = 'home'
       ui.slug = null
       ui.focusId = null
+      ui.blogMember = null
+      ui.blogPost = null
     }
   }
 
@@ -102,16 +123,30 @@
 
   $effect(() => {
     if (!routed) return
-    const want = hashFor(ui.view, ui.slug, ui.focusId)
+    const want = ui.view === 'blog' ? blogHash() : hashFor(ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
     /* on the media route, every change (next/prev, ✕/Back-close) edits the
        same history entry — Back exits the viewer in one step; opening the
        viewer from a thread/grid address is a new entry, so Back returns to
-       exactly where you were; a consumed focus segment cleans up in place */
-    if (/^#\/media\//.test(location.hash) || (!lightbox.open && /\/\d+$/.test(location.hash)))
+       exactly where you were; a consumed focus segment cleans up in place.
+       Blog post URLs also end in digits — those push normally (each screen
+       is its own history entry, like the app) */
+    if (
+      /^#\/media\//.test(location.hash) ||
+      (!lightbox.open && !location.hash.startsWith('#/blog/') && /\/\d+$/.test(location.hash))
+    )
       history.replaceState(null, '', want)
     else history.pushState(null, '', want)
   })
+
+  function blogHash() {
+    /* directory URLs carry the site (like #/site/<site> on Talk) so a
+       Sakurazaka blogs link can be shared; member/post URLs imply the site */
+    if (!ui.blogMember)
+      return ui.site === siteKeys[0] ? '#/blog' : `#/blog/${encodeURIComponent(ui.site)}`
+    const m = encodeURIComponent(ui.blogMember)
+    return `#/blog/${m}${ui.blogPost != null ? '/' + ui.blogPost : ''}`
+  }
 </script>
 
 <div class="phone {ui.site === 'sakurazaka46' ? 'sakura-line' : 'nogizaka-line'}">
@@ -127,6 +162,8 @@
     {#key current.slug}
       <Gallery member={current} />
     {/key}
+  {:else if ui.view === 'blog'}
+    <Blog {archive} />
   {:else}
     <div class="screen">
       <div class="muted-note">メンバーが見つかりません / member not found</div>

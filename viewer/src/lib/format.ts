@@ -72,3 +72,12 @@ export function sizeOf(n: number): string {
   if (n > 1_000) return `${(n / 1_000).toFixed(0)} kB`
   return `${n} B`
 }
+
+/** "11/14/2026 20:06" — the app's blog-card stamp (numeric, 24-hour) */
+export function fmtBlogStamp(iso: string): string {
+  const x = d(iso)
+  return (
+    `${String(x.getMonth() + 1).padStart(2, '0')}/${String(x.getDate()).padStart(2, '0')}/${x.getFullYear()} ` +
+    `${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`
+  )
+}

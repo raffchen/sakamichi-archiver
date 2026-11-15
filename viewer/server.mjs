@@ -281,6 +281,66 @@ const app = http.createServer(async (req, res) => {
     return sendJson(res, 404, { error: 'unknown api route' })
   }
 
+  // --- blog posts (tools/grab-blog.py output) — bodies stay on disk and are
+  //     fetched lazily: the list strips content to a plain-text lead, the
+  //     detail endpoint returns the full HTML for one post
+  if (p.startsWith('/api/blog/')) {
+    const safe = (s) => (s && !/[/\\]|^\.{1,2}$/.test(s) ? s : null)
+    const key = safe(decodeURIComponent(p.split('/')[3] ?? ''))
+    if (!key) return sendJson(res, 404, { error: 'no such blog' })
+    // 川﨑/崎: U+FA11 has no NFKC decomposition in V8, so fold it manually —
+    // some keyboards/URL bars hand back the plain 崎 form
+    const fold = (s) => s.normalize('NFKC').replace(/\uFA11/g, '\u5D0E')
+    let dir = key
+    const exact = fs.existsSync(path.join(MEDIA, 'blogs', key))
+    if (!exact) {
+      const hit = fs.existsSync(path.join(MEDIA, 'blogs'))
+        ? fs
+            .readdirSync(path.join(MEDIA, 'blogs'))
+            .find((d) => fold(d) === fold(key))
+        : null
+      if (!hit) return sendJson(res, 404, { error: 'no such blog' })
+      dir = hit
+    }
+    const file = path.join(MEDIA, 'blogs', dir, 'blog', '_blogs.json')
+    let state
+    try {
+      state = JSON.parse(fs.readFileSync(file, 'utf8'))
+    } catch {
+      return sendJson(res, 404, { error: 'no such blog' })
+    }
+    // grab-blog stores post images as bare "files/<n>" — prefix them so the
+    // HTML can be dropped straight into the page (thumbnails likewise)
+    const prefixLocal = (html, key) =>
+      html ? html.replace(/(["'])(files\/)/g, `$1/media/blogs/${encodeURIComponent(key)}/blog/$2`) : html
+    const lead = (html) =>
+      html
+        ? html
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&[a-z#0-9]+;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 140)
+        : null
+    const parts = p.split('/').slice(3).map(decodeURIComponent)
+    if (parts[1] != null) {
+      const entry = (state.entries ?? []).find((e) => String(e.id) === parts[1])
+      if (!entry) return sendJson(res, 404, { error: 'no such post' })
+      return sendJson(res, 200, {
+        key,
+        member: state.member,
+        site: state.site,
+        entry: { ...entry, content: prefixLocal(entry.content, dir), lead: lead(entry.content) },
+      })
+    }
+    return sendJson(res, 200, {
+      key,
+      member: state.member,
+      site: state.site,
+      entries: (state.entries ?? []).map(({ content, ...e }) => ({ ...e, lead: lead(content) })).reverse(),
+    })
+  }
+
   if (p.startsWith('/api/')) return sendJson(res, 404, { error: 'unknown api route' })
 
   // /media/** — the archive (Range-capable, decode percent-encoded slugs).

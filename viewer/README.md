@@ -2,9 +2,12 @@
 
 A small Svelte 5 + Vite app that renders `../media/` like the real
 Nogizaka46 / 櫻坂46 Message apps: Talk list → chat thread → photo/video/voice
-bubbles, plus a media gallery, cross-member search and an archive info sheet.
+bubbles, plus the Blog tab (official-site diaries), a media gallery,
+cross-member search and an archive info sheet.
 
-Everything is local. No server-side DB, no API calls, nothing uploaded.
+Everything is local. No server-side DB, nothing uploaded. The only network
+calls are to the viewer's own `/api/*` routes (below) — the message/blog data
+always comes off disk.
 
 ## Run
 
@@ -52,7 +55,16 @@ Hash routes, so Back / reload / pasting a link all work:
 #/thread/<member-slug>/<msg-id>    jump to one message (deep link / search hit)
 #/gallery/<member-slug>            that member's media
 #/search                           full-text search over every message
+#/blog                             Blog directory (generation sections, first site)
+#/blog/<site-key>                  Blog directory for another site (e.g. #/blog/sakurazaka46)
+#/blog/<member-key>                one member's blog post list
+#/blog/<member-key>/<post-id>      one blog post (deep-linkable)
 ```
+
+Opening a blog deep link adopts that member's site theme (nogi purple /
+sakura pink) even if the rest of the UI was on the other site. Inside a blog
+post, tapping any image opens a lightweight overlay (`←` `→` step, `Esc`
+closes, `1 / N` counter).
 
 Inside a thread, click any photo/video to get the lightbox (`←` `→` step, `Esc`
 closes). Timestamps are stored UTC and shown in your browser's timezone.
@@ -106,6 +118,48 @@ duration badges on videos; the Voice tab is a flat list with unread dots and
 a bottom player bar (leaving the tab stops playback)
 - **Search** — full-text across every member, highlighted
 - **Info sheet** — per-member counts and date ranges
+- **Blog** — mirrors the official-site diaries (`tools/grab-blog.py`, see the
+  root README). Directory groups every known member by 期生 (newest first);
+  members whose backfill hasn't landed yet are greyed out. Member view is a
+  thumbnail post list (pink title, two-line lead, stamp). Post view renders
+  the archived HTML with a simple in-post image overlay.
 
-The Blog / News / Official tabs are deliberately disabled — that content was
-never part of these archives.
+News / Official remain decorative placeholders — that content isn't archived.
+
+## Blog data
+
+`blogs/` is a sibling of the message archives (`media/blogs/<member>/blog/`),
+indexed into `index.json` as `blogs.members[]`:
+
+```json
+{ "key": "川﨑_桜", "site": "nogizaka46", "uuid": "55400",
+  "name": "川﨑 桜", "gen": "5期生", "gen_num": 5, "graduated": false,
+  "count": 95, "first": "...", "last": "...", "thumb": "/media/blogs/..." }
+```
+
+- the **full roster** comes from `logs/blog-members-<site>.json` (grabbed once
+  from `GET /v2/blog-members`), joined with the static generation map in
+  `public/blog-generations.json` — so not-yet-archived members still show up
+  (greyed)
+- post **bodies stay lazy**: the index carries directory metadata only; the
+  list endpoint strips HTML to a 140-char lead and the detail endpoint returns
+  the full post
+
+## HTTP API (production container)
+
+The docker viewer serves a few JSON routes alongside the static bundle
+(`viewer/server.mjs`; the dev server doesn't need them — vite serves the same
+index from disk):
+
+| Route | Purpose |
+|---|---|
+| `GET /api/health` | liveness (used by docker healthcheck + uptime monitor) |
+| `GET /api/version` | index build stamp — clients poll it and reload when the index changes |
+| `GET /api/index` | the built `index.json` (includes `blogs.members[]`) |
+| `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead` |
+| `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/blogs/...`) |
+| `POST /api/secrets/session` | syncer uploads rotated session cookies here (guarded by `UPLOAD_TOKEN`) |
+| `GET /api/secrets/status` | token/cookie freshness for monitoring |
+
+Member keys are matched leniently: 川﨑 (U+FA11) and 崎 (U+5D0E) are treated as
+the same character, so keyboards that normalize the name still resolve.

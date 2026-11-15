@@ -21,9 +21,15 @@ The API shape is identical across sites; only the domains and app IDs differ.
 - **JWT Bearer token** in the `Authorization` header (~132 chars,
   `Authorization: Bearer eyJhbGciOiJIUzI1NiIs...`). Short TTL — the app
   refreshes it periodically via `POST /v2/update_token`.
-- Login is OAuth via **LINE** (`access.line.me/oauth2/...`); the JWT is issued
-  after consent and stored encrypted in the browser (`FlutterSecureStorage`,
-  localStorage).
+- Login is OAuth via **LINE** (`access.line.me/oauth2/...`). The web app never
+  receives a refresh token — instead the login sets a long-lived httpOnly
+  **`session=<uuid>` cookie** on `.message.<site>.com` (browser-wide,
+  partitioned). `POST /v2/update_token` accepts that cookie (body
+  `refresh_token: null` is fine) and returns a fresh ~1 h JWT **plus a rotated
+  `Set-Cookie: session=<new>`** scoped to `Path=/v2/update_token`. Tools must
+  persist every rotation or the session dies on the next renewal.
+  Consequence: **only one owner may renew a session at a time** — two
+  refreshing clients would keep invalidating each other's cookie.
 
 ### Required headers
 
@@ -195,7 +201,7 @@ supply the UI chrome (logos, tab icons) — not member-specific.
 `/v2/organizations/{id}/configs|menu`, `/v2/announcements`,
 `/v2/fan-organization-news`, `/v2/products`, `/v2/products/{id}/subscription_count`,
 `/v2/receipts`, `/v2/seal-settings`, `/v2/tags`, `/v2/tutorials`, `/v2/api-updates`,
-`/v2/app_configs`, `/v2/blog-members`.
+`/v2/app_configs`.
 
 ## Message object schema
 
@@ -254,6 +260,77 @@ https://djznowbmqickg.cloudfront.net/private/messages/files/<id>-<upload-ts>.<ex
   content type / magic bytes, not just the status code.
 - No auth headers needed for the download itself — the URL is self-contained.
 - Extensions observed: `.jpg`, `.mp4` (video), `.m4a` (voice).
+
+## Blog endpoints
+
+The app's Blog tab mirrors the members' **official-site diaries**. Three API
+layers are involved:
+
+### `GET /v2/blog-members`
+
+Every member with a blog (both sites return their own list), **Bearer auth
+required**. One entry per member:
+
+```json
+{ "id": 63, "service_uuid": "nogizaka46.com", "member_uuid": "63101",
+  "name": "愛宕 心響", "organization_id": 1, "blog_source_id": 1,
+  "group_id": 60, "priority": 10000,
+  "tags": ["nogizaka46.com", "nogizaka46-1"] }
+```
+
+- `member_uuid` is the key used by the official diary APIs and by the viewer's
+  generation map — **not** the message `member_id`
+- includes relay accounts (e.g. sakura's 四期生リレー) — filter by name
+- 54 entries on nogizaka (incl. graduates), 32 on sakurazaka
+- grab-blog caches this roster under `logs/blog-members-<site>.json` so later
+  runs work without a token
+
+### `GET /v2/blog-sources?organization_id=1`
+
+Bearer auth required. Returns **URL templates** (`members_latest_url` /
+`update_url` / `member_url`) pointing at the official sites' public JSON diary
+APIs — this is how the app itself fetches blogs. Example template (nogizaka):
+
+```
+https://www.nogizaka46.com/s/n46/api/json/diary?cd=MEMBER&get=B&member_id=${member_id}&getnum=${count}&st=${start}
+```
+
+### Official-site diary JSON API (public, no auth)
+
+```
+https://www.nogizaka46.com/s/n46/api/json/diary?cd=MEMBER&get=B&member_id=<uuid>&getnum=<count>&st=<offset>
+https://sakurazaka46.com/s/s46app/api/json/diary?cd=blog&get=B&member_id=<uuid>&getnum=<count>&st=<offset>
+```
+
+| Param | Meaning |
+|---|---|
+| `cd` | `MEMBER` (nogi) / `blog` (sakura) |
+| `get` | `B` (blog) |
+| `member_id` | the blog `member_uuid` from `/v2/blog-members` |
+| `getnum` | page size (grabber uses 50) |
+| `st` | zero-based offset — walk downward for history, newest first |
+
+Returns an array of entries, newest first:
+
+```json
+{ "title": "大切な場所　　川﨑桜", "id": 105009, "creator": "川﨑桜",
+  "member_id": "55400", "pubdate": "2026-11-13 22:34",
+  "thumbnail": "https://.../thumb.jpg",
+  "content": "<p>こんばんは …</p><img src=\"https://.../photo.jpg\">" }
+```
+
+`content` is raw HTML with absolute CDN image URLs; `pubdate` is JST local
+string (no timezone suffix). No signing, no auth, no rate limiting observed
+beyond common sense — this is the same data the public sites render.
+
+Used by `tools/grab-blog.py`, which rewrites the HTML to local `files/...`
+paths and stores entries in `media/blogs/<member>/blog/_blogs.json`.
+
+## Local viewer API (not part of the upstream API)
+
+The production viewer container (`viewer/server.mjs`) serves a few JSON routes
+of its own — documented in `viewer/README.md`: `/api/health`, `/api/version`,
+`/api/index`, `/api/blog/<key>[/<id>]`, `/api/secrets/*`.
 
 ## Quirks & gotchas
 
