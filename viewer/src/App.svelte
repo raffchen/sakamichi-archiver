@@ -99,7 +99,7 @@
     } else if (route === 'search' || route === 'blog-search') {
       ui.view = 'search'
       /* #/blog-search — the Blog tab's scoped search (back returns to Blogs) */
-      ui.searchBlog = window.location.hash.startsWith('#/blog-search')
+      ui.searchScope = window.location.hash.startsWith('#/blog-search') ? 'blog' : 'message'
       ui.slug = null
       ui.focusId = null
     } else {
@@ -128,7 +128,7 @@
     const want =
       ui.view === 'blog'
         ? blogHash()
-        : hashFor(ui.view === 'search' && ui.searchBlog ? 'blog-search' : ui.view, ui.slug, ui.focusId)
+        : hashFor(ui.view === 'search' && ui.searchScope === 'blog' ? 'blog-search' : ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
     /* on the media route, every change (next/prev, ✕/Back-close) edits the
        same history entry — Back exits the viewer in one step; opening the

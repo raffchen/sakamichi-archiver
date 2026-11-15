@@ -29,7 +29,7 @@
 <nav class="tabs">
   {#each tabs as t (t.id)}
     <button
-      class:on={(t.id === 'talk' && onTalk()) || (t.id === 'blog' && (ui.view === 'blog' || (ui.view === 'search' && ui.searchBlog)))}
+      class:on={(t.id === 'talk' && onTalk()) || (t.id === 'blog' && (ui.view === 'blog' || (ui.view === 'search' && ui.searchScope === 'blog')))}
       class:locked={t.locked}
       disabled={t.locked}
       title={t.locked ? 'not part of the archive' : ''}

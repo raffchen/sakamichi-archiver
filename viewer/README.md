@@ -118,9 +118,9 @@ thing; the whole UI renders at a 125% app zoom, `--app-zoom` in `app.css`).
 duration badges on videos; the Voice tab is a flat list with unread dots and
 a bottom player bar (leaving the tab stops playback)
 - **Search** — two search bars, two scopes: the Talk page's bar searches
-  **messages and blog posts**; the Blogs header's 🔍 opens a **blog-only**
-  search (`#/blog-search`, back returns to Blogs). Both hit the same server
-  search (`/api/search`, the blog one with `?type=blog`): `完全一致 / exact
+  **messages**; the Blog tab's search bar (under the site pills) searches
+  **blog posts** (`#/blog-search`, back returns to Blogs). Both hit the same
+  server search (`/api/search?type=message|blog`): `完全一致 / exact
   matches` via FTS5 (trigram tokenizer — real substring matching for
   Japanese; 1–2 char words go through an `instr()` path), `<mark>`-highlighted
   snippets, Blog/Message type badges, debounced fetch (~250 ms), ranked by

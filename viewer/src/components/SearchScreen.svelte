@@ -6,9 +6,9 @@
 
   let { archive }: { archive: Archive } = $props()
 
-  /* scope: the Talk page's bar searches messages + blogs; the Blog tab's
-     search icon opens the same screen filtered to blog posts (?type=blog) */
-  const blogOnly = $derived(ui.searchBlog)
+  /* scope: the Talk page's bar searches messages (?type=message), the Blog
+     tab's searches blog posts (?type=blog) */
+  const blogOnly = $derived(ui.searchScope === 'blog')
 
   let input = $state<HTMLInputElement | undefined>()
   const q = $derived(ui.query.trim())
@@ -72,7 +72,7 @@
     searching = true
     const ctrl = new AbortController()
     const timer = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(query)}${scoped ? '&type=blog' : ''}`, { signal: ctrl.signal })
+      fetch(`/api/search?q=${encodeURIComponent(query)}${scoped ? '&type=blog' : '&type=message'}`, { signal: ctrl.signal })
         .then((r) => r.json())
         .then((reply: SearchReply) => {
           if (mySeq === seq) {
@@ -106,7 +106,7 @@
 
   const goBack = () => {
     if (blogOnly) {
-      ui.searchBlog = false
+      ui.searchScope = 'message'
       openBlog()
     } else ui.view = 'home'
   }
@@ -135,8 +135,8 @@
 <div class="screen">
   {#if !q}
     <p class="muted-note">
-      {#if results?.available}
-        メッセージとブログから検索 / searching messages and blog posts
+      {#if blogOnly}
+        ブログ記事を検索 / searching blog posts
       {:else}
         {archive.totals.messages} 件のメッセージから検索 / searching {archive.totals.messages} messages
       {/if}
