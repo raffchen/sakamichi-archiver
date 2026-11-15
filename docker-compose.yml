@@ -25,10 +25,12 @@ services:
       # share) so the files are browsable outside Docker; unset = named volume
       - "${MEDIA_HOST_DIR:-media}:/data/media"
       - secrets:/data/logs    # the upload endpoint (§3.7) writes the fresh cookie here
+      - viewer-db:/data/db    # derived search index (SQLite) — rebuildable, never source of truth
     environment:
       PORT: 8080
       MEDIA_DIR: /data/media
       LOGS_DIR: /data/logs
+      DB_PATH: /data/db/index.sqlite
       UPLOAD_TOKEN: ${UPLOAD_TOKEN:-}   # unset = endpoint disabled
     restart: unless-stopped
 
@@ -54,3 +56,4 @@ services:
 volumes:
   media: {}
   secrets: {}
+  viewer-db: {}
