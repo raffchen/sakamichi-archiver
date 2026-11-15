@@ -374,6 +374,10 @@ for (const site of Object.keys(sites)) {
     seen.add(uuid)
     const g = gens[site]?.[uuid] ?? {}
     const arch = archivedBlogs.get(uuid)
+    /* staff/relay/research accounts (運営スタッフ, 期生リレー, 研究生 …) have no
+       generation in the wiki-sourced map and never get archived — emitting
+       them just fills the その他 section with empty cards */
+    if (!arch && !g.gen) continue
     blogMembers.push({
       key: arch?.key ?? null,
       site,

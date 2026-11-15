@@ -45,9 +45,11 @@ services:
     volumes:
       - "${MEDIA_HOST_DIR:-media}:/data/media"
       - secrets:/data/logs
+      - ./viewer/public:/data/pub:ro   # blog-generations.json (sync filtering)
     environment:
       MEDIA_DIR: /data/media
       LOGS_DIR: /data/logs
+      PUB_DIR: /data/pub
       SYNC_INTERVAL: ${SYNC_INTERVAL:-6h}
       SYNC_SITES: ${SYNC_SITES:-nogizaka46}
       SYNC_FLAGS: ${SYNC_FLAGS:-}

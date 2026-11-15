@@ -48,6 +48,35 @@ MEDIA = Path(os.environ.get("MEDIA_DIR") or ROOT / "media")
 BLOGS = Path(os.environ.get("BLOGS_DIR") or MEDIA / "blogs")
 LOGS = Path(os.environ.get("LOGS_DIR") or ROOT / "logs")
 CONFIG = Path(os.environ.get("BLOG_CONFIG") or ROOT / "viewer" / "archive.config.json")
+# viewer/public — the wiki-sourced generation map lives there (committed);
+# the syncer mounts it read-only, local runs use the sibling checkout
+PUB = Path(os.environ.get("PUB_DIR") or ROOT / "viewer" / "public")
+
+
+def load_generations():
+    """{ site: { member_uuid: {name, gen, graduated, ...} } } — empty map if absent
+    (older checkouts); skipping then degrades to no-op rather than blocking."""
+    f = PUB / "blog-generations.json"
+    try:
+        data = json.loads(f.read_text())
+        return {k: v for k, v in data.items() if not k.startswith("_")}
+    except FileNotFoundError:
+        print(f"[warn] {f} not found — no graduation/other filtering")
+        return {}
+
+
+def skip_reason(site_key: str, uuid: str, name: str, gens: dict) -> str | None:
+    """Sync policy: current generation members only. Graduated members' blogs
+    are erased from the official site (their images 404 — the sync would just
+    hammer dead URLs) and stay in the archive for a future re-source; unranked
+    accounts (運営スタッフ, 期生リレー relays, 研究生, generation placeholders)
+    are out of scope entirely."""
+    g = gens.get(site_key, {}).get(str(uuid))
+    if g is None or not g.get("gen"):
+        return "no generation (staff/relay/other)"
+    if g.get("graduated"):
+        return "graduated"
+    return None
 
 PAGE = 50          # entries per diary page
 SLEEP = 1.0        # polite gap between requests to the official sites
@@ -279,6 +308,7 @@ def main() -> None:
         if site_filter not in SITES:
             raise SystemExit(f"--site must be one of: {', '.join(SITES)}")
 
+    gens = load_generations()
     if grab_all:
         for site_key, site in SITES.items():
             if site_filter and site_key != site_filter:
@@ -291,6 +321,10 @@ def main() -> None:
             print(f"=== {site_key}: {len(members)} blog member(s) ===")
             for info in members.values():
                 key = info["display"].replace(" ", "_")
+                why = skip_reason(site_key, info["member_uuid"], key, gens)
+                if why:
+                    print(f"  {key}: skipped ({why})")
+                    continue
                 try:
                     grab_member(site_key, site, members, key, info, only_new=not full)
                 except Exception as e:
@@ -319,6 +353,10 @@ def main() -> None:
                 info = members.get(norm_name(members_cfg[name]["roman"])) or members.get(norm_name(name))
                 if info is None:
                     print(f"  {name}: no blog member match — skipped")
+                    continue
+                why = skip_reason(site_key, info["member_uuid"], name, gens)
+                if why:
+                    print(f"  {name}: skipped ({why})")
                     continue
                 grab_member(site_key, site, members, name, info, only_new=not full)
                 time.sleep(SLEEP)
