@@ -29,6 +29,32 @@
     const p = m.file ?? m.thumb ?? ''
     return decodeURIComponent(p.split('/').pop() || '') || 'media'
   }
+
+  /* touch swipe navigation — on phones the arrow chips are hidden (CSS below:
+     they sat on top of the photo and blurred it), so a horizontal flick steps
+     prev/next. Vertical drags (caption scroll) and anything starting on a
+     button/link/video/audio are left alone — those have their own gestures. */
+  let touchX = 0
+  let touchY = 0
+  let swiping = false
+  function onTouchStart(e: TouchEvent) {
+    if ((e.target as HTMLElement)?.closest('button, a, video, audio')) {
+      swiping = false
+      return
+    }
+    touchX = e.touches[0].clientX
+    touchY = e.touches[0].clientY
+    swiping = true
+  }
+  function onTouchEnd(e: TouchEvent) {
+    if (!swiping) return
+    swiping = false
+    const dx = e.changedTouches[0].clientX - touchX
+    const dy = e.changedTouches[0].clientY - touchY
+    /* 48px minimum flick, and clearly more horizontal than vertical */
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    stepLightbox(dx < 0 ? 1 : -1)
+  }
 </script>
 
 <!-- the backdrop click is a convenience; Esc (use:keynav) and ✕ are the
@@ -39,6 +65,8 @@
   transition:fade={{ duration: 130 }}
   use:keynav={{ onLeft: () => stepLightbox(-1), onRight: () => stepLightbox(1), onEsc: closeLightbox }}
   onclick={onBackdrop}
+  ontouchstart={onTouchStart}
+  ontouchend={onTouchEnd}
 >
   <div class="lb-top">
     <span>{lightbox.i + 1} / {n}</span>

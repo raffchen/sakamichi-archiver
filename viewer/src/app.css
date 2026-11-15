@@ -863,6 +863,8 @@ img {
   backdrop-filter: blur(18px) saturate(1.3);
   display: flex;
   flex-direction: column;
+  /* horizontal drags belong to the swipe handler, not the browser */
+  touch-action: pan-y;
 }
 .lb-top,
 .lb-cap {
@@ -1002,6 +1004,16 @@ img {
   opacity: 1;
   background: rgba(255, 255, 255, 0.2);
   box-shadow: 0 0 32px 6px rgba(255, 255, 255, 0.28);
+}
+/* touch devices and portrait-shaped screens navigate by swipe instead
+   (Lightbox.svelte), so the acrylic chips go — on a phone they sat right on
+   top of the photo and their backdrop blur smeared the image. The invisible
+   click zones stay on every form factor: a tap near the edge still steps,
+   and being invisible they never cover the picture. */
+@media (pointer: coarse), (max-aspect-ratio: 4/5) {
+  .lb-glyph {
+    display: none;
+  }
 }
 .lb-cap {
   flex: none;
