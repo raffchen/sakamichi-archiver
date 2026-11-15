@@ -5,6 +5,9 @@ chrome-profile/
 # downloaded archive + generated viewer index/thumbs (rebuild with npm run index)
 media/
 viewer/public/index.json
+viewer/public/index.sqlite*
+# local design doc — deliberately not in the repo (see docs/search-db.md)
+docs/search-db.md
 viewer/public/thumbs/
 
 # node / vite

@@ -18,6 +18,7 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { openSearchDb } from './db.mjs'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -312,6 +313,7 @@ const genNum = (gen) => {
 
 const blogMembers = []
 const archivedBlogs = new Map() // uuid -> archived state
+const blogRows = new Map() // member_key -> full-post mirror for the search DB
 const blogsRoot = path.join(MEDIA, 'blogs')
 if (fs.existsSync(blogsRoot)) {
   for (const key of fs.readdirSync(blogsRoot)) {
@@ -327,6 +329,18 @@ if (fs.existsSync(blogsRoot)) {
       first: entries[0]?.at ?? null,
       last: entries.at(-1)?.at ?? null,
       thumb: lastWithThumb ? `/media/${enc(`blogs/${key}/blog/${lastWithThumb.thumbnail}`)}` : null,
+    })
+    /* mirror for the search DB (stage 1): full bodies, keyed per member */
+    let srcMtime = null
+    try {
+      srcMtime = Math.floor(fs.statSync(path.join(blogsRoot, key, 'blog', '_blogs.json')).mtimeMs)
+    } catch {}
+    blogRows.set(key, {
+      site: state.site ?? null,
+      uuid: String(state.member_uuid),
+      name: state.member ?? key.replace(/_/g, ' '),
+      src_mtime: srcMtime,
+      posts: entries.map((e) => ({ id: e.id, title: e.title, at: e.at, body: e.content ?? '' })),
     })
   }
 }
@@ -402,6 +416,29 @@ fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
 
 say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
 say(`thumbs: ${thumbNote}`)
+
+// ---- search DB mirror (stage 1) ------------------------------------------
+// Runs after index.json is written so a DB problem can never block serving.
+// Derived + rebuildable: delete the file and the next build recreates it.
+{
+  const db = openSearchDb(process.env.DB_PATH || path.join(PUB, 'index.sqlite'), say)
+  if (db) {
+    const t0 = Date.now()
+    try {
+      const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
+      const ps = db.syncBlogPosts(blogRows)
+      const ms = db.syncMessages(msgRows)
+      say(
+        `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
+          `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged) — ${Date.now() - t0}ms`,
+      )
+    } catch (e) {
+      say(`! search DB sync failed (${e.message}) — continuing without it`)
+    } finally {
+      db.close()
+    }
+  }
+}
 for (const m of members) {
   const c = m.counts
   say(
