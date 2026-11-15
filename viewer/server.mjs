@@ -62,6 +62,10 @@ const getEmbedder = () =>
    Both tunable per env (stage 6 tunes them with logged distributions). */
 const SEMANTIC_MIN_COS = Number(process.env.SEMANTIC_MIN_COS) || 0.65
 const SEMANTIC_GAP = Number(process.env.SEMANTIC_GAP) || 0.06
+/* unscoped (mixed-corpus) related budgets per group; a scoped search gives the
+   active group the full 20 */
+const BLOG_CAP = 12
+const MSG_CAP = 8
 /* stage 6: set SEMANTIC_LOG=1 to log per-query score distributions (tuning aid) */
 const SEMANTIC_LOG = process.env.SEMANTIC_LOG === '1'
 
@@ -555,17 +559,19 @@ const app = http.createServer(async (req, res) => {
             }
             const exactBlog = new Set(results.filter((r) => r.type === 'blog').map((r) => `${r.key}/${r.id}`))
             const exactMsg = new Set(results.filter((r) => r.type === 'message').map((r) => `${r.slug}/${r.id}`))
-            /* two rank groups (posts/messages don't share a score scale — passage
-               length biases), each with its own gap rule + budget, merged after */
-            const BLOG_CAP = 12
-            const MSG_CAP = 8
+            /* the search scope applies to related too: Talk search gets messages,
+               Blog search gets posts, the unscoped API search mixes both. Scores
+               don't share a scale across corpora (passage-length bias), so each
+               group ranks with its own gap rule + budget. */
+            const blogCap = scope === 'blog' ? 20 : scope === 'message' ? 0 : BLOG_CAP
+            const msgCap = scope === 'message' ? 20 : scope === 'blog' ? 0 : MSG_CAP
             const cand = [...byPost.values()]
               .filter((c) => !exactBlog.has(`${c.key}/${c.id}`) && c.score >= SEMANTIC_MIN_COS)
               .sort((a, b) => b.score - a.score)
             const best = cand[0]?.score ?? 0
             for (const c of cand) {
               if (c.score < best - SEMANTIC_GAP) break
-              if (related.length >= BLOG_CAP) break
+              if (related.length >= blogCap) break
               related.push({
                 type: 'blog',
                 key: c.key,
@@ -610,7 +616,7 @@ const app = http.createServer(async (req, res) => {
             const bestMsg = candMsg[0]?.score ?? 0
             for (const c of candMsg) {
               if (c.score < bestMsg - SEMANTIC_GAP) break
-              if (related.length >= BLOG_CAP + MSG_CAP) break
+              if (related.length >= blogCap + msgCap) break
               related.push(c)
             }
             /* group order is preserved (blog first, then messages) — the client
