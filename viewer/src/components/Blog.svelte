@@ -141,6 +141,7 @@
           <div class="ph"></div>
         {/if}
         <span class="nm">{b.name}{b.graduated ? ' (卒)' : ''}</span>
+        {#if b.roman}<span class="sub">{b.roman}</span>{/if}
         <span class="dt">{b.count ? fmtBlogStamp(b.last!) : '—'}</span>
       </button>
     {/snippet}

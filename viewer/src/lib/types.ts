@@ -52,6 +52,7 @@ export interface BlogMemberInfo {
   uuid: string // message/blog member_uuid (joins blog-generations.json)
   name: string
   kana: string | null // reading (blog-generations.json) — the reliable sort key
+  roman: string | null // romanized name (official JSONP / en-wiki) — the .sub line
   gen: string | null
   gen_num: number | null
   graduated: boolean
