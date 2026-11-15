@@ -40,6 +40,14 @@ const PUB = path.resolve(process.env.PUBLIC_DIR || path.join(VIEWER, 'public'))
 const LOGS = path.resolve(process.env.LOGS_DIR || path.join(ROOT, 'logs'))
 const DB_PATH = process.env.DB_PATH || path.join(PUB, 'index.sqlite')
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || ''
+
+/* kuromoji, lazy: only the reading-snippet fallback needs token positions,
+   so the ~0.5 s dictionary load happens on the first search that needs it */
+let tokenizerPromise = null
+const getTokenizer = () =>
+  (tokenizerPromise ??= import(path.join(VIEWER, 'scripts', 'tokenize.mjs'))
+    .then((m) => m.buildTokenizer(say))
+    .catch(() => null))
 const PORT = Number(process.env.PORT || 8080)
 const INDEX = path.join(PUB, 'index.json')
 
@@ -249,11 +257,21 @@ const app = http.createServer(async (req, res) => {
   // arrives in stage 5 — the shape is final today so the client won't change.
   if (p === '/api/search') {
     const qp = new URL(req.url, 'http://localhost').searchParams
-    const query = (qp.get('q') ?? '').trim()
+    const raw = (qp.get('q') ?? '').trim()
     const limit = Math.min(Number(qp.get('limit')) || 30, 100)
     const t0 = Date.now()
+    // stage 3: match readings, not just surface text. Normalize the query the
+    // same way the indexer normalized the readings: katakana → hiragana (incl.
+    // half-width kana), latin lowercased. Surface columns match the raw query,
+    // reading columns match the normalized one — one MATCH covers both.
+    const kataToHira = (s) => s
+      .replace(/[ｦ-ﾟ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60)) // half-width kana
+      .replace(/[\u30A1-\u30F6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60)) // katakana
+      .toLowerCase()
+    const normalized = kataToHira(raw)
+    const tokens = normalized ? await getTokenizer().then((t) => t ?? null).catch(() => null) : null
     const empty = { available: false, exact: [], related: [], took_ms: 0 }
-    if (!query) return sendJson(res, 200, { ...empty, available: true })
+    if (!raw) return sendJson(res, 200, { ...empty, available: true })
     let db = null
     try {
       if (fs.existsSync(DB_PATH)) db = new DatabaseSync(DB_PATH, { readOnly: true })
@@ -264,34 +282,76 @@ const app = http.createServer(async (req, res) => {
 
     try {
       const results = []
-      const cps = [...query]
+      const cps = [...raw]
+      /* When the best match lives in the reading column (kana query vs kanji
+         text), snippet(-1) happily shows the kana reading dump — replace it
+         with a plain window over the real text so cards never show readings. */
+      const realSnippet = (snip, baseText) => {
+        const m = /<mark>([\s\S]*?)<\/mark>/.exec(snip)
+        /* reading-column match (or no mark at all): find the kanji surface
+           word whose kuromoji reading contains the query and mark IT
+           (ひかり → 光) */
+        if (!m || !baseText.toLowerCase().includes(m[1].toLowerCase())) {
+          if (tokens) {
+            for (const tok of tokens.tokens(baseText)) {
+              const reading = tok.reading ? kataToHira(tok.reading) : ''
+              if (reading.includes(normalized) && tok.surface_form && baseText.includes(tok.surface_form)) {
+                const surface = tok.surface_form
+                const i = baseText.indexOf(surface)
+                const start = Math.max(0, i - 30)
+                return (
+                  (start > 0 ? '…' : '') +
+                  baseText.slice(start, i + Math.max(surface.length, 60)).replace(surface, () => `<mark>${surface}</mark>`) +
+                  (i + Math.max(surface.length, 60) < baseText.length ? '…' : '')
+                )
+              }
+            }
+          }
+          if (!m) return snip
+        }
+        const hit = m[1]
+        const needle = [raw, normalized].find((n) => baseText.toLowerCase().includes(n.toLowerCase())) ?? null
+        if (!needle) return baseText.slice(0, 100) + (baseText.length > 100 ? '…' : '')
+        const i = baseText.toLowerCase().indexOf(needle.toLowerCase())
+        const start = Math.max(0, i - 30)
+        return (
+          (start > 0 ? '…' : '') +
+          baseText.slice(start, i + Math.max(needle.length, 60)).replace(needle, () => `<mark>${needle}</mark>`) +
+          (i + Math.max(needle.length, 60) < baseText.length ? '…' : '')
+        )
+      }
       if (cps.length >= 3) {
-        // trigram phrase == exact substring; quotes doubled for FTS safety
-        const match = `"${query.replaceAll('"', '""')}"`
+        // trigram phrase == exact substring; quotes doubled for FTS safety.
+        // Column weights (title, body, reading / text, reading): surface hits
+        // rank well above reading-only hits.
         const posts = db
           .prepare(
             `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member,
-                    p.at, bm25(posts_fts) AS score,
+                    p.at, p.body, bm25(posts_fts, 10.0, 10.0, 1.0) AS score,
                     snippet(posts_fts, -1, '<mark>', '</mark>', '…', 16) AS snippet
              FROM posts_fts JOIN posts p ON p.rowid = posts_fts.rowid
              WHERE posts_fts MATCH ? ORDER BY score LIMIT ?`,
           )
-          .all(match, limit)
-        for (const r of posts) results.push({ type: 'blog', ...r })
+          .all(`"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`, limit)
+        for (const r of posts) {
+          r.snippet = realSnippet(r.snippet, `${r.title ?? ''} ${r.body ?? ''}`)
+          results.push({ type: 'blog', ...r })
+        }
         const msgs = db
           .prepare(
-            `SELECT m.slug, m.msg_id AS id, m.at, m.type, bm25(messages_fts) AS score,
+            `SELECT m.slug, m.msg_id AS id, m.at, m.type, bm25(messages_fts, 10.0, 1.0) AS score,
                     snippet(messages_fts, 0, '<mark>', '</mark>', '…', 16) AS snippet
              FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid
              WHERE messages_fts MATCH ? ORDER BY score LIMIT ?`,
           )
-          .all(match, limit)
+          .all(`"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`, limit)
         // slug → display name/site comes from the JSON index (search DB stays name-free)
         const members = new Map(
           (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
         )
         for (const r of msgs) {
           const mem = members.get(r.slug)
+          const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
           results.push({
             type: 'message',
             slug: r.slug,
@@ -302,43 +362,45 @@ const app = http.createServer(async (req, res) => {
             site: mem?.site ?? null,
             avatar: mem?.avatar ?? null,
             score: r.score,
-            snippet: r.snippet,
+            snippet: realSnippet(r.snippet, text),
           })
         }
       } else {
         // <3 code points: below the trigram minimum — instr() scan instead
+        // (over surface AND reading columns)
         const posts = db
           .prepare(
-            `SELECT member_key AS "key", site, post_id AS id, title, member_name AS member, at, body
-             FROM posts WHERE instr(title, ?) > 0 OR instr(body, ?) > 0 LIMIT ?`,
+            `SELECT member_key AS "key", site, post_id AS id, title, member_name AS member, at, body, reading
+             FROM posts WHERE instr(title, ?) > 0 OR instr(body, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
           )
-          .all(query, query, limit)
+          .all(raw, raw, normalized, limit)
         for (const r of posts) {
-          const hay = r.title.includes(query) ? r.title : r.body
-          const i = hay.indexOf(query)
+          const hay = r.title.includes(raw) ? r.title : r.body
+          const i = hay.indexOf(raw)
           const start = Math.max(0, i - 30)
           results.push({
             type: 'blog',
             ...r,
             score: 0,
-            snippet:
-              (start > 0 ? '…' : '') +
-              hay.slice(start, i + query.length + 60).replace(query, () => `<mark>${query}</mark>`) +
-              (i + query.length + 60 < hay.length ? '…' : ''),
+            snippet: i < 0
+              ? (r.reading ?? '').slice(0, 60)
+              : (start > 0 ? '…' : '') +
+                hay.slice(start, i + raw.length + 60).replace(raw, () => `<mark>${raw}</mark>`) +
+                (i + raw.length + 60 < hay.length ? '…' : ''),
           })
         }
         const msgs = db
           .prepare(
-            `SELECT slug, msg_id AS id, at, type FROM messages WHERE instr(text, ?) > 0 LIMIT ?`,
+            `SELECT slug, msg_id AS id, at, type, reading FROM messages WHERE instr(text, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
           )
-          .all(query, limit)
+          .all(raw, normalized, limit)
         const members = new Map(
           (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
         )
         for (const r of msgs) {
           const mem = members.get(r.slug)
           const text = (mem?.messages ?? []).find((m) => m.id === r.id)?.text ?? ''
-          const i = text.indexOf(query)
+          const i = text.indexOf(raw)
           const start = Math.max(0, i - 30)
           results.push({
             type: 'message',
@@ -350,10 +412,11 @@ const app = http.createServer(async (req, res) => {
             site: mem?.site ?? null,
             avatar: mem?.avatar ?? null,
             score: 0,
-            snippet:
-              (start > 0 ? '…' : '') +
-              text.slice(start, i + query.length + 60).replace(query, () => `<mark>${query}</mark>`) +
-              (i + query.length + 60 < text.length ? '…' : ''),
+            snippet: i < 0
+              ? text.slice(0, 80) + (text.length > 80 ? '…' : '')
+              : (start > 0 ? '…' : '') +
+                text.slice(start, i + raw.length + 60).replace(raw, () => `<mark>${raw}</mark>`) +
+                (i + raw.length + 60 < text.length ? '…' : ''),
           })
         }
       }
