@@ -12,6 +12,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "kuromoji": "^0.1.2",
     "sirv": "^3.0.2"
   },
   "devDependencies": {

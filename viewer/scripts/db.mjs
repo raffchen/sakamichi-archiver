@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 const md5 = (s) => createHash('md5').update(s ?? '').digest('hex')
 
 const SCHEMA = `
@@ -24,9 +24,10 @@ CREATE TABLE IF NOT EXISTS posts (
   member_name TEXT,
   title       TEXT,
   at          TEXT,              -- "YYYY/MM/DD HH:mm:ss" (sorts as-is)
-  body        TEXT,              -- archived HTML (FTS arrives in stage 2)
-  body_md5    TEXT NOT NULL,     -- skip rework of unchanged posts
+  body        TEXT,              -- HTML-stripped plain text (stage 2)
+  body_md5    TEXT NOT NULL,     -- skip re-tokenizing unchanged posts
   src_mtime   INTEGER,           -- _blogs.json mtime at index time
+  reading     TEXT,              -- kuromoji readings, hiragana (stage 3)
   PRIMARY KEY (member_key, post_id)
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS messages (
   type       TEXT,
   text       TEXT,
   body_md5   TEXT NOT NULL,
+  reading    TEXT,               -- kuromoji readings, hiragana (stage 3)
   PRIMARY KEY (slug, msg_id)
 );`
 
@@ -46,22 +48,30 @@ CREATE TABLE IF NOT EXISTS messages (
    2-code-point words (卒業, 桜); those go through an instr() path in
    server.mjs instead. Content is duplicated into the FTS tables (external
    content was rejected: node:sqlite's delete path for it is fiddly and the
-   corpus is only a few MB). FTS rowid mirrors the base-table rowid. */
+   corpus is only a few MB). FTS rowid mirrors the base-table rowid.
+
+   v3 (stage 3): `reading` columns — kuromoji readings (hiragana) in both the
+   base tables (for the instr() short-query path) and the FTS tables (for
+   MATCH). MATCH without a column filter searches surface OR reading, and
+   bm25 column weights rank surface matches above reading matches. */
 const SCHEMA_FTS = `
-CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts    USING fts5(title, body, tokenize='trigram');
-CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, tokenize='trigram');`
+CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts    USING fts5(title, body, reading, tokenize='trigram');
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, reading, tokenize='trigram');`
 const BACKFILL_FTS = `
-INSERT INTO posts_fts (rowid, title, body)
-  SELECT rowid, title, body FROM posts WHERE rowid NOT IN (SELECT rowid FROM posts_fts);
-INSERT INTO messages_fts (rowid, text)
-  SELECT rowid, text FROM messages WHERE rowid NOT IN (SELECT rowid FROM messages_fts);`
+INSERT INTO posts_fts (rowid, title, body, reading)
+  SELECT rowid, title, body, reading FROM posts WHERE rowid NOT IN (SELECT rowid FROM posts_fts);
+INSERT INTO messages_fts (rowid, text, reading)
+  SELECT rowid, text, reading FROM messages WHERE rowid NOT IN (SELECT rowid FROM messages_fts);`
 
 /**
  * Open (and migrate) the search DB. Returns null when the DB is disabled —
  * missing DB_PATH is fine (defaults to public/index.sqlite for local dev),
  * an unopenable/corrupt file degrades to no-DB instead of failing the build.
+ * tokenize: optional (text) => hiragana-reading-string (build-index wires
+ * kuromoji here). When present, new/changed/missing rows get readings; when
+ * null the reading columns stay empty and search remains surface-only.
  */
-export function openSearchDb(dbPath, log = () => {}) {
+export function openSearchDb(dbPath, log = () => {}, tokenize = null) {
   if (!dbPath) return null
   try {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -69,12 +79,38 @@ export function openSearchDb(dbPath, log = () => {}) {
     db.exec('PRAGMA journal_mode = WAL')
     db.exec(SCHEMA)
     const ver = db.prepare('PRAGMA user_version').get().user_version
-    if (ver < 2) {
-      // v1 DBs carry raw-HTML bodies and no FTS — rebuild the text side once
+    if (ver > 0 && ver < 3) {
+      // v1/v2 base tables lack the reading columns — add them, then drop FTS
+      // (the backfill below rebuilds it, now with readings)
+      const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((r) => r.name)
+      if (!cols('posts').includes('reading')) db.exec('ALTER TABLE posts ADD COLUMN reading TEXT')
+      if (!cols('messages').includes('reading')) db.exec('ALTER TABLE messages ADD COLUMN reading TEXT')
       db.exec('DROP TABLE IF EXISTS posts_fts; DROP TABLE IF EXISTS messages_fts')
+      log('search schema v2 → v3: reading columns added, FTS will be rebuilt')
     }
     db.exec(SCHEMA_FTS)
-    // cheap, idempotent safety net: any base row missing from FTS gets indexed
+    // readings for any base row that lacks one (the v3 migration lands here;
+    // idempotent — only NULL rows are tokenized, so warm restarts are free).
+    // The FTS backfill below then indexes everything incl. the new readings.
+    if (tokenize) {
+      const missPosts = db.prepare('SELECT rowid, title, body FROM posts WHERE reading IS NULL').all()
+      const missMsgs = db.prepare('SELECT rowid, text FROM messages WHERE reading IS NULL').all()
+      if (missPosts.length || missMsgs.length) {
+        const t0 = Date.now()
+        const setP = db.prepare('UPDATE posts SET reading = ? WHERE rowid = ?')
+        for (const r of missPosts) {
+          const reading = tokenize(`${r.title ?? ''} ${r.body ?? ''}`)
+          if (reading) setP.run(reading, r.rowid)
+        }
+        const setM = db.prepare('UPDATE messages SET reading = ? WHERE rowid = ?')
+        for (const r of missMsgs) {
+          // '' for empty texts (pure media messages) so they don't re-attempt forever
+          const reading = tokenize(r.text ?? '') ?? ''
+          if (reading !== null) setM.run(reading, r.rowid)
+        }
+        log(`readings: ${missPosts.length} posts + ${missMsgs.length} messages tokenized — ${Date.now() - t0}ms`)
+      }
+    }
     db.exec(BACKFILL_FTS)
     if (ver < SCHEMA_VERSION) {
       // future migrations go here (stage 3 the reading columns, stage 5 the
@@ -87,9 +123,9 @@ export function openSearchDb(dbPath, log = () => {}) {
     }
     log(`db open: ${dbPath} (v${SCHEMA_VERSION}, ${counts.posts} posts, ${counts.messages} messages)`)
     const fts = {
-      postsIns: db.prepare('INSERT INTO posts_fts (rowid, title, body) VALUES (?, ?, ?)'),
+      postsIns: db.prepare('INSERT INTO posts_fts (rowid, title, body, reading) VALUES (?, ?, ?, ?)'),
       postsDel: db.prepare('DELETE FROM posts_fts WHERE rowid = ?'),
-      msgsIns: db.prepare('INSERT INTO messages_fts (rowid, text) VALUES (?, ?)'),
+      msgsIns: db.prepare('INSERT INTO messages_fts (rowid, text, reading) VALUES (?, ?, ?)'),
       msgsDel: db.prepare('DELETE FROM messages_fts WHERE rowid = ?'),
     }
     return {
@@ -107,10 +143,10 @@ export function openSearchDb(dbPath, log = () => {}) {
         try {
           const sel = db.prepare('SELECT post_id, body_md5, rowid FROM posts WHERE member_key = ?')
           const ins = db.prepare(
-            'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime, reading) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
           const upd = db.prepare(
-            'UPDATE posts SET site = ?, member_uuid = ?, member_name = ?, title = ?, at = ?, body = ?, body_md5 = ?, src_mtime = ? WHERE member_key = ? AND post_id = ?',
+            'UPDATE posts SET site = ?, member_uuid = ?, member_name = ?, title = ?, at = ?, body = ?, body_md5 = ?, src_mtime = ?, reading = ? WHERE member_key = ? AND post_id = ?',
           )
           const del = db.prepare('DELETE FROM posts WHERE member_key = ? AND post_id = ?')
           for (const [memberKey, m] of rowsByMember) {
@@ -121,15 +157,17 @@ export function openSearchDb(dbPath, log = () => {}) {
               const digest = md5(p.body)
               const prev = existing.get(String(p.id))
               if (!prev) {
+                const reading = tokenize?.(`${p.title ?? ''} ${p.body ?? ''}`) ?? null
                 const { lastInsertRowid } = ins.run(
-                  memberKey, m.site, String(p.id), m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime,
+                  memberKey, m.site, String(p.id), m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, reading,
                 )
-                fts.postsIns.run(lastInsertRowid, p.title, p.body)
+                fts.postsIns.run(lastInsertRowid, p.title, p.body, reading)
                 stat.added++
               } else if (prev.md5 !== digest) {
-                upd.run(m.site, m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, memberKey, String(p.id))
+                const reading = tokenize?.(`${p.title ?? ''} ${p.body ?? ''}`) ?? null
+                upd.run(m.site, m.uuid, m.name, p.title, p.at, p.body, digest, m.src_mtime, reading, memberKey, String(p.id))
                 fts.postsDel.run(prev.rowid)
-                fts.postsIns.run(prev.rowid, p.title, p.body)
+                fts.postsIns.run(prev.rowid, p.title, p.body, reading)
                 stat.updated++
               } else {
                 stat.unchanged++
@@ -173,10 +211,10 @@ export function openSearchDb(dbPath, log = () => {}) {
         try {
           const sel = db.prepare('SELECT msg_id, body_md5, rowid FROM messages WHERE slug = ?')
           const ins = db.prepare(
-            'INSERT INTO messages (slug, msg_id, at, type, text, body_md5) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO messages (slug, msg_id, at, type, text, body_md5, reading) VALUES (?, ?, ?, ?, ?, ?, ?)',
           )
           const upd = db.prepare(
-            'UPDATE messages SET at = ?, type = ?, text = ?, body_md5 = ? WHERE slug = ? AND msg_id = ?',
+            'UPDATE messages SET at = ?, type = ?, text = ?, body_md5 = ?, reading = ? WHERE slug = ? AND msg_id = ?',
           )
           const del = db.prepare('DELETE FROM messages WHERE slug = ? AND msg_id = ?')
           for (const [slug, msgs] of rowsBySlug) {
@@ -187,13 +225,15 @@ export function openSearchDb(dbPath, log = () => {}) {
               const digest = md5(msg.text)
               const prev = existing.get(Number(msg.id))
               if (!prev) {
-                const { lastInsertRowid } = ins.run(slug, Number(msg.id), msg.at, msg.type, msg.text, digest)
-                fts.msgsIns.run(lastInsertRowid, msg.text)
+                const reading = tokenize?.(msg.text ?? '') ?? null
+                const { lastInsertRowid } = ins.run(slug, Number(msg.id), msg.at, msg.type, msg.text, digest, reading)
+                fts.msgsIns.run(lastInsertRowid, msg.text, reading)
                 stat.added++
               } else if (prev.md5 !== digest) {
-                upd.run(msg.at, msg.type, msg.text, digest, slug, Number(msg.id))
+                const reading = tokenize?.(msg.text ?? '') ?? null
+                upd.run(msg.at, msg.type, msg.text, digest, reading, slug, Number(msg.id))
                 fts.msgsDel.run(prev.rowid)
-                fts.msgsIns.run(prev.rowid, msg.text)
+                fts.msgsIns.run(prev.rowid, msg.text, reading)
                 stat.updated++
               } else {
                 stat.unchanged++

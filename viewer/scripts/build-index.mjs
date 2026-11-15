@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { openSearchDb } from './db.mjs'
+import { buildTokenizer } from './tokenize.mjs'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -431,11 +432,12 @@ fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
 say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
 say(`thumbs: ${thumbNote}`)
 
-// ---- search DB mirror (stage 1) ------------------------------------------
+// ---- search DB mirror (stage 1/3) ---------------------------------------
 // Runs after index.json is written so a DB problem can never block serving.
 // Derived + rebuildable: delete the file and the next build recreates it.
 {
-  const db = openSearchDb(process.env.DB_PATH || path.join(PUB, 'index.sqlite'), say)
+  const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
+  const db = openSearchDb(process.env.DB_PATH || path.join(PUB, 'index.sqlite'), say, tokenize)
   if (db) {
     const t0 = Date.now()
     try {
