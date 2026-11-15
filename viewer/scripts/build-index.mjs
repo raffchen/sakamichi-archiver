@@ -356,7 +356,7 @@ if (fs.existsSync(blogsRoot)) {
       uuid: String(state.member_uuid),
       name: state.member ?? key.replace(/_/g, ' '),
       src_mtime: srcMtime,
-      posts: entries.map((e) => ({ id: e.id, title: e.title, at: e.at, body: stripHtml(e.content) })),
+      posts: entries.map((e) => ({ id: e.id, title: e.title, at: e.at, body: stripHtml(e.content), thumb: e.thumbnail ?? null })),
     })
   }
 }
@@ -445,11 +445,11 @@ say(`thumbs: ${thumbNote}`)
     try {
       const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
       const ps = await db.syncBlogPosts(blogRows)
-      const ms = db.syncMessages(msgRows)
+      const ms = await db.syncMessages(msgRows)
       say(
         `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
           `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +
-          (embedder ? `, ${ps.embedded} chunks embedded` : '') +
+          (embedder ? `, embedded ${ps.embedded} post chunks + ${ms.embedded} messages` : '') +
           ` — ${Date.now() - t0}ms`,
       )
     } catch (e) {
