@@ -922,6 +922,15 @@ img {
   padding: 0 8px;
   position: relative;
 }
+/* keyed per-item overlay: during a step the outgoing media fades out here
+   while the incoming one slides in on top — both occupy the same box, so
+   they must stack (absolute) rather than flow as two grid rows */
+.lb-media {
+  position: absolute;
+  inset: 0 8px;
+  display: grid;
+  place-items: center;
+}
 .lb-body img,
 .lb-body video {
   max-width: 100%;

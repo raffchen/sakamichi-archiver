@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fade } from 'svelte/transition'
+  import { fade, fly } from 'svelte/transition'
   import { keynav } from '../lib/actions'
   import { closeLightbox, claimMedia, releaseMedia, lightbox, stepLightbox } from '../lib/store.svelte'
   import { fmtDateTime } from '../lib/format'
@@ -7,6 +7,16 @@
 
   const m = $derived(lightbox.items[lightbox.i])
   const n = $derived(lightbox.items.length)
+
+  /* direction of the last step — the incoming media slides in from that side
+     while the old one fades out in place (a push would need them side by
+     side; overlapping, slide-in-over-fade reads cleaner). Every entry point
+     (swipe, arrows, keys) goes through step() so dir is always right. */
+  let dir = $state(1)
+  function step(d: number) {
+    dir = d
+    stepLightbox(d)
+  }
 
   /* the lightbox media (video/audio) is ephemeral — pause its own element on
      teardown, otherwise a removed-but-playing video keeps playing in the
@@ -53,7 +63,7 @@
     const dy = e.changedTouches[0].clientY - touchY
     /* 48px minimum flick, and clearly more horizontal than vertical */
     if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return
-    stepLightbox(dx < 0 ? 1 : -1)
+    step(dx < 0 ? 1 : -1)
   }
 </script>
 
@@ -63,7 +73,7 @@
 <div
   class="lb"
   transition:fade={{ duration: 130 }}
-  use:keynav={{ onLeft: () => stepLightbox(-1), onRight: () => stepLightbox(1), onEsc: closeLightbox }}
+  use:keynav={{ onLeft: () => step(-1), onRight: () => step(1), onEsc: closeLightbox }}
   onclick={onBackdrop}
   ontouchstart={onTouchStart}
   ontouchend={onTouchEnd}
@@ -80,6 +90,10 @@
   <div class="lb-body">
     {#if m}
       {#key m.id}
+        <!-- the wrapper is an absolutely-positioned overlay (see .lb-media) so
+             the outgoing media fades out underneath the incoming one instead
+             of both briefly stacking as separate grid rows -->
+        <div class="lb-media" in:fly={{ x: 60 * dir, duration: 200 }} out:fade={{ duration: 150 }}>
         {#if m.type === 'picture'}
           <img src={m.file ?? m.thumb ?? ''} alt="" />
         {:else if m.type === 'video'}
@@ -112,6 +126,7 @@
             onended={(e) => releaseMedia(e.currentTarget)}
           ></audio>
         {/if}
+        </div>
       {/key}
       {#if n > 1}
         <!-- click zones are full-height screen halves (see .lb-nav); the visible
@@ -119,11 +134,11 @@
              viewport center instead of riding on the caption height.
              Clamped stepping means an end has no further item — hide that chip. -->
         {#if lightbox.i > 0}
-          <button class="lb-nav l" aria-label="previous" onclick={() => stepLightbox(-1)}></button>
+          <button class="lb-nav l" aria-label="previous" onclick={() => step(-1)}></button>
           <span class="lb-glyph l" aria-hidden="true">{@html icon('back')}</span>
         {/if}
         {#if lightbox.i < n - 1}
-          <button class="lb-nav r" aria-label="next" onclick={() => stepLightbox(1)}></button>
+          <button class="lb-nav r" aria-label="next" onclick={() => step(1)}></button>
           <span class="lb-glyph r" aria-hidden="true">{@html icon('forward')}</span>
         {/if}
       {/if}
