@@ -16,6 +16,7 @@
  * Usage:  node scripts/build-index.mjs [--no-thumbs] [--force-thumbs]
  */
 import { spawnSync } from 'node:child_process'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { openSearchDb } from './db.mjs'
@@ -456,7 +457,6 @@ blogMembers.sort(
 )
 
 const index = {
-  generated_at: new Date().toISOString(),
   display_name: displayName,
   sites,
   totals,
@@ -464,40 +464,75 @@ const index = {
   blogs: { members: blogMembers },
 }
 
-// index.json is written atomically (tmp + rename): the server may serve it to
-// polling clients while a rebuild lands, so a truncated write must never be
-// observable under the final name.
-fs.mkdirSync(PUB, { recursive: true })
-const indexTmp = path.join(PUB, 'index.json.tmp')
-fs.writeFileSync(indexTmp, JSON.stringify(index))
-fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
+// ---- semantic no-op detection --------------------------------------------
+// Hash the index payload (everything except generated_at/content_hash). If the
+// hash matches the served index, skip the write entirely: generated_at stays
+// put, /api/version stops changing, and clients never reload. This is what
+// keeps a long blog sync (hundreds of images landing one by one before
+// _blogs.json finally updates) from refreshing the UI every minute. The DB
+// mirror is skipped too — same content means the DB is already in sync — but
+// only when the DB file actually exists (a wiped volume must rebuild).
+const canonical = (v) => {
+  if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']'
+  if (v && typeof v === 'object')
+    return '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}'
+  return JSON.stringify(v ?? null)
+}
+const payloadHash = (idx) => {
+  const { generated_at, content_hash, ...payload } = idx
+  return crypto.createHash('sha256').update(canonical(payload)).digest('hex')
+}
+const DB_PATH = process.env.DB_PATH || path.join(PUB, 'index.sqlite')
+let old = null
+try {
+  old = JSON.parse(fs.readFileSync(path.join(PUB, 'index.json'), 'utf8'))
+} catch {
+  /* first build / unreadable — treat as changed */
+}
+const hash = payloadHash(index)
+if (old && payloadHash(old) === hash && fs.existsSync(DB_PATH)) {
+  say(`index unchanged — skipped write + db sync (clients keep their state)`)
+} else {
+  // generated_at only moves when the content actually changes: this timestamp
+  // is what the client version poll watches, so it must not bump on no-ops
+  index.generated_at = new Date().toISOString()
+  index.content_hash = hash
 
-say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
-say(`thumbs: ${thumbNote}`)
+  // index.json is written atomically (tmp + rename): the server may serve it to
+  // polling clients while a rebuild lands, so a truncated write must never be
+  // observable under the final name.
+  fs.mkdirSync(PUB, { recursive: true })
+  const indexTmp = path.join(PUB, 'index.json.tmp')
+  fs.writeFileSync(indexTmp, JSON.stringify(index))
+  fs.renameSync(indexTmp, path.join(PUB, 'index.json'))
 
-// ---- search DB mirror (stage 1/3/5) --------------------------------------
-// Runs after index.json is written so a DB problem can never block serving.
-// Derived + rebuildable: delete the file and the next build recreates it.
-{
-  const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
-  const embedder = await buildEmbedder(say) // null ⇒ exact-only search
-  const db = await openSearchDb(process.env.DB_PATH || path.join(PUB, 'index.sqlite'), say, tokenize, embedder)
-  if (db) {
-    const t0 = Date.now()
-    try {
-      const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
-      const ps = await db.syncBlogPosts(blogRows)
-      const ms = await db.syncMessages(msgRows)
-      say(
-        `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
-          `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +
-          (embedder ? `, embedded ${ps.embedded} post chunks + ${ms.embedded} messages` : '') +
-          ` — ${Date.now() - t0}ms`,
-      )
-    } catch (e) {
-      say(`! search DB sync failed (${e.message}) — continuing without it`)
-    } finally {
-      db.close()
+  say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
+  say(`thumbs: ${thumbNote}`)
+
+  // ---- search DB mirror (stage 1/3/5) ------------------------------------
+  // Runs after index.json is written so a DB problem can never block serving.
+  // Derived + rebuildable: delete the file and the next build recreates it.
+  {
+    const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
+    const embedder = await buildEmbedder(say) // null ⇒ exact-only search
+    const db = await openSearchDb(DB_PATH, say, tokenize, embedder)
+    if (db) {
+      const t0 = Date.now()
+      try {
+        const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
+        const ps = await db.syncBlogPosts(blogRows)
+        const ms = await db.syncMessages(msgRows)
+        say(
+          `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
+            `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +
+            (embedder ? `, embedded ${ps.embedded} post chunks + ${ms.embedded} messages` : '') +
+            ` — ${Date.now() - t0}ms`,
+        )
+      } catch (e) {
+        say(`! search DB sync failed (${e.message}) — continuing without it`)
+      } finally {
+        db.close()
+      }
     }
   }
 }

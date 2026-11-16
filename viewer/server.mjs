@@ -879,7 +879,8 @@ buildIndex().then(() => {
   const watching = watchMedia()
   if (!watching) {
     // no fs-watch available (network volume etc.) — rebuild periodically as a
-    // fallback; note this bumps generated_at and triggers client reloads
+    // fallback; build-index skips the write when nothing changed, so clients
+    // only reload if the archive content actually moved
     say('falling back to a 6h rebuild interval')
     setInterval(buildIndex, 6 * 60 * 60 * 1000).unref()
   }
