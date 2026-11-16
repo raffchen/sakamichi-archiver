@@ -1108,15 +1108,20 @@ img {
   place-items: end center;
 }
 /* the login gate must not trap a passwordless visitor: while it is up, the
-   tab bar paints above every sheet (and stays clickable), and sheets lift
-   their cards clear of the bar. Other states (info sheet alone) keep the
-   old fullscreen-modal behavior — the bar dims under them. */
+   tab bar paints above every sheet (and stays clickable), and sheets anchor
+   their cards to the bar's top edge. Other states (info sheet alone) keep
+   the old fullscreen-modal behavior — the bar dims under them. */
 body:has(.sheet.login) .tabs {
   position: relative;
   z-index: 56;
 }
 body:has(.sheet.login) .sheet {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  /* the sheet lives OUTSIDE the zoomed .phone, so its px are real, while the
+     bar inside the phone renders at ~54.7px × --app-zoom — multiply so the
+     card's bottom edge tracks the bar's top edge at every zoom level. 54
+     (a hair under the bar's height) tucks the card's bottom edge behind the
+     bar, which paints on top — flush anchor, no gap, nothing hidden. */
+  padding-bottom: calc(54px * var(--app-zoom) + env(safe-area-inset-bottom));
 }
 .sheet .card {
   /* zoomed to match the .phone frame; divide viewport units so the
