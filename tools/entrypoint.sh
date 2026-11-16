@@ -3,10 +3,17 @@
 # refreshes via the stored session cookie on each run and persists rotation.
 #
 # Env (set via docker-compose):
-#   SYNC_INTERVAL  sleep between rounds ("6h", "30m", ...) — GNU sleep suffixes
+#   SYNC_INTERVAL  cadence of full rounds ("6h", "24h", ...) — GNU sleep suffixes
+#   SYNC_PROBE_INTERVAL  cadence of probe rounds between full rounds (e.g.
+#                  "3m"); unset = probe disabled (behaviour as before). A
+#                  probe fetches only the newest message per member (count=1)
+#                  and runs the full sync just for members whose newest
+#                  message is new or edited — near-instant pickup at ~1 KB
+#                  per member instead of a full timeline refetch
 #   SYNC_SITES     sites to sync, space-separated ("nogizaka46 sakurazaka46")
-#   SYNC_FLAGS     extra grab-media flags, e.g. "--full-history" for the very
-#                  first sync of a long archive (removed afterwards)
+#   SYNC_FLAGS     extra grab-media flags for FULL rounds only, e.g.
+#                  "--full-history" for the very first sync of a long
+#                  archive (removed afterwards)
 #   SYNC_BLOG      1 (default) = also grab blogs on their own schedule:
 #                  grab-blog.py --all --site <site>, whose generation-map
 #                  filter reduces that to current members (graduated members'
@@ -25,6 +32,7 @@
 # upload flow (docs/deployment.md §3.7).
 set -u
 INTERVAL="${SYNC_INTERVAL:-6h}"
+PROBE_INTERVAL="${SYNC_PROBE_INTERVAL:-}"
 SITES="${SYNC_SITES:-nogizaka46}"
 FLAGS="${SYNC_FLAGS:-}"
 BLOG="${SYNC_BLOG:-1}"
@@ -41,7 +49,12 @@ to_secs() {
   esac
 }
 BLOG_SECS=$(to_secs "$BLOG_INTERVAL")
+FULL_SECS=$(to_secs "$INTERVAL")
+PROBE_SECS=0
+[ -n "$PROBE_INTERVAL" ] && PROBE_SECS=$(to_secs "$PROBE_INTERVAL")
 last_blog=0   # epoch of the last blog pass; 0 = due immediately on start
+last_full=0   # epoch of the last full round; 0 = due immediately on start
+last_probe=0  # epoch of the last probe round (only meaningful when PROBE_SECS > 0)
 PUSH_BASE="${PUSH_URL:-}"
 PUSH_BASE="${PUSH_BASE%%\?*}"   # strip the sample query string from the URL
 
@@ -62,39 +75,69 @@ except Exception as e:
 PY
 }
 
-echo "[syncer] sites='$SITES' interval=$INTERVAL flags='$FLAGS' push='${PUSH_BASE:+on}'"
+echo "[syncer] sites='$SITES' full=$INTERVAL probe='$PROBE_INTERVAL' flags='$FLAGS' push='${PUSH_BASE:+on}'"
 while :; do
-  do_blog=0
-  if [ "$BLOG" = "1" ] && [ $(( $(date +%s) - last_blog )) -ge "$BLOG_SECS" ]; then
-    do_blog=1
-  fi
-  for site in $SITES; do
-    echo "[syncer] === $site $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
-    t0=$(date +%s)
-    if # shellcheck disable=SC2086  # FLAGS is intentionally word-split
-      python grab-media.py --site "$site" --subscribed $FLAGS
-    then
-      kuma up "$site OK" $(( ($(date +%s) - t0) * 1000 ))
-    else
-      rc=$?
-      echo "[syncer] $site: sync FAILED rc=$rc (see log above)"
-      kuma down "$site sync failed (exit $rc)"
+  now=$(date +%s)
+  if [ $(( now - last_full )) -ge "$FULL_SECS" ]; then
+    # --- full round: roster refresh, profile/single artwork, edit +
+    # deletion healing, partial-archive repair. SYNC_FLAGS applies here only.
+    do_blog=0
+    if [ "$BLOG" = "1" ] && [ $(( now - last_blog )) -ge "$BLOG_SECS" ]; then
+      do_blog=1
     fi
-    # blogs ride along only when their interval is due. grab-media refreshes
-    # the API token as a side effect, so the blog grab inherits a fresh one;
-    # failures are loud but do not flip the heartbeat (media is the paging
-    # signal)
-    if [ "$do_blog" = "1" ]; then
-      if python grab-blog.py --all --site "$site"; then
-        echo "[syncer] $site: blogs OK"
+    for site in $SITES; do
+      echo "[syncer] === $site $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+      t0=$(date +%s)
+      if # shellcheck disable=SC2086  # FLAGS is intentionally word-split
+        python grab-media.py --site "$site" --subscribed $FLAGS
+      then
+        kuma up "$site OK" $(( ($(date +%s) - t0) * 1000 ))
       else
-        echo "[syncer] $site: blog sync FAILED (non-fatal) — media heartbeat unaffected"
+        rc=$?
+        echo "[syncer] $site: sync FAILED rc=$rc (see log above)"
+        kuma down "$site sync failed (exit $rc)"
       fi
+      # blogs ride along only when their interval is due. grab-media refreshes
+      # the API token as a side effect, so the blog grab inherits a fresh one;
+      # failures are loud but do not flip the heartbeat (media is the paging
+      # signal)
+      if [ "$do_blog" = "1" ]; then
+        if python grab-blog.py --all --site "$site"; then
+          echo "[syncer] $site: blogs OK"
+        else
+          echo "[syncer] $site: blog sync FAILED (non-fatal) — media heartbeat unaffected"
+        fi
+      fi
+    done
+    if [ "$do_blog" = "1" ]; then
+      last_blog=$(date +%s)
     fi
-  done
-  if [ "$do_blog" = "1" ]; then
-    last_blog=$(date +%s)
+    last_full=$now
+  elif [ "$PROBE_SECS" -gt 0 ] && [ $(( now - last_probe )) -ge "$PROBE_SECS" ]; then
+    # --- probe round: count=1 timeline per member, full sync only for hot
+    # members (new/edited newest message). Probes carry the heartbeat so a
+    # dead container pages within PROBE_INTERVAL, not FULL_INTERVAL.
+    for site in $SITES; do
+      echo "[syncer] --- probe $site $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+      t0=$(date +%s)
+      if python grab-media.py --site "$site" --subscribed --probe; then
+        kuma up "$site probe OK" $(( ($(date +%s) - t0) * 1000 ))
+      else
+        rc=$?
+        echo "[syncer] $site: probe FAILED rc=$rc (see log above)"
+        kuma down "$site probe failed (exit $rc)"
+      fi
+    done
+    last_probe=$now
   fi
-  echo "[syncer] sleeping $INTERVAL"
-  sleep "$INTERVAL"
+  # sleep until the next due event (probe or full, whichever comes first)
+  now=$(date +%s)
+  wait=$FULL_SECS
+  if [ "$PROBE_SECS" -gt 0 ]; then
+    p_wait=$(( PROBE_SECS - ( now - last_probe ) ))
+    [ "$p_wait" -lt "$wait" ] && wait=$p_wait
+  fi
+  [ "$wait" -lt 1 ] && wait=1
+  echo "[syncer] sleeping ${wait}s"
+  sleep "$wait"
 done
