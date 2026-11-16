@@ -348,8 +348,45 @@ def ext_of(url: str) -> str:
     return m.group(1) if m else "bin"
 
 
+def probe_member(member: dict, token: str, site: dict) -> bool:
+    """Cheap change detection: True when the member needs a full sync.
+
+    Fetches a single message (count=1) instead of the full 200-message
+    timeline and compares id + updated_at against the member's
+    _messages.json on disk. updated_at bumps on edits, so an edited newest
+    message also reads hot; edits to older messages only surface in the
+    periodic full sync. Any API error reads hot — the full sync path then
+    runs, which is where token refresh and healing live.
+    """
+    mid, name = member["id"], member["name"]
+    slug = slugify(name)
+    disk_newest = None
+    try:
+        prev = json.loads((msg_dir(site, slug) / "_messages.json").read_text(encoding="utf-8"))
+        if prev:
+            disk_newest = max(prev, key=lambda m: (m["published_at"], m["id"]))
+    except (OSError, ValueError, KeyError, TypeError):
+        pass  # no archive yet -> hot
+    try:
+        tl = api_get(f"/groups/{mid}/timeline?count=1&order=desc", token, site)
+    except urllib.error.HTTPError as e:
+        print(f"[{mid}] {name}: probe HTTP {e.code} — treating as hot")
+        return True
+    msgs = tl.get("messages") or []
+    if not msgs:
+        return disk_newest is not None  # upstream empty but disk has data -> reconcile
+    api_newest = msgs[0]
+    if (disk_newest and disk_newest["id"] == api_newest["id"]
+            and disk_newest.get("updated_at") == api_newest.get("updated_at")):
+        return False
+    why = "first sync" if disk_newest is None else "changed"
+    print(f"[{mid}] {name}: probe HOT ({why}: id {api_newest['id']} {api_newest['updated_at']})")
+    return True
+
+
 def process_member(member: dict, token: str, site: dict, full_history: bool,
                    from_date: str) -> tuple[int, int]:
+    """Full sync of one member: messages, media, profile, artwork, metadata."""
     mid, name = member["id"], member["name"]
     slug = slugify(name)
     mroot = msg_dir(site, slug)
@@ -464,6 +501,10 @@ def main():
     ap.add_argument("--subscribed", action="store_true",
                     help="only member chats with an active paid subscription "
                          "(excludes the free group accounts 乃木坂46/櫻坂46)")
+    ap.add_argument("--probe", action="store_true",
+                    help="cheap change detection first: 1-message timeline per "
+                         "member, full sync only for members whose newest "
+                         "message differs from disk")
     ap.add_argument("--full-history", action="store_true",
                     help="walk the full timeline via updated_from cursor")
     ap.add_argument("--from", dest="from_date", default="2024-01-01T00:00:00Z",
@@ -505,11 +546,21 @@ def main():
     print(f"{len(members)} member(s) to process")
 
     total_got = total_skip = 0
+    hot = clean = 0
     for m in members:
+        if args.probe:
+            if not probe_member(m, token, site):
+                clean += 1
+                continue
+            hot += 1
         got, skip = process_member(m, token, site, args.full_history, args.from_date)
         total_got += got
         total_skip += skip
-    print(f"DONE. downloaded {total_got}, already present {total_skip}")
+    if args.probe:
+        print(f"DONE. probed {len(members)} member(s): {hot} hot, {clean} clean; "
+              f"downloaded {total_got}, already present {total_skip}")
+    else:
+        print(f"DONE. downloaded {total_got}, already present {total_skip}")
 
 
 if __name__ == "__main__":
