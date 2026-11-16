@@ -137,9 +137,10 @@
      teardown, otherwise a removed-but-playing video keeps playing in the
      background and the next voice claim has nothing to stop */
   let mediaEl = $state<HTMLMediaElement | undefined>()
-  /* volume preference is global (shared with the voice bubbles); position is
-     per message id — persisted on pause, throttled while playing, and in the
-     teardown effect so a mid-clip reload or slide change resumes where it was */
+  /* volume preference is global (localStorage, shared with the voice bubbles);
+     position is per message id and session-scoped (in memory) — saved on
+     pause, throttled while playing, and in the teardown effect so a slide
+     change or close-and-reopen resumes, while a page reload starts fresh */
   const savedVol = loadVolume()
   let lbVol = $state(savedVol.vol)
   let lbMuted = $state(savedVol.muted)

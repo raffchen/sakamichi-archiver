@@ -11,7 +11,9 @@
   let playing = $state(false)
   let dur = $state(0)
   let cur = $state(0)
-  /* volume survives reloads (global preference); position resumes per clip */
+  /* volume survives reloads (localStorage device preference); position is
+     session-scoped (in memory — see mediaPersist.ts): reopening a clip
+     resumes, a page reload starts it from the top */
   const savedVol = loadVolume()
   let vol = $state(savedVol.vol)
   let muted = $state(savedVol.muted)
@@ -39,7 +41,8 @@
   })
 
   /* position: persist while playing (throttled), on pause and on teardown —
-     a reindex reload mid-clip must not send the listener back to 0:00 */
+     session-scoped, so closing/reopening the clip resumes but a reload
+     resets to 0:00 */
   let lastSaved = 0
   const persist = () => {
     if (audio && cur > 0.5 && cur < dur - 0.5) {

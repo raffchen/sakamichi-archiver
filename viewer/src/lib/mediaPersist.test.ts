@@ -1,48 +1,59 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { loadVolume, saveVolume, loadPosition, savePosition, clearPosition } from './mediaPersist'
+/* The position map is module-level state; re-import it fresh for every test
+   so tests can't leak positions into each other (same pattern as store.test). */
+let mp: typeof import('./mediaPersist')
+
+beforeEach(async () => {
+  vi.resetModules()
+  mp = await import('./mediaPersist')
+  localStorage.clear()
+})
 
 describe('mediaPersist', () => {
-  beforeEach(() => localStorage.clear())
-
   it('volume defaults to 100% unmuted with nothing stored', () => {
-    expect(loadVolume()).toEqual({ vol: 1, muted: false })
+    expect(mp.loadVolume()).toEqual({ vol: 1, muted: false })
   })
 
   it('round-trips volume + mute', () => {
-    saveVolume(0.42, true)
-    expect(loadVolume()).toEqual({ vol: 0.42, muted: true })
+    mp.saveVolume(0.42, true)
+    expect(mp.loadVolume()).toEqual({ vol: 0.42, muted: true })
   })
 
   it('clamps corrupt volume values into range', () => {
     localStorage.setItem('sakamichi-viewer:volume', JSON.stringify({ v: 7, m: false }))
-    expect(loadVolume().vol).toBe(1)
+    expect(mp.loadVolume().vol).toBe(1)
     localStorage.setItem('sakamichi-viewer:volume', 'not json')
-    expect(loadVolume()).toEqual({ vol: 1, muted: false })
+    expect(mp.loadVolume()).toEqual({ vol: 1, muted: false })
   })
 
   it('positions round-trip per message id and default to 0', () => {
-    expect(loadPosition(101)).toBe(0)
-    savePosition(101, 12.34)
-    expect(loadPosition(101)).toBeCloseTo(12.3) // stored to 0.1s precision
-    savePosition(102, 3)
-    expect(loadPosition(101)).toBeCloseTo(12.3)
-    expect(loadPosition(102)).toBe(3)
+    expect(mp.loadPosition(101)).toBe(0)
+    mp.savePosition(101, 12.34)
+    expect(mp.loadPosition(101)).toBeCloseTo(12.3) // stored to 0.1s precision
+    mp.savePosition(102, 3)
+    expect(mp.loadPosition(101)).toBeCloseTo(12.3)
+    expect(mp.loadPosition(102)).toBe(3)
   })
 
   it('clearPosition removes a single entry', () => {
-    savePosition(101, 5)
-    savePosition(102, 6)
-    clearPosition(101)
-    expect(loadPosition(101)).toBe(0)
-    expect(loadPosition(102)).toBe(6)
+    mp.savePosition(101, 5)
+    mp.savePosition(102, 6)
+    mp.clearPosition(101)
+    expect(mp.loadPosition(101)).toBe(0)
+    expect(mp.loadPosition(102)).toBe(6)
   })
 
-  it('caps the position map and drops the oldest entries', () => {
-    for (let i = 0; i < 55; i++) savePosition(i, i)
-    expect(loadPosition(0)).toBe(0) // evicted (oldest)
-    expect(loadPosition(54)).toBe(54) // newest survives
-    const stored = JSON.parse(localStorage.getItem('sakamichi-viewer:positions') ?? '{}')
-    expect(Object.keys(stored).length).toBe(50)
+  it('positions are session-scoped — never written to localStorage', () => {
+    mp.savePosition(101, 9)
+    expect(localStorage.getItem('sakamichi-viewer:positions')).toBeNull()
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('volume lives in localStorage while positions do not', () => {
+    mp.saveVolume(0.5, false)
+    mp.savePosition(101, 9)
+    expect(localStorage.getItem('sakamichi-viewer:volume')).not.toBeNull()
+    expect(localStorage.getItem('sakamichi-viewer:positions')).toBeNull()
   })
 })
