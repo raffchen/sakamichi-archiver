@@ -93,6 +93,21 @@ describe('normalizeBlogContent', () => {
     )
   })
 
+  it('treats runs of empty inline elements as blank lines (span-per-line shape)', () => {
+    // 大園_玲 #36969 shape: every line is a <span>, blank lines are empty spans
+    const html = '<div><br/><span></span><br/><span>画面越しだけど</span><br/><span></span><br/><span>もう会っちゃった気です</span></div>'
+    expect(normalizeBlogContent(html)).toBe(
+      '<div><br></div><div><br></div><div><span>画面越しだけど</span></div><div><br></div><div><span>もう会っちゃった気です</span></div>'
+    )
+  })
+
+  it('keeps elements with real content even when their text is empty', () => {
+    // the <br> after the image span just ends that line — no extra blank
+    expect(normalizeBlogContent('a<br><span><img src="x.jpg"></span><br>b')).toBe(
+      '<div>a</div><div><span><img src="x.jpg"></span></div><div>b</div>'
+    )
+  })
+
   it('is idempotent', () => {
     const samples = [
       '<p><br/><br/>ブログを開いて下さり、ありがとうございます。<br/>光莉🦋<br/></p>',
