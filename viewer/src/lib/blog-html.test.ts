@@ -108,6 +108,30 @@ describe('normalizeBlogContent', () => {
     )
   })
 
+  it('strips upstream full-bleed margins from images (renders fitted + centered)', () => {
+    // 大園_玲 #36969 shape: Apple edge-to-edge export shifts photos 24px left
+    const out = normalizeBlogContent(
+      '<div><span style="-webkit-text-size-adjust: auto;">文字</span><br/><img src="files/x.jpg" style="-webkit-text-size-adjust: auto; width: calc(100% + 48px); margin-left: -24px;"><br/></div>'
+    )
+    expect(out).toContain('<img src="files/x.jpg" style="-webkit-text-size-adjust: auto; width: calc(100% + 48px)">')
+    expect(out).not.toContain('margin')
+  })
+
+  it('strips margins from pure image wrappers too, keeps text margins', () => {
+    // 与田_祐希-era shape: wrapper span carries the full-bleed shift
+    const out = normalizeBlogContent(
+      '<span style="width: calc((100% + 20px) + 20px); margin-left: -20px;"><img src="files/y.jpg"></span>' +
+        '<div style="margin: 9px 0px 8px;">テキスト</div>'
+    )
+    expect(out).toContain('<div><span style="width: calc((100% + 20px) + 20px)"><img src="files/y.jpg"></span></div>')
+    expect(out).toContain('<div style="margin: 9px 0px 8px;">テキスト</div>')
+  })
+
+  it('strips margins even when there is no <br> (fast-path must not skip it)', () => {
+    const html = '<div><img src="files/z.jpg" style="margin-left: -24px; width: calc(100% + 48px)"></div>'
+    expect(normalizeBlogContent(html)).toBe('<div><img src="files/z.jpg" style="width: calc(100% + 48px)"></div>')
+  })
+
   it('is idempotent', () => {
     const samples = [
       '<p><br/><br/>ブログを開いて下さり、ありがとうございます。<br/>光莉🦋<br/></p>',
