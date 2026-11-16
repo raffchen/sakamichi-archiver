@@ -1262,9 +1262,6 @@ img {
   text-overflow: ellipsis;
   max-width: 100%;
 }
-.blog-card.grad .nm {
-  color: var(--muted);
-}
 .blog-card .sub {
   color: var(--muted);
   font-size: 11px;
