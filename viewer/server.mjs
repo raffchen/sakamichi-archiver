@@ -387,6 +387,19 @@ const mediaFiles = sirv(MEDIA, {
 const distFiles = sirv(DIST, {
   dev: false,
   single: false, // hash routing — nothing but / needs the shell
+  setHeaders(res, file) {
+    /* the shell must revalidate on every load: each deploy changes the
+       hashed asset names it references, and a stale shell (browser or
+       Cloudflare edge — which cached it for 4h when the origin sent no
+       cache header) ends up 404ing its own assets. Hashed assets are the
+       opposite: content-addressed, safe to cache forever. */
+    /* sirv passes the URL pathname — the shell arrives as '/' or '/index.html' */
+    if (file === '/' || /\/index\.html$/.test(file)) {
+      res.setHeader('Cache-Control', 'no-cache')
+    } else if (/\/assets\//.test(file)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    }
+  },
 })
 
 const pubFiles = sirv(PUB, {
