@@ -5,6 +5,7 @@
   import type { Archive, BlogEntry } from '../lib/types'
   import { back, showBlogLightbox, ui } from '../lib/store.svelte'
   import { fmtFull } from '../lib/format'
+  import { normalizeBlogContent } from '../lib/blog-html'
 
   let { archive }: { archive: Archive } = $props()
 
@@ -58,7 +59,7 @@
   {:else}
     <h2 class="bp-title">{entry.title || '(無題)'}</h2>
     <div class="bp-date">{fmtFull(entry.at)}</div>
-    <div bind:this={body}>{@html entry.content}</div>
+    <div bind:this={body}>{@html normalizeBlogContent(entry.content ?? '')}</div>
     <div class="bp-end">— end —</div>
   {/if}
 </div>
