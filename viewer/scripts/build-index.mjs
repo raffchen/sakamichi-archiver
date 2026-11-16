@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { openSearchDb } from './db.mjs'
+import { openSearchDb, readDbMeta } from './db.mjs'
 import { buildTokenizer } from './tokenize.mjs'
 import { buildEmbedder } from './embed.mjs'
 import { fileURLToPath } from 'node:url'
@@ -470,8 +470,9 @@ const index = {
 // put, /api/version stops changing, and clients never reload. This is what
 // keeps a long blog sync (hundreds of images landing one by one before
 // _blogs.json finally updates) from refreshing the UI every minute. The DB
-// mirror is skipped too — same content means the DB is already in sync — but
-// only when the DB file actually exists (a wiped volume must rebuild).
+// mirror skips independently — the DB itself remembers the content hash of its
+// last completed sync (meta table), so a killed sync leaves it unmarked and
+// the next build heals it even though the index content didn't change.
 const canonical = (v) => {
   if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']'
   if (v && typeof v === 'object')
@@ -490,8 +491,9 @@ try {
   /* first build / unreadable — treat as changed */
 }
 const hash = payloadHash(index)
-if (old && payloadHash(old) === hash && fs.existsSync(DB_PATH)) {
-  say(`index unchanged — skipped write + db sync (clients keep their state)`)
+const contentChanged = !old || payloadHash(old) !== hash
+if (!contentChanged) {
+  say(`index unchanged — skipped write (clients keep their state)`)
 } else {
   // generated_at only moves when the content actually changes: this timestamp
   // is what the client version poll watches, so it must not bump on no-ops
@@ -508,31 +510,39 @@ if (old && payloadHash(old) === hash && fs.existsSync(DB_PATH)) {
 
   say(`index.json: ${members.length} members, ${totals.messages} messages, ${totals.media} media, ${blogMembers.length} blog members`)
   say(`thumbs: ${thumbNote}`)
+}
 
-  // ---- search DB mirror (stage 1/3/5) ------------------------------------
-  // Runs after index.json is written so a DB problem can never block serving.
-  // Derived + rebuildable: delete the file and the next build recreates it.
-  {
-    const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
-    const embedder = await buildEmbedder(say) // null ⇒ exact-only search
-    const db = await openSearchDb(DB_PATH, say, tokenize, embedder)
-    if (db) {
-      const t0 = Date.now()
-      try {
-        const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
-        const ps = await db.syncBlogPosts(blogRows)
-        const ms = await db.syncMessages(msgRows)
-        say(
-          `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
-            `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +
-            (embedder ? `, embedded ${ps.embedded} post chunks + ${ms.embedded} messages` : '') +
-            ` — ${Date.now() - t0}ms`,
-        )
-      } catch (e) {
-        say(`! search DB sync failed (${e.message}) — continuing without it`)
-      } finally {
-        db.close()
-      }
+// ---- search DB mirror (stage 1/3/5) --------------------------------------
+// Runs after index.json is written so a DB problem can never block serving.
+// Derived + rebuildable: delete the file and the next build recreates it.
+// Skipped only when the DB itself carries this exact content hash — a hash
+// match on index.json alone is not enough, because a killed sync leaves
+// partial progress (per-member commits) that must heal on the next build.
+if (!contentChanged && fs.existsSync(DB_PATH) && readDbMeta(DB_PATH, 'content_hash') === hash) {
+  say(`search DB already in sync — skipped`)
+} else {
+  const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
+  const embedder = await buildEmbedder(say) // null ⇒ exact-only search
+  const db = await openSearchDb(DB_PATH, say, tokenize, embedder)
+  if (db) {
+    const t0 = Date.now()
+    try {
+      const msgRows = new Map(members.map((m) => [m.slug, m.messages.map((msg) => ({ id: msg.id, at: msg.at, type: msg.type, text: msg.text ?? null }))]))
+      const ps = await db.syncBlogPosts(blogRows)
+      const ms = await db.syncMessages(msgRows)
+      // mark only after both syncs completed — a kill must leave the DB
+      // unmarked so the next build retries
+      db.setMeta('content_hash', hash)
+      say(
+        `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
+          `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +
+          (embedder ? `, embedded ${ps.embedded} post chunks + ${ms.embedded} messages` : '') +
+          ` — ${Date.now() - t0}ms`,
+      )
+    } catch (e) {
+      say(`! search DB sync failed (${e.message}) — continuing without it`)
+    } finally {
+      db.close()
     }
   }
 }

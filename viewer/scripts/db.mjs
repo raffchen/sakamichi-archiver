@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS messages (
   vec_rowid  INTEGER,            -- stage 6: rowid in vec_messages (whole-message embed)
   embed_md5  TEXT,               -- stage 6: md5(text) when the vector was stored
   PRIMARY KEY (slug, msg_id)
+);
+CREATE TABLE IF NOT EXISTS meta (   -- build bookkeeping (content hash of the last completed sync)
+  key   TEXT PRIMARY KEY,
+  value TEXT
 );`
 
 /* v2: FTS for stage-2 search. Tokenizer decision (bake-off on the real
@@ -215,54 +219,74 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
        * src_mtime, posts: [{ id, title, at, body }] }>. Unchanged posts
        * (same body_md5) are skipped; posts missing from the source are
        * deleted. Async only because embedding is; returns the delta
-       * (+ stat.embedded = chunks vectorized this run).
+       * (+ stat.embedded = chunks vectorized this run). One transaction per
+       * member — a killed sync loses at most the current member's work.
        */
       async syncBlogPosts(rowsByMember) {
         const stat = { added: 0, updated: 0, removed: 0, unchanged: 0, embedded: 0 }
-        db.exec('BEGIN')
-        try {
-          const sel = db.prepare('SELECT post_id, body_md5, rowid, chunks_md5 FROM posts WHERE member_key = ?')
-          const ins = db.prepare(
-            'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime, reading, thumb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          )
-          const upd = db.prepare(
-            'UPDATE posts SET site = ?, member_uuid = ?, member_name = ?, title = ?, at = ?, body = ?, body_md5 = ?, src_mtime = ?, reading = ?, thumb = ? WHERE member_key = ? AND post_id = ?',
-          )
-          const del = db.prepare('DELETE FROM posts WHERE member_key = ? AND post_id = ?')
-          /* chunk/vector maintenance (stage 5) — no-op without an embedder.
-             vec0 only accepts autoassigned rowids, so the vec rowid is stored
-             back into post_chunks.vec_rowid for deletes and KNN joins. */
-          const selChunkIds = db.prepare('SELECT vec_rowid FROM post_chunks WHERE post_rowid = ?')
-          const insChunk = db.prepare('INSERT INTO post_chunks (vec_rowid, post_rowid, idx, md5) VALUES (?, ?, ?, ?)')
-          const delChunks = db.prepare('DELETE FROM post_chunks WHERE post_rowid = ?')
-          const vecDel = db.prepare('DELETE FROM vec_posts WHERE rowid = ?')
-          const vecIns = db.prepare('INSERT INTO vec_posts (embedding) VALUES (?)')
-          const setChunksMd5 = db.prepare('UPDATE posts SET chunks_md5 = ? WHERE rowid = ?')
-          const embedBody = async (rowid, body) => {
-            const chunks = chunkText(body)
-            const want = md5(chunks.join('\u0000'))
-            for (const r of selChunkIds.all(rowid)) vecDel.run(r.vec_rowid)
-            delChunks.run(rowid)
-            let ok = true
-            for (const [idx, c] of chunks.entries()) {
-              const v = await embed.passage(c).catch(() => null)
-              if (!v) {
-                ok = false
-                continue
-              }
-              const { lastInsertRowid } = vecIns.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength))
-              insChunk.run(lastInsertRowid, rowid, idx, md5(c))
-              stat.embedded++
+        // safety net: an empty input while the DB holds posts means the index
+        // walk failed to see the archive (transient mount problem) — wiping
+        // everything would be unrecoverable, so refuse and let the next
+        // build retry
+        if (!rowsByMember.size) {
+          const have = db.prepare('SELECT COUNT(*) c FROM posts').get().c
+          if (have)
+            throw new Error(`empty blog input but ${have} posts in the DB — refusing to wipe (transient mount issue?)`)
+        }
+        const sel = db.prepare('SELECT post_id, body_md5, rowid, chunks_md5 FROM posts WHERE member_key = ?')
+        const ins = db.prepare(
+          'INSERT INTO posts (member_key, site, post_id, member_uuid, member_name, title, at, body, body_md5, src_mtime, reading, thumb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        const upd = db.prepare(
+          'UPDATE posts SET site = ?, member_uuid = ?, member_name = ?, title = ?, at = ?, body = ?, body_md5 = ?, src_mtime = ?, reading = ?, thumb = ? WHERE member_key = ? AND post_id = ?',
+        )
+        const del = db.prepare('DELETE FROM posts WHERE member_key = ? AND post_id = ?')
+        /* chunk/vector maintenance (stage 5) — no-op without an embedder.
+           vec0 only accepts autoassigned rowids, so the vec rowid is stored
+           back into post_chunks.vec_rowid for deletes and KNN joins. The
+           vector tables only exist when the vec extension loaded (SCHEMA_VEC),
+           so these statements are prepared only when embedding is active. */
+        let selChunkIds, insChunk, delChunks, vecDel, vecIns, setChunksMd5
+        if (embed) {
+          selChunkIds = db.prepare('SELECT vec_rowid FROM post_chunks WHERE post_rowid = ?')
+          insChunk = db.prepare('INSERT INTO post_chunks (vec_rowid, post_rowid, idx, md5) VALUES (?, ?, ?, ?)')
+          delChunks = db.prepare('DELETE FROM post_chunks WHERE post_rowid = ?')
+          vecDel = db.prepare('DELETE FROM vec_posts WHERE rowid = ?')
+          vecIns = db.prepare('INSERT INTO vec_posts (embedding) VALUES (?)')
+          setChunksMd5 = db.prepare('UPDATE posts SET chunks_md5 = ? WHERE rowid = ?')
+        }
+        const embedBody = async (rowid, body) => {
+          const chunks = chunkText(body)
+          const want = md5(chunks.join('\u0000'))
+          for (const r of selChunkIds.all(rowid)) vecDel.run(r.vec_rowid)
+          delChunks.run(rowid)
+          let ok = true
+          for (const [idx, c] of chunks.entries()) {
+            const v = await embed.passage(c).catch(() => null)
+            if (!v) {
+              ok = false
+              continue
             }
-            // only mark clean when every chunk embedded — partial failures retry
-            if (ok) setChunksMd5.run(want, rowid)
+            const { lastInsertRowid } = vecIns.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength))
+            insChunk.run(lastInsertRowid, rowid, idx, md5(c))
+            stat.embedded++
           }
-          const dropChunks = (rowid) => {
-            if (!embed) return
-            for (const r of selChunkIds.all(rowid)) vecDel.run(r.vec_rowid)
-            delChunks.run(rowid)
-          }
-          for (const [memberKey, m] of rowsByMember) {
+          // only mark clean when every chunk embedded — partial failures retry
+          if (ok) setChunksMd5.run(want, rowid)
+        }
+        const dropChunks = (rowid) => {
+          if (!embed) return
+          for (const r of selChunkIds.all(rowid)) vecDel.run(r.vec_rowid)
+          delChunks.run(rowid)
+        }
+        // one transaction per member: a kill mid-embed loses at most the
+        // current member's work, and the WAL can checkpoint along the way
+        // instead of growing for the whole run
+        const total = rowsByMember.size
+        let done = 0
+        for (const [memberKey, m] of rowsByMember) {
+          db.exec('BEGIN')
+          try {
             const existing = new Map(
               sel.all(memberKey).map((r) => [r.post_id, { md5: r.body_md5, rowid: r.rowid, chunks: r.chunks_md5 }]),
             )
@@ -305,8 +329,21 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
                 stat.removed++
               }
             }
+            db.exec('COMMIT')
+          } catch (e) {
+            db.exec('ROLLBACK')
+            throw e
           }
-          // members whose blog directory vanished entirely
+          done++
+          if (done % 10 === 0 || done === total)
+            log(
+              `db: ${done}/${total} blog members, +${stat.added}/~${stat.updated}/-${stat.removed}` +
+                (stat.embedded ? `, ${stat.embedded} chunks embedded` : ''),
+            )
+        }
+        // members whose blog directory vanished entirely — own transaction
+        db.exec('BEGIN')
+        try {
           const keys = [...rowsByMember.keys()]
           const stale = db
             .prepare('SELECT DISTINCT member_key FROM posts')
@@ -332,34 +369,46 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
         }
         return stat
       },
-      /** Mirror messages. rowsBySlug: Map<slug, [{ id, at, type, text }]>. */
+      /** Mirror messages. rowsBySlug: Map<slug, [{ id, at, type, text }]>.
+       *  One transaction per member, like syncBlogPosts. */
       async syncMessages(rowsBySlug) {
         const stat = { added: 0, updated: 0, removed: 0, unchanged: 0, embedded: 0 }
-        db.exec('BEGIN')
-        try {
-          const sel = db.prepare('SELECT msg_id, body_md5, rowid, embed_md5, vec_rowid FROM messages WHERE slug = ?')
-          const ins = db.prepare(
-            'INSERT INTO messages (slug, msg_id, at, type, text, body_md5, reading) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          )
-          const upd = db.prepare(
-            'UPDATE messages SET at = ?, type = ?, text = ?, body_md5 = ?, reading = ? WHERE slug = ? AND msg_id = ?',
-          )
-          const del = db.prepare('DELETE FROM messages WHERE slug = ? AND msg_id = ?')
-          /* whole-message vectors (stage 6): messages are short — one embedding
-             each, no chunking; empty texts (pure media) get none */
-          const vecDel = db.prepare('DELETE FROM vec_messages WHERE rowid = ?')
-          const vecIns = db.prepare('INSERT INTO vec_messages (embedding) VALUES (?)')
-          const setVec = db.prepare('UPDATE messages SET vec_rowid = ?, embed_md5 = ? WHERE rowid = ?')
-          const embedMsg = async (rowid, text, prevVec) => {
-            if (!text || !text.trim()) return
-            const v = await embed.passage(text).catch(() => null)
-            if (!v) return
-            if (prevVec) vecDel.run(prevVec) // clear the previous vector
-            const { lastInsertRowid } = vecIns.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength))
-            setVec.run(lastInsertRowid, md5(text), rowid)
-            stat.embedded++
-          }
-          for (const [slug, msgs] of rowsBySlug) {
+        // same safety net as syncBlogPosts
+        if (!rowsBySlug.size) {
+          const have = db.prepare('SELECT COUNT(*) c FROM messages').get().c
+          if (have)
+            throw new Error(`empty message input but ${have} messages in the DB — refusing to wipe (transient mount issue?)`)
+        }
+        const sel = db.prepare('SELECT msg_id, body_md5, rowid, embed_md5, vec_rowid FROM messages WHERE slug = ?')
+        const ins = db.prepare(
+          'INSERT INTO messages (slug, msg_id, at, type, text, body_md5, reading) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        const upd = db.prepare(
+          'UPDATE messages SET at = ?, type = ?, text = ?, body_md5 = ?, reading = ? WHERE slug = ? AND msg_id = ?',
+        )
+        const del = db.prepare('DELETE FROM messages WHERE slug = ? AND msg_id = ?')
+        /* whole-message vectors (stage 6): messages are short — one embedding
+           each, no chunking; empty texts (pure media) get none. vec_messages
+           only exists when the vec extension loaded, so these are prepared
+           only when embedding is active. */
+        let vecDel, vecIns, setVec
+        if (embed) {
+          vecDel = db.prepare('DELETE FROM vec_messages WHERE rowid = ?')
+          vecIns = db.prepare('INSERT INTO vec_messages (embedding) VALUES (?)')
+          setVec = db.prepare('UPDATE messages SET vec_rowid = ?, embed_md5 = ? WHERE rowid = ?')
+        }
+        const embedMsg = async (rowid, text, prevVec) => {
+          if (!text || !text.trim()) return
+          const v = await embed.passage(text).catch(() => null)
+          if (!v) return
+          if (prevVec) vecDel.run(prevVec) // clear the previous vector
+          const { lastInsertRowid } = vecIns.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength))
+          setVec.run(lastInsertRowid, md5(text), rowid)
+          stat.embedded++
+        }
+        for (const [slug, msgs] of rowsBySlug) {
+          db.exec('BEGIN')
+          try {
             const existing = new Map(
               sel.all(slug).map((r) => [r.msg_id, { md5: r.body_md5, rowid: r.rowid, embed: r.embed_md5, vec: r.vec_rowid }]),
             )
@@ -397,7 +446,15 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
                 stat.removed++
               }
             }
+            db.exec('COMMIT')
+          } catch (e) {
+            db.exec('ROLLBACK')
+            throw e
           }
+        }
+        // slugs whose member vanished entirely — own transaction
+        db.exec('BEGIN')
+        try {
           const slugs = [...rowsBySlug.keys()]
           const stale = db
             .prepare('SELECT DISTINCT slug FROM messages')
@@ -423,6 +480,14 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
         }
         return stat
       },
+      getMeta(key) {
+        return db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null
+      },
+      setMeta(key, value) {
+        db.prepare(
+          'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        ).run(key, value)
+      },
       close() {
         try {
           db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
@@ -434,6 +499,20 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
     }
   } catch (e) {
     log(`! search DB unavailable (${e.message}) — continuing without it`)
+    return null
+  }
+}
+
+/** Cheap meta read without loading the tokenizer/embedder: used by the
+ *  index build's no-op path to check whether the DB already mirrors a given
+ *  content hash. Returns null when the DB is missing/corrupt/has no entry. */
+export function readDbMeta(dbPath, key) {
+  try {
+    const db = new DatabaseSync(dbPath, { readOnly: true })
+    const v = db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null
+    db.close()
+    return v
+  } catch {
     return null
   }
 }
