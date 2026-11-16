@@ -293,7 +293,18 @@ function watchMedia() {
     }, 1500)
   }
   try {
-    fs.watch(MEDIA, { recursive: true }, schedule)
+    const w = fs.watch(MEDIA, { recursive: true }, schedule)
+    /* the setup above can succeed and the watch can still die later — e.g.
+       ENOSPC when the kernel's inotify watches run out (mergerfs gets one
+       watch per file under node's recursive fallback, so a big backfill
+       exhausts it). Dying with the volume is unacceptable: keep serving and
+       degrade to rebuild-on-restart. */
+    w.on('error', (e) => {
+      say(`! media watch failed (${e.message}) — index updates need a restart`)
+      try {
+        w.close()
+      } catch {}
+    })
     say(`watching ${MEDIA} for changes`)
     return true
   } catch (e) {
