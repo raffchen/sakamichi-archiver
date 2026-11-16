@@ -3,6 +3,7 @@
   import { fmtDur } from '../lib/format'
   import { icon } from '../lib/icons'
   import { claimMedia, releaseMedia } from '../lib/store.svelte'
+  import { loadVolume, saveVolume, loadPosition, savePosition, clearPosition } from '../lib/mediaPersist'
 
   let { m, autostart = false }: { m: Msg; autostart?: boolean } = $props()
 
@@ -10,8 +11,10 @@
   let playing = $state(false)
   let dur = $state(0)
   let cur = $state(0)
-  let vol = $state(1)
-  let muted = $state(false)
+  /* volume survives reloads (global preference); position resumes per clip */
+  const savedVol = loadVolume()
+  let vol = $state(savedVol.vol)
+  let muted = $state(savedVol.muted)
   /* before the first play the label shows the clip's total length; once
      playback (or a scrub) moves the position, it becomes a running clock */
   let started = $state(false)
@@ -28,6 +31,26 @@
      user activation) */
   $effect(() => {
     if (autostart && audio) void audio.play?.()?.catch(() => {})
+  })
+
+  /* volume preference: save on change (fires on mount too — harmless rewrite) */
+  $effect(() => {
+    saveVolume(vol, muted)
+  })
+
+  /* position: persist while playing (throttled), on pause and on teardown —
+     a reindex reload mid-clip must not send the listener back to 0:00 */
+  let lastSaved = 0
+  const persist = () => {
+    if (audio && cur > 0.5 && cur < dur - 0.5) {
+      savePosition(m.id, cur)
+      lastSaved = cur
+    }
+  }
+  $effect(() => {
+    return () => {
+      if (playing) persist()
+    }
   })
 </script>
 
@@ -87,6 +110,17 @@
     bind:duration={dur}
     bind:volume={vol}
     bind:muted={muted}
+    onloadedmetadata={(e) => {
+      const t = loadPosition(m.id)
+      if (t > 0 && t < e.currentTarget.duration - 0.5) {
+        e.currentTarget.currentTime = t
+        cur = t
+        started = true
+      }
+    }}
+    ontimeupdate={(e) => {
+      if (Math.abs(e.currentTarget.currentTime - lastSaved) > 2) persist()
+    }}
     onplay={(e) => {
       playing = true
       started = true
@@ -95,10 +129,12 @@
     onpause={(e) => {
       playing = false
       releaseMedia(e.currentTarget)
+      persist()
     }}
     onended={(e) => {
       playing = false
       releaseMedia(e.currentTarget)
+      clearPosition(m.id) // finished — start from the top next time
     }}
   ></audio>
 {:else}

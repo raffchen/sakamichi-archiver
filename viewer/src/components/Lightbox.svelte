@@ -4,6 +4,7 @@
   import { closeLightbox, claimMedia, releaseMedia, lightbox, stepLightbox } from '../lib/store.svelte'
   import { fmtDateTime } from '../lib/format'
   import { icon } from '../lib/icons'
+  import { loadVolume, saveVolume, loadPosition, savePosition, clearPosition } from '../lib/mediaPersist'
 
   const m = $derived(lightbox.items[lightbox.i])
   const n = $derived(lightbox.items.length)
@@ -136,9 +137,43 @@
      teardown, otherwise a removed-but-playing video keeps playing in the
      background and the next voice claim has nothing to stop */
   let mediaEl = $state<HTMLMediaElement | undefined>()
+  /* volume preference is global (shared with the voice bubbles); position is
+     per message id — persisted on pause, throttled while playing, and in the
+     teardown effect so a mid-clip reload or slide change resumes where it was */
+  const savedVol = loadVolume()
+  let lbVol = $state(savedVol.vol)
+  let lbMuted = $state(savedVol.muted)
+  $effect(() => {
+    saveVolume(lbVol, lbMuted)
+  })
+
+  let lastSaved = 0
+  const persistEl = (el: HTMLMediaElement | undefined, it: { id: number } | undefined) => {
+    if (!el || !it) return
+    const t = el.currentTime
+    if (t > 0.5 && t < (el.duration || 0) - 0.5) {
+      savePosition(it.id, t)
+      lastSaved = t
+    }
+  }
+  const resume = (el: HTMLMediaElement | undefined, it: { id: number } | undefined) => {
+    if (!el || !it) return
+    const t = loadPosition(it.id)
+    if (t > 0 && t < (el.duration || 0) - 0.5) {
+      el.currentTime = t
+      lastSaved = t
+    }
+  }
+
+  /* dependencies: the element itself (new slide ⇒ save the outgoing one) and
+     the current item — the captured el/it are what the cleanup persists */
   $effect(() => {
     const el = mediaEl
-    return () => el?.pause()
+    const it = lightbox.items[lightbox.i]
+    return () => {
+      persistEl(el, it)
+      el?.pause()
+    }
   })
 
   /* clicking the backdrop (anything that isn't the media, the nav buttons or
@@ -198,9 +233,20 @@
                   autoplay
                   playsinline
                   muted={s.it.silent}
+                  bind:volume={lbVol}
+                  onloadedmetadata={(e) => resume(e.currentTarget, s.it)}
+                  ontimeupdate={(e) => {
+                    if (Math.abs(e.currentTarget.currentTime - lastSaved) > 2) persistEl(e.currentTarget, s.it)
+                  }}
                   onplay={(e) => claimMedia(e.currentTarget)}
-                  onpause={(e) => releaseMedia(e.currentTarget)}
-                  onended={(e) => releaseMedia(e.currentTarget)}
+                  onpause={(e) => {
+                    releaseMedia(e.currentTarget)
+                    persistEl(e.currentTarget, s.it)
+                  }}
+                  onended={(e) => {
+                    releaseMedia(e.currentTarget)
+                    clearPosition(s.it.id)
+                  }}
                 ></video>
               {:else if s.it.type === 'voice'}
                 <!-- svelte-ignore a11y_media_has_caption -->
@@ -210,9 +256,21 @@
                   src={s.it.file ?? ''}
                   controls
                   autoplay
+                  bind:volume={lbVol}
+                  bind:muted={lbMuted}
+                  onloadedmetadata={(e) => resume(e.currentTarget, s.it)}
+                  ontimeupdate={(e) => {
+                    if (Math.abs(e.currentTarget.currentTime - lastSaved) > 2) persistEl(e.currentTarget, s.it)
+                  }}
                   onplay={(e) => claimMedia(e.currentTarget)}
-                  onpause={(e) => releaseMedia(e.currentTarget)}
-                  onended={(e) => releaseMedia(e.currentTarget)}
+                  onpause={(e) => {
+                    releaseMedia(e.currentTarget)
+                    persistEl(e.currentTarget, s.it)
+                  }}
+                  onended={(e) => {
+                    releaseMedia(e.currentTarget)
+                    clearPosition(s.it.id)
+                  }}
                 ></audio>
               {/if}
             <!-- neighbours show a still instead of live media: a video sliding
