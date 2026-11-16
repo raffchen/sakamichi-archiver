@@ -13,6 +13,10 @@
  *      it (debounced fs-watch) whenever the media volume changes
  *   5. /api/* — index + version + health for the client and the container
  *      healthcheck
+ *   6. optional login gate (VIEWER_PASSWORD): the talk/message side answers
+ *      401 to anonymous clients while the blog archive stays public — the
+ *      login screen lives in the SPA (viewer/src/lib/auth.svelte.ts), no
+ *      basic_auth popup. Unset ⇒ everything is public (local dev).
  *
  * Config (env, with the local-development layout as default):
  *   PORT        :8080
@@ -40,6 +44,91 @@ const PUB = path.resolve(process.env.PUBLIC_DIR || path.join(VIEWER, 'public'))
 const LOGS = path.resolve(process.env.LOGS_DIR || path.join(ROOT, 'logs'))
 const DB_PATH = process.env.DB_PATH || path.join(PUB, 'index.sqlite')
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || ''
+
+/* ---- optional login gate (VIEWER_PASSWORD) ----------------------------
+   The talk/message side of the archive is subscription content; the blog
+   archive is fine to be public. When VIEWER_PASSWORD is set, every path
+   carrying message data (needsAuth below) answers 401 until the client
+   POSTs the password to /api/login; the SPA shows its own login screen
+   instead of a basic_auth popup.
+
+   Sessions are stateless: the cookie carries an expiry plus an HMAC
+   signature whose key is derived from the password itself. Nothing lives
+   in a file or DB, sessions survive container restarts, and changing the
+   password invalidates every session at once (the derived key changes).
+   Unset ⇒ the gate is off entirely (local dev, vite dev has no server). */
+const AUTH_PW = process.env.VIEWER_PASSWORD || ''
+const AUTH_COOKIE = 'sakamichi_auth'
+const AUTH_TTL_MS = 30 * 864e5 // 30 days
+const AUTH_SECRET = AUTH_PW
+  ? crypto.createHash('sha256').update('sakamichi-auth-v1:' + AUTH_PW).digest()
+  : null
+const authSignature = (exp) =>
+  crypto.createHmac('sha256', AUTH_SECRET).update('auth:' + exp).digest('hex')
+
+/** fixed-length constant-time string comparison (hash both sides first) */
+function safeEqStr(a, b) {
+  const ha = crypto.createHash('sha256').update(a).digest()
+  const hb = crypto.createHash('sha256').update(b).digest()
+  return crypto.timingSafeEqual(ha, hb)
+}
+
+const parseCookies = (req) => {
+  const out = {}
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=')
+    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim()
+  }
+  return out
+}
+
+function isAuthed(req) {
+  if (!AUTH_SECRET) return true // gate disabled — everything is public
+  const raw = parseCookies(req)[AUTH_COOKIE]
+  if (!raw) return false
+  const dot = raw.indexOf('.')
+  const exp = Number(raw.slice(0, dot))
+  const sig = raw.slice(dot + 1)
+  if (!Number.isFinite(exp) || exp < Date.now() || !/^[0-9a-f]{64}$/.test(sig)) return false
+  return safeEqStr(sig, authSignature(exp))
+}
+
+/** which paths carry talk/message data — the login boundary; the blog
+    archive (and its media) is deliberately public. /index.json is the RAW
+    on-disk index (unslimmed, full texts) so it must never reach an
+    anonymous client; the slimmed /api/index handles that (anon variant
+    below). Message media is path-distinguishable under the group-first
+    layout (media/<site>/messages/**, thumbs mirror it) — legacy flat
+    message trees (media/<member>) would NOT be gated by the segment check,
+    but this archive has none (see docs/deployment.md §2.1). */
+function needsAuth(p, qp) {
+  if (p.startsWith('/api/member/')) return true
+  if (p === '/api/search') return qp.get('type') !== 'blog' // blog search stays public
+  if (p === '/index.json') return true
+  if (/^\/(media|thumbs)\//.test(p)) {
+    try {
+      return /\/messages\//.test(decodeURIComponent(p))
+    } catch {
+      return true // un-decodable path — treat as sensitive
+    }
+  }
+  return false
+}
+
+/* naive per-IP throttle on failed logins: escalating lockout, in-memory
+   (resets on restart — the goal is slowing brute force, not forensics) */
+const loginFails = new Map() // ip → { n, until }
+const loginThrottled = (ip) => {
+  const rec = loginFails.get(ip)
+  return rec && rec.until > Date.now() ? rec.until : 0
+}
+const loginFailed = (ip) => {
+  if (loginFails.size > 500)
+    for (const [k, v] of loginFails) if (v.until < Date.now()) loginFails.delete(k)
+  const n = (loginFails.get(ip)?.n ?? 0) + 1
+  // one typo shouldn't lock anyone out — the window opens at the 2nd failure
+  loginFails.set(ip, { n, until: n >= 2 ? Date.now() + Math.min(n - 1, 8) * 1500 : 0 })
+}
 
 /* kuromoji, lazy: only the reading-snippet fallback needs token positions,
    so the ~0.5 s dictionary load happens on the first search that needs it */
@@ -87,7 +176,7 @@ const INDEX = path.join(PUB, 'index.json')
 /* stage 4: how many recent messages keep their text in the SLIM /api/index
    payload (talk-list previews). Full texts stay on disk + /api/member/<slug>. */
 const SLIM_TEXT_KEEP = 5
-const slimCache = { mtime: 0, body: /** @type {string | null} */ (null) }
+const slimCache = { mtime: 0, full: /** @type {string | null} */ (null), anon: /** @type {string | null} */ (null) }
 
 // session-cookie upload (docs/deployment.md §3.7): site key → cookie file
 // (same names harvest-session.py writes, so grab-media.py needs no changes)
@@ -267,6 +356,53 @@ const app = http.createServer(async (req, res) => {
     return sendJson(res, 200, { ok: true, lastError })
   }
 
+  /* ---- login gate: status + login + logout, then the path gate. Everything
+     below that carries talk data answers 401 {error:'auth required'} to
+     anonymous clients (needsAuth above); the SPA's login screen (auth.svelte.ts)
+     handles the UX. ---- */
+  if (p === '/api/auth') {
+    return sendJson(res, 200, { required: !!AUTH_SECRET, authed: isAuthed(req) })
+  }
+
+  if (p === '/api/login' && req.method === 'POST') {
+    if (!AUTH_SECRET) return sendJson(res, 400, { error: 'auth disabled (VIEWER_PASSWORD not set)' })
+    const ip = req.socket.remoteAddress || '?'
+    const throttledUntil = loginThrottled(ip)
+    if (throttledUntil) {
+      audit(`login throttled from ${ip}`)
+      return sendJson(res, 429, { error: `too many attempts — retry after ${new Date(throttledUntil).toISOString()}` })
+    }
+    let body = {}
+    try {
+      body = JSON.parse((await readBody(req)) || '{}')
+    } catch {}
+    if (typeof body.password === 'string' && body.password && safeEqStr(body.password, AUTH_PW)) {
+      loginFails.delete(ip)
+      const exp = Date.now() + AUTH_TTL_MS
+      // Caddy terminates TLS and sets x-forwarded-proto (trusted_proxies is
+      // configured) — Secure only applies when the client actually used https
+      const secure = String(req.headers['x-forwarded-proto'] || '').includes('https') ? '; Secure' : ''
+      res.setHeader(
+        'Set-Cookie',
+        `${AUTH_COOKIE}=${exp}.${authSignature(exp)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_TTL_MS / 1000}${secure}`,
+      )
+      audit(`login ok from ${ip}`)
+      return sendJson(res, 200, { ok: true })
+    }
+    loginFailed(ip)
+    audit(`login failed from ${ip}`)
+    return sendJson(res, 401, { error: 'wrong password' })
+  }
+
+  if (p === '/api/logout' && req.method === 'POST') {
+    res.setHeader('Set-Cookie', `${AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+    return sendJson(res, 200, { ok: true })
+  }
+
+  if (AUTH_SECRET && !isAuthed(req) && needsAuth(p, url.searchParams)) {
+    return sendJson(res, 401, { error: 'auth required' })
+  }
+
   if (p === '/api/version') {
     const raw = readIndexJson()
     if (!raw) return sendJson(res, 404, { error: 'no index yet' })
@@ -303,7 +439,7 @@ const app = http.createServer(async (req, res) => {
     // texts + the client-scan search fallback.
     try {
       const st = fs.statSync(INDEX)
-      if (!slimCache.body || slimCache.mtime !== st.mtimeMs) {
+      if (!slimCache.full || slimCache.mtime !== st.mtimeMs) {
         const idx = JSON.parse(raw)
         let truncated = false
         for (const m of idx.members) {
@@ -315,16 +451,25 @@ const app = http.createServer(async (req, res) => {
         }
         if (truncated) idx.textsTruncated = true
         slimCache.mtime = st.mtimeMs
-        slimCache.body = JSON.stringify(idx)
+        slimCache.full = JSON.stringify(idx)
+        // anonymous variant (login gate): the message arrays ARE talk data
+        // (previews, media URLs, counts of what's new) — empty them entirely;
+        // names, sites and the blog directory stay public
+        const anon = JSON.parse(slimCache.full)
+        for (const m of anon.members) m.messages = []
+        delete anon.textsTruncated
+        slimCache.anon = JSON.stringify(anon)
       }
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
         'Access-Control-Allow-Origin': '*',
       })
-      return res.end(slimCache.body)
+      return res.end(isAuthed(req) ? slimCache.full : slimCache.anon)
     } catch (e) {
       say(`! slimming index failed (${e.message}) — serving raw`)
+      // the raw file is unslimmed (full texts) — never an anonymous body
+      if (!isAuthed(req)) return sendJson(res, 500, { error: 'index unreadable' })
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',

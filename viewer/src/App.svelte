@@ -9,6 +9,8 @@
   import SearchScreen from './components/SearchScreen.svelte'
   import TabBar from './components/TabBar.svelte'
   import Thread from './components/Thread.svelte'
+  import Login from './components/Login.svelte'
+  import { auth, checkAuth } from './lib/auth.svelte'
   import { disp } from './lib/display'
 
   /* the archive lives in the store so an in-place swap (no page reload) can
@@ -21,6 +23,10 @@
   const current = $derived(getMember(archive, ui.slug))
 
   let routed = $state(false)
+
+  /* the login gate covers every talk view; blog views (and blog-scope search)
+     are public. ui.view === 'media' is a message lightbox — gated. */
+  const talkView = $derived(!(ui.view === 'blog' || (ui.view === 'search' && ui.searchScope === 'blog')))
 
   /* the active site drives the whole theme (purple / pale pink) */
   $effect(() => {
@@ -122,6 +128,7 @@
 
   onMount(() => {
     parseHash()
+    checkAuth() // ask once whether the login gate (VIEWER_PASSWORD) is on
     routed = true
     // popstate = browser Back/Forward; hashchange = an edited/pasted #url
     window.addEventListener('popstate', parseHash)
@@ -192,4 +199,9 @@
 {/if}
 {#if info.open}
   <InfoSheet {archive} onclose={() => (info.open = false)} />
+{/if}
+{#if auth.open || (auth.checked && auth.required && !auth.authed && talkView)}
+  <!-- login gate: the Blog tab stays public; any talk view asks for the
+       password (a 401 from a gated fetch opens it explicitly too) -->
+  <Login />
 {/if}

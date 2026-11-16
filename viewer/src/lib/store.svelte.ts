@@ -1,4 +1,5 @@
 import type { Archive, Member, Msg } from './types'
+import { requireLogin } from './auth.svelte'
 
 /* Shared app state (Svelte 5 runes in a .svelte.ts module). */
 
@@ -86,7 +87,13 @@ export function ensureFullTexts(member: Member) {
   fullInflight.set(
     member.slug,
     fetch(`/api/member/${encodeURIComponent(member.slug)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((r) => {
+        if (r.status === 401) {
+          requireLogin() // the talk side is gated — open the login screen
+          throw new Error('auth required')
+        }
+        return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
+      })
       .then((m: Member) => {
         fullMembers.set(m.slug, m)
         fullTick++

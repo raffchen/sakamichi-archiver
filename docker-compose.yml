@@ -34,6 +34,7 @@ services:
       DB_PATH: /data/db/index.sqlite
       MODEL_DIR: /data/model
       UPLOAD_TOKEN: ${UPLOAD_TOKEN:-}   # unset = endpoint disabled
+      VIEWER_PASSWORD: ${VIEWER_PASSWORD:-}  # unset = no login gate (blog + talk both public)
     restart: unless-stopped
 
   syncer:
