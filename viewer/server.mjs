@@ -682,9 +682,13 @@ const app = http.createServer(async (req, res) => {
   // --- blog posts (tools/grab-blog.py output) — bodies stay on disk and are
   //     fetched lazily: the list strips content to a plain-text lead, the
   //     detail endpoint returns the full HTML for one post
+  /* strip tags for the two-line lead. Official blog posts embed mail-app CSS
+     (p.p1 {margin: ...}) inside <style> blocks — drop block CONTENT first or
+     every lead would start with CSS (same rule as build-index's stripHtml) */
   const blogLead = (html) =>
     html
       ? html
+          .replace(/<(style|script)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
           .replace(/<[^>]*>/g, ' ')
           .replace(/&[a-z#0-9]+;/gi, ' ')
           .replace(/\s+/g, ' ')
