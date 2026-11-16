@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import type { Archive, Member } from './lib/types'
-  import { closeLightbox, getMember, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
+  import { closeLightbox, getArchive, getMember, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
   import Blog from './components/Blog.svelte'
   import Home from './components/Home.svelte'
@@ -12,7 +11,9 @@
   import Thread from './components/Thread.svelte'
   import { disp } from './lib/display'
 
-  let { archive }: { archive: Archive } = $props()
+  /* the archive lives in the store so an in-place swap (no page reload) can
+     replace it under the running app — set before mount, hence the assert */
+  const archive = $derived(getArchive()!)
 
   const siteKeys = $derived(Object.keys(archive.sites))
   const members = $derived(archive.members.filter((m) => (m.site ?? 'nogizaka46') === ui.site))
