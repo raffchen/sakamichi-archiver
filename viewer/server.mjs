@@ -277,6 +277,21 @@ const app = http.createServer(async (req, res) => {
     }
   }
 
+  if (p === '/api/sync/status') {
+    // public (unlike /api/secrets/status): the Talk footer shows when the API
+    // was last checked — grabbed from the syncer's session-status records,
+    // which every grab-media round (probe or full) refreshes. Reads live from
+    // the logs dir, so it's fresh between index rebuilds.
+    const sites = sessionStatus()
+    const checked = Object.values(sites).map((s) => s.checked_at).filter(Boolean).sort()
+    return sendJson(res, 200, {
+      last_checked: checked.length ? checked[checked.length - 1] : null,
+      sites: Object.fromEntries(
+        Object.entries(sites).map(([k, v]) => [k, { checked_at: v.checked_at, ok: v.ok }]),
+      ),
+    })
+  }
+
   if (p === '/api/index') {
     const raw = readIndexJson()
     if (!raw) return sendJson(res, 404, { error: 'no index yet (build-index pending or failed)' })
