@@ -68,8 +68,9 @@ export function back(archiveMembers: { slug: string }[] | null) {
 
 /* ---- stage 4: full texts on demand ------------------------------------
    The served index is slim (old message texts dropped). Thread/Gallery fetch
-   the full member from /api/member/<slug> once and cache it here; the page
-   reload that a reindex triggers clears it naturally. */
+   the full member from /api/member/<slug> once and cache it here; setArchive
+   drops entries for members whose data changed, so a swap never serves
+   stale texts from this cache (see docs/inplace-reindex.md). */
 const fullMembers = new Map<string, Member>()
 const fullInflight = new Map<string, Promise<void>>()
 let fullTick = $state(0)
@@ -96,6 +97,39 @@ export function ensureFullTexts(member: Member) {
       })
       .finally(() => fullInflight.delete(member.slug)),
   )
+}
+
+/* ---- archive: reactive, swappable in place (docs/inplace-reindex.md) ----
+   main.ts polls /api/version and swaps a freshly fetched index into this
+   state instead of reloading the page — playback, volume, scroll and the
+   open thread all survive. Set before mount, so consumers see a non-null
+   archive from the first render on. */
+let archive = $state<Archive | null>(null)
+
+export function getArchive(): Archive | null {
+  return archive
+}
+
+/* a cached member is stale when its message list moved: count changed, or any
+   message's id / updated_at / missing-flag differs. Text is compared with
+   text nulled out on BOTH sides — the served index truncates old texts, and
+   filling them back in is this cache's whole job. Member-level cosmetics
+   (avatar / single artwork changes) are accepted-stale until a real reload. */
+function memberChanged(cached: Member, fresh: Member): boolean {
+  const body = (m: Msg) => ({ ...m, text: null })
+  return (
+    cached.message_count !== fresh.message_count ||
+    JSON.stringify(cached.messages.map(body)) !== JSON.stringify(fresh.messages.map(body))
+  )
+}
+
+export function setArchive(next: Archive) {
+  for (const [slug, cached] of fullMembers) {
+    const fresh = next.members.find((m) => m.slug === slug)
+    if (!fresh || memberChanged(cached, fresh)) fullMembers.delete(slug)
+  }
+  archive = next
+  fullTick++
 }
 
 /* ---- one media at a time ----------------------------------------------

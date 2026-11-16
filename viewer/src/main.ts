@@ -1,5 +1,6 @@
 import { mount } from 'svelte'
 import App from './App.svelte'
+import { getArchive, setArchive } from './lib/store.svelte'
 import './app.css'
 // Font Awesome for the header buttons — served locally by Vite, no CDN
 import '@fortawesome/fontawesome-free/css/fontawesome.min.css'
@@ -27,12 +28,13 @@ async function loadArchive(): Promise<ReturnType<typeof JSON.parse>> {
   throw lastErr
 }
 
-/** Track the loaded index generation and reload when the server rebuilds it.
-    Polls /api/version (server only — vite dev 404s it and polling disables
-    itself); only fetches while the tab is visible. */
-function watchForReindex(archive: { generated_at?: string }) {
-  if (!archive.generated_at) return
-  const known = archive.generated_at
+/** Track the loaded index generation and swap in a fresh archive when the
+    server rebuilds it — no page reload (docs/inplace-reindex.md): playback,
+    volume, scroll and the open thread all survive; setArchive drops stale
+    full-text caches. Polls /api/version (server only — vite dev 404s it and
+    polling disables itself); only fetches while the tab is visible. */
+function watchForReindex() {
+  let known = getArchive()?.generated_at ?? null
   let disabled = false
   const tick = async () => {
     if (disabled || document.visibilityState !== 'visible') return
@@ -44,7 +46,17 @@ function watchForReindex(archive: { generated_at?: string }) {
       }
       if (!r.ok) return
       const v = await r.json()
-      if (v.generated_at && v.generated_at !== known) location.reload()
+      if (!v.generated_at || v.generated_at === known) return
+      if (localStorage.getItem('sakamichi-viewer:no-swap')) {
+        location.reload() // kill switch — the old hard-reload behavior
+        return
+      }
+      try {
+        setArchive(await loadArchive())
+        known = getArchive()?.generated_at ?? null
+      } catch {
+        /* swap fetch failed — keep the current archive, the next poll retries */
+      }
     } catch {
       /* server briefly unreachable — keep polling */
     }
@@ -54,9 +66,10 @@ function watchForReindex(archive: { generated_at?: string }) {
 }
 
 loadArchive()
-  .then((archive) => {
-    watchForReindex(archive)
-    mount(App, { target, props: { archive } })
+  .then((loaded) => {
+    setArchive(loaded)
+    watchForReindex()
+    mount(App, { target })
   })
   .catch((err) => {
     target.innerHTML =
