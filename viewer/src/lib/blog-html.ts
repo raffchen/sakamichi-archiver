@@ -77,16 +77,42 @@ function blocks(doc: Document, nodes: Node[]): Element[] {
   return out
 }
 
+/** upstream mail-app markup full-bleeds some photos: `width:
+    calc(100% + 48px); margin-left: -24px` (Apple edge-to-edge export) — in
+    the viewer that pushes the image past the left edge. Our CSS already fits
+    (max-width: 100%) and centers (margin: 10px auto) content images, so drop
+    the margin declarations from images and pure image wrappers and render
+    them as if the upstream style wasn't there. Text margins stay. */
+function stripImageMargins(root: ParentNode) {
+  const targets = new Set<Element>([...root.querySelectorAll('img')])
+  for (const el of [...root.querySelectorAll('*')]) {
+    if (el !== root && !(el.textContent ?? '').trim() && el.querySelector('img')) targets.add(el)
+  }
+  for (const el of targets) {
+    const style = el.getAttribute('style')
+    if (!style || !/margin/i.test(style)) continue
+    const kept = style
+      .split(';')
+      .map((d) => d.trim())
+      .filter((d) => d && !/^margin/i.test(d))
+      .join('; ')
+    if (kept) el.setAttribute('style', kept)
+    else el.removeAttribute('style')
+  }
+}
+
 /** rewrite translation-hostile bodies into line-per-block HTML (no-op when
     there's no <br> anywhere, and for subtrees that are already block-per-line) */
 export function normalizeBlogContent(html: string): string {
   if (!html) return html
-  // fast path: no <br> anywhere means nothing can collapse — except legacy
-  // <html> documents, which always need unwrapping
-  if (!/<br[\s/>]/i.test(html) && !/^<(!doctype|html)/i.test(html.trim())) return html
+  // fast path: nothing can collapse (no <br>, not a legacy <html> document)
+  // and no inline margins to strip — leave the string untouched
+  if (!/<br[\s/>]/i.test(html) && !/^<(!doctype|html)/i.test(html.trim()) && !/margin/i.test(html))
+    return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
   // parsing full <html> documents (legacy captures) drops head/meta for us
-  return blocks(doc, [...doc.body.childNodes])
-    .map((el) => el.outerHTML)
-    .join('')
+  const frag = doc.createElement('div')
+  for (const el of blocks(doc, [...doc.body.childNodes])) frag.appendChild(el)
+  stripImageMargins(frag)
+  return frag.innerHTML
 }
