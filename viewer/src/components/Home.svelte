@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import type { Archive, Member } from '../lib/types'
   import { openMember, ui, unreadCount } from '../lib/store.svelte'
   import { daysAgo, fmtDateTime } from '../lib/format'
@@ -13,6 +14,28 @@
     members: Member[]
     siteKeys: string[]
   } = $props()
+
+  /* "last checked" is when the syncer last talked to the API (probe or full
+     round) — served live from the session-status records via /api/sync/status,
+     so it doesn't move on index rebuilds the way generated_at does. Falls
+     back to the index timestamp in dev (no API routes on the vite server). */
+  let lastChecked = $state<string | null>(null)
+  onMount(() => {
+    let alive = true
+    const load = () =>
+      fetch('/api/sync/status')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (alive && j?.last_checked) lastChecked = j.last_checked
+        })
+        .catch(() => {}) // dev mode has no API routes — keep the fallback
+    load()
+    const t = setInterval(load, 60_000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  })
 
   // UI chrome is English on both sites; member names stay 日本語 + roman
   const jp = $derived(ui.site === 'sakurazaka46')
@@ -98,7 +121,7 @@
   <p class="muted-note">
     {site.name}：{siteTotals(ui.site).messages} messages · {siteTotals(ui.site).media} media<br />
     {archive.totals.messages} messages · {archive.totals.media} media total<br />
-    sync: {fmtDateTime(archive.generated_at)}<br />
+    sync: {fmtDateTime(lastChecked ?? archive.generated_at)}<br />
     tap a member to open the thread
   </p>
 </div>
