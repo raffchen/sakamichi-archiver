@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { Archive, Member, Msg } from '../lib/types'
   import { openMember, openBlog, ui } from '../lib/store.svelte'
+  import { requireLogin } from '../lib/auth.svelte'
   import { fmtDateTime } from '../lib/format'
 
   let { archive }: { archive: Archive } = $props()
@@ -74,7 +75,10 @@
     const ctrl = new AbortController()
     const timer = setTimeout(() => {
       fetch(`/api/search?q=${encodeURIComponent(query)}${scoped ? '&type=blog' : '&type=message'}`, { signal: ctrl.signal })
-        .then((r) => r.json())
+        .then((r) => {
+          if (r.status === 401) requireLogin() // message search is gated
+          return r.json()
+        })
         .then((reply: SearchReply) => {
           if (mySeq === seq) {
             results = reply
