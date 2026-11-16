@@ -23,8 +23,15 @@ const INLINE = new Set([
 
 const isElem = (n: Node): n is Element => n.nodeType === 1
 const isBr = (n: Node) => isElem(n) && (n as Element).tagName === 'BR'
-/** whitespace-only text renders as nothing — a run of these is a blank line */
-const isBlank = (n: Node) => n.nodeType === 3 && !(n.textContent ?? '').trim()
+/** whitespace-only text — or an element carrying no visible content at all
+    (upstream encodes blank lines as empty <span>s) — renders as nothing */
+const isBlank = (n: Node): boolean => {
+  if (n.nodeType === 3) return !(n.textContent ?? '').trim()
+  if (!isElem(n)) return false
+  const el = n as Element
+  if (el.tagName === 'IMG' || el.querySelector('img, video, iframe, svg, canvas, picture')) return false
+  return !(el.textContent ?? '').trim()
+}
 
 /** split a child-node stream into block elements at <br> boundaries */
 function blocks(doc: Document, nodes: Node[]): Element[] {
