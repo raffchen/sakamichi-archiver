@@ -1,6 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import sirv from 'sirv'
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite'
@@ -28,6 +29,10 @@ function watchArchive(): Plugin {
         return
       }
       rebuilding = true
+      // build-index skips the write when the content is unchanged (semantic
+      // no-op detection) — only reload the browser when index.json moved
+      const indexFile = path.join(VIEWER, 'public', 'index.json')
+      const mtimeBefore = fs.existsSync(indexFile) ? fs.statSync(indexFile).mtimeMs : -1
       const child = spawn(
         process.execPath,
         [path.join(VIEWER, 'scripts', 'build-index.mjs')],
@@ -35,7 +40,8 @@ function watchArchive(): Plugin {
       )
       child.on('exit', () => {
         rebuilding = false
-        server.ws.send({ type: 'full-reload' })
+        const mtimeAfter = fs.existsSync(indexFile) ? fs.statSync(indexFile).mtimeMs : -1
+        if (mtimeAfter !== mtimeBefore) server.ws.send({ type: 'full-reload' })
         if (dirtyDuringRebuild) {
           dirtyDuringRebuild = false
           schedule(server)
