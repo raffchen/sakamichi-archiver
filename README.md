@@ -38,12 +38,20 @@ Per-site theming (nogizaka purple / sakurazaka pink) matches the official apps.
 
 - **Talk list** — per-site switcher, unread pills, "Online/Offline" grouping
   (relative to the newest message in the archive), member artwork from
-  `single/`, romanized name under the Japanese one
+  `single/`, romanized name under the Japanese one; the footer shows when
+  the syncer last checked the Message API (live from `/api/sync/status`),
+  not the index timestamp
 - **Thread** — day separators, `New` divider, inline video with poster + play
   overlay, "no audio" badge for silent voice notes, voice bubbles with a scrub
   bar, per-message `···` copy-link menu, jump-to-newest chip
 - **Lightbox** — every photo/video/voice has a shareable deep link
-  (`#/media/<member>/<id>`); `←`/`→` step, `Esc` closes
+  (`#/media/<member>/<id>`); steps are a two-layer slide/crossfade with the
+  neighbours pre-decoded; `←`/`→` (edge-pinned chevrons on desktop, circles on
+  hover) or swipe/drag on touch — the track follows the finger 1:1 and
+  spring-settles X-style, flicks commit, videos drag too (except their seek
+  bar); `Esc` closes. Playback **volume persists across reloads** (device
+  preference) while the **per-clip position is session-scoped** — reloads
+  start the clip fresh
 - **Blog tab** — directory of every blog member grouped by 期生 → member post
   list (thumbnail, pink title, lead, stamp) → post detail rendering the
   archived HTML — tapping an image opens the same shared lightbox viewer as
@@ -80,14 +88,29 @@ thumbnails when the archive changes — the dev server watches `../media`).
 
 **Production / Docker** — the same stack as two containers: a **viewer**
 (serves the archive with HTTP Range support, builds the index at startup and
-re-indexes as new files land, plus a few JSON API routes) and an optional
+re-indexes as new files land — an unchanged archive skips the rebuild, and a
+changed one swaps the new index in without a page reload — plus a few JSON
+API routes) and an optional
 **syncer** (`grab-media.py` on a loop):
 
 ```sh
-cp .env.example .env     # optional: port, sites, sync interval
+cp .env.example .env     # optional: port, sites, sync cadence, login gate…
 docker compose up -d     # viewer + syncer; `up -d viewer` for viewer only
 # → http://localhost:8080
 ```
+
+The syncer does more than loop `grab-media.py`: between full rounds it can
+run cheap **probe rounds** (`SYNC_PROBE_INTERVAL`, e.g. `3m`) that fetch only
+the newest message per member (~1 KB) and sync just the members whose newest
+message is new or edited — so new messages land within minutes instead of
+waiting for the full round. It also carries an optional **Uptime Kuma
+heartbeat** (`PUSH_URL`), and failures (e.g. an expired session cookie) fire
+**notifications** via `NOTIFY_URL` (ntfy/SMTP/webhook) and recover
+notifications when a fresh cookie lands. Setting `VIEWER_PASSWORD` turns on a
+**login gate**: the Talk/message side requires the password while the Blog
+tab stays publicly browsable (see the viewer README's *Login gate* section).
+On a server behind a reverse proxy, set `VIEWER_BIND_IP=172.17.0.1` so the
+unauthenticated port is only reachable through the proxy.
 
 Alongside `public/index.json` the indexer maintains a derived **SQLite**
 search index (`viewer/scripts/db.mjs` — posts + messages with FTS5, kuromoji
@@ -233,6 +256,8 @@ official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
 | `tools/grab-blog.py` | the blog archiver (§2.2) |
 | `tools/harvest-session.py` | browser-level cookie read after a login (once per login) |
 | `tools/keep-alive.py` | token renewal via `/v2/update_token` (`--loop 45m` for daemon mode) |
+| `tools/migrate-media-layout.py` | one-shot migration to the group-first `media/<site>/…` layout (dry-run by default) |
+| `tools/entrypoint.sh` | the syncer container's loop: full/probe rounds, blog phase, heartbeat |
 | `tools/session-upload.py` | push a fresh cookie into a running viewer's `/data/logs` volume |
 | `tools/cdp.py` | Chrome DevTools Protocol helper (auto-probes IPv4/IPv6 loopback) |
 | `viewer/` | the web viewer — **`viewer/README.md`** has the deep-dive |

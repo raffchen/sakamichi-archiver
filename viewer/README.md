@@ -28,6 +28,7 @@ tabs live-reload. Nothing to do by hand.
 | `npm run dev` | dev server on :5173, `host: true` so a phone on the same Wi-Fi can open it |
 | `npm run build` + `npm run preview` | production build, served on :4173 |
 | `npm run check` | `svelte-check` (types + a11y) |
+| `npm run test` | `vitest run` (unit tests for format/display/store/actions/auth/mediaPersist, happy-dom) |
 
 Index flags: `npm run index -- --no-thumbs` (skip ffmpeg), `--force-thumbs`
 (re-encode every poster), `--quiet`.
@@ -54,6 +55,8 @@ Hash routes, so Back / reload / pasting a link all work:
 #/site/<site-key>                  legacy alias of #/talk/<site-key>
 #/thread/<member-slug>             chat thread (opens at the newest message)
 #/thread/<member-slug>/<msg-id>    jump to one message (deep link / search hit)
+#/media/<member-slug>/<msg-id>     the open lightbox is itself a route — every
+                                   photo/video/voice is deep-linkable
 #/gallery/<member-slug>            that member's media
 #/search                           two-section search (messages + blog posts)
 #/blog-search                      blog-only search (opened from the Blogs header)
@@ -65,11 +68,14 @@ Hash routes, so Back / reload / pasting a link all work:
 
 Opening a blog deep link adopts that member's site theme (nogi purple /
 sakura pink) even if the rest of the UI was on the other site. Inside a blog
-post, tapping any image opens a lightweight overlay (`←` `→` step, `Esc`
-closes, `1 / N` counter).
+post, tapping any image opens the same shared lightbox as message media
+(`←` `→` step, `Esc`/backdrop close, `1 / N` counter, download).
 
-Inside a thread, click any photo/video to get the lightbox (`←` `→` step, `Esc`
-closes). Timestamps are stored UTC and shown in your browser's timezone.
+Inside a thread, click any photo/video to get the lightbox (`←` `→` step,
+`Esc` closes; swipe/drag on touch — the track follows the finger and
+spring-settles, X-style; edge-pinned chevrons on desktop). The open lightbox
+is itself the `#/media/…` route, so Back closes it. Timestamps are stored
+UTC and shown in your browser's timezone.
 
 ## Configuration — `archive.config.json`
 
@@ -98,13 +104,22 @@ overrides this file if present.
 src/App.svelte              hash router + which screen is mounted
 src/lib/store.svelte.ts     shared $state: view/slug/site, lightbox, "seen" markers,
                             full-text member cache (stage 4 on-demand threads)
+src/lib/auth.svelte.ts      login-gate state — asks /api/auth once at startup;
+                            dev (no API routes) ⇒ gate off
+src/lib/mediaPersist.ts     playback volume → localStorage (persists), per-clip
+                            position → in-memory Map (session-scoped)
 src/lib/format.ts           UTC archive stamps → local display
+src/components/Login.svelte the login screen (production gate only)
 scripts/build-index.mjs     media/ → public/index.json + public/thumbs/ + the SQLite
                             search index (FTS5 + readings + embeddings)
 scripts/db.mjs              schema + incremental sync for the search index
 scripts/tokenize.mjs        kuromoji readings (hiragana) for kana↔kanji search
 scripts/embed.mjs           local ONNX embedder (semantic related section)
 scripts/shot.mjs            optional: screenshot every screen in headless Chrome
+scripts/media-bus.mjs       dev-only: verify only-one-media-playing in headless Chrome
+scripts/wide-lb.mjs         dev-only: verify lightbox nav/backdrop at desktop size
+
+src/lib/*.test.ts           vitest unit tests (happy-dom); `npm run test`
 ```
 
 `public/index.json`, `public/thumbs/` and `public/index.sqlite` are generated
@@ -119,10 +134,15 @@ Styled after the official Message apps (bottom nav icons traced from the real
 thing; the whole UI renders at a 125% app zoom, `--app-zoom` in `app.css`).
 
 - **Talk list** — per-site tabs, unread pills from localStorage, member
-  artwork from `single/`
+  artwork from `single/`; the footer shows when the syncer last checked the
+  Message API (live from `/api/sync/status`, refreshed every minute — falls
+  back to the index timestamp in dev, which has no API routes)
 - **Thread** — day separators, `New` divider, inline video with poster and a
   play overlay (tapping opens the lightbox), "no audio" badge for `is_silent`,
-  voice bubbles with a scrub bar
+  voice bubbles with a scrub bar; playback **volume persists across reloads**
+  (a device preference in localStorage) while the **per-clip position is
+  session-scoped** (in-memory — closing the clip or reloading starts it
+  fresh, and per-message memory keeps `seen` marking honest)
 - **Gallery** — filter tabs (All / Photos / Videos / Voice). Photos & videos
   are a 4-per-row square grid grouped in ascending month sections, with
 duration badges on videos; the Voice tab is a flat list with unread dots and
@@ -181,6 +201,27 @@ indexed into `index.json` as `blogs.members[]`:
   list endpoint strips HTML to a 140-char lead and the detail endpoint returns
   the full post
 
+## Login gate (production container)
+
+Set `VIEWER_PASSWORD` in the environment and the **Talk/message side requires
+a login while the Blog tab stays publicly browsable** — no basic-auth popup,
+the SPA renders its own login screen (`src/components/Login.svelte`, state in
+`src/lib/auth.svelte.ts`). The flow:
+
+- the client asks `GET /api/auth` once at startup (`required` + `authed`);
+  on the vite dev server that route doesn't exist, so the gate is off in dev
+- `POST /api/login` checks the password and sets a **30-day signed session
+  cookie** (`sakamichi_auth`); the signing key is derived from the password,
+  so changing `VIEWER_PASSWORD` invalidates every session at once — and
+  sessions survive container restarts (nothing is stored server-side)
+- failed logins get a naive **per-IP escalating lockout** (in-memory,
+  resets on restart); `POST /api/logout` clears the cookie
+- the boundary is path-based (`needsAuth` in `server.mjs`): member/thread API
+  routes and `media/<site>/messages/**` URLs are gated; blog routes, blog
+  media and the health/version endpoints stay public
+
+Unset (the default) everything is public — right for a purely local archive.
+
 ## HTTP API (production container)
 
 The docker viewer serves a few JSON routes alongside the static bundle
@@ -190,6 +231,10 @@ index from disk):
 | Route | Purpose |
 |---|---|
 | `GET /api/health` | liveness (used by docker healthcheck + uptime monitor) |
+| `GET /api/auth` | login-gate check: `{required, authed}` (404 in dev → gate off) |
+| `POST /api/login` | `{password}` → 30-day signed session cookie (per-IP throttle on failures) |
+| `POST /api/logout` | clear the session cookie |
+| `GET /api/sync/status` | public — when the syncer last talked to the Message API per site (Talk footer) |
 | `GET /api/version` | index build stamp — clients poll it and reload when the index changes |
 | `GET /api/index` | the built `index.json`, **slimmed**: message texts for all but the 5 most recent messages per member are dropped (`textsTruncated` flags mark it) — keeps the payload flat as the archive grows |
 | `GET /api/member/<slug>` | one member, full texts — thread/gallery fetch this when the slim index says `textsTruncated` |
