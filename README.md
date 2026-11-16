@@ -127,8 +127,16 @@ browser needed:
 
 ```bash
 # 1. start Chrome with remote debugging and log in (both sites, once)
+# Git Bash — $PWD is already a Windows-style path:
 "/c/Program Files/Google/Chrome/Application/chrome.exe" \
     --remote-debugging-port=9222 --user-data-dir="$PWD/chrome-profile" \
+    --no-first-run "https://message.nogizaka46.com/" &
+
+# WSL — chrome.exe needs a Windows path for --user-data-dir; a /mnt/c/...
+# value silently falls back to the default profile and just opens a tab
+# in the already-running Chrome:
+"/mnt/c/Program Files/Google/Chrome/Application/chrome.exe" \
+    --remote-debugging-port=9222 --user-data-dir="$(wslpath -w "$PWD")/chrome-profile" \
     --no-first-run "https://message.nogizaka46.com/" &
 
 # 2. harvest the browser-wide cookie jar via the DevTools Storage domain
