@@ -1107,6 +1107,17 @@ img {
   display: grid;
   place-items: end center;
 }
+/* the login gate must not trap a passwordless visitor: while it is up, the
+   tab bar paints above every sheet (and stays clickable), and sheets lift
+   their cards clear of the bar. Other states (info sheet alone) keep the
+   old fullscreen-modal behavior — the bar dims under them. */
+body:has(.sheet.login) .tabs {
+  position: relative;
+  z-index: 56;
+}
+body:has(.sheet.login) .sheet {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
 .sheet .card {
   /* zoomed to match the .phone frame; divide viewport units so the
      rendered max-height stays 78dvh and the card never exceeds the window */
