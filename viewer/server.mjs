@@ -278,11 +278,26 @@ function buildIndex() {
 }
 
 /**
- * Debounced fs-watch on the media volume — same shape as the watchArchive()
- * plugin in vite.config.ts (one big sync lands hundreds of files; re-arm if
- * edits arrive while a rebuild is running). Unlike the dev plugin there is no
- * websocket to ping: clients poll /api/version and reload on change.
+ * Debounced watch on the media volume's METADATA — same shape as the
+ * watchArchive() plugin in vite.config.ts (one big sync lands hundreds of
+ * files; re-arm if edits arrive while a rebuild is running). Unlike the dev
+ * plugin there is no websocket to ping: clients poll /api/version and reload
+ * on change.
+ *
+ * Why not fs.watch(MEDIA, { recursive: true }): the index only changes when
+ * the archive's metadata JSONs change (_messages.json/_member.json/…,
+ * _blogs.json, _profile.json) — image/video bytes alone never alter it, and
+ * both writers land media BEFORE the JSONs that reference them, so the JSON
+ * write is the commit point. Media trees hold tens of thousands of files on
+ * a FUSE mount where node's recursive fallback burns an inotify watch PER
+ * FILE — which exhausted the kernel pool (ENOSPC, shared per-user with
+ * every root container on the host) and killed the server. So: watch
+ * directories non-recursively, skipping the media-only dirs (files/,
+ * picture/, single/, video/), add watchers as new dirs appear, and re-arm
+ * any watcher that dies. ~1–2 hundred watches instead of ~60k.
  */
+const MEDIA_ONLY_DIRS = new Set(['files', 'picture', 'single', 'video'])
+
 function watchMedia() {
   let timer = null
   const schedule = () => {
@@ -292,25 +307,69 @@ function watchMedia() {
       buildIndex()
     }, 1500)
   }
-  try {
-    const w = fs.watch(MEDIA, { recursive: true }, schedule)
-    /* the setup above can succeed and the watch can still die later — e.g.
-       ENOSPC when the kernel's inotify watches run out (mergerfs gets one
-       watch per file under node's recursive fallback, so a big backfill
-       exhausts it). Dying with the volume is unacceptable: keep serving and
-       degrade to rebuild-on-restart. */
+  const watchers = new Map() // dir -> FSWatcher
+  /* returns true when a NEW watcher was added — the caller rebuilds then,
+     because content may already sit inside a dir that appeared (and got
+     watched) after its files were written */
+  const watchDir = (dir) => {
+    if (watchers.has(dir)) return false
+    if (MEDIA_ONLY_DIRS.has(path.basename(dir))) return false
+    let w
+    try {
+      w = fs.watch(dir, (eventType, filename) => {
+        /* a new member/blog dir under a watched parent needs its own watch */
+        if (filename) {
+          const sub = path.join(dir, filename)
+          try {
+            if (fs.statSync(sub).isDirectory() && watchDir(sub)) schedule()
+          } catch {}
+        }
+        schedule()
+      })
+    } catch (e) {
+      say(`! cannot watch ${dir} (${e.message})`)
+      return
+    }
+    /* a single dead watcher must not take the server down (see ENOSPC note) */
     w.on('error', (e) => {
-      say(`! media watch failed (${e.message}) — index updates need a restart`)
+      say(`! watch on ${path.relative(MEDIA, dir) || '.'} failed (${e.message})`)
       try {
         w.close()
       } catch {}
+      watchers.delete(dir)
     })
-    say(`watching ${MEDIA} for changes`)
+    watchers.set(dir, w)
+    let subs
+    try {
+      subs = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return true
+    }
+    for (const ent of subs) {
+      if (ent.isDirectory()) watchDir(path.join(dir, ent.name))
+    }
     return true
-  } catch (e) {
-    say(`! cannot watch ${MEDIA} (${e.message}) — index updates need a restart`)
-    return false
   }
+  watchDir(MEDIA)
+  /* re-arm sweep: revives watchers killed by transient errors and picks up
+     dirs created while a watcher was down — cheap (a few hundred stats).
+     Any newly-covered dir schedules a rebuild: files may have landed inside
+     it before the watcher existed. */
+  const sweep = setInterval(() => {
+    try {
+      let added = false
+      const walk = (dir) => {
+        if (watchDir(dir)) added = true
+        for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (ent.isDirectory()) walk(path.join(dir, ent.name))
+        }
+      }
+      walk(MEDIA)
+      if (added) schedule()
+    } catch {}
+  }, 60000)
+  say(`watching ${MEDIA} metadata (${watchers.size} dirs) for changes`)
+  return { watchers, sweep }
 }
 
 // ---------------------------------------------------------------- static
