@@ -1460,6 +1460,7 @@ body:has(.sheet.login) .sheet {
   overflow: hidden;
 }
 .bp-nav-btn.right {
+  flex-direction: row-reverse; /* mirror the prev card: chevron on the right edge */
   text-align: right;
 }
 .bp-nav-btn.right .txt {
