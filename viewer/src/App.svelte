@@ -32,7 +32,18 @@
   $effect(() => {
     document.documentElement.dataset.site = ui.site
     const s = archive.sites[ui.site]
-    const who = current ? disp(current) : (s?.roman ?? s?.name ?? ui.site)
+    /* title follows the topmost screen: thread/gallery member, blog member
+       (or the Blogs directory), site name otherwise — ui.slug intentionally
+       lingers when a blog is open, so the blog view must be checked first */
+    let who: string
+    if (ui.view === 'blog') {
+      const b = archive.blogs?.members.find((m) => m.key === ui.blogMember)
+      who = ui.blogMember ? (b?.name ?? ui.blogMember.replace(/_/g, ' ')) : 'Blogs'
+    } else if (current) {
+      who = disp(current)
+    } else {
+      who = s?.roman ?? s?.name ?? ui.site
+    }
     document.title = `${who} — 坂道 Message アーカイブ`
   })
 
