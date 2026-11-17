@@ -1442,7 +1442,10 @@ body:has(.sheet.login) .sheet {
   height: auto;
   border-radius: 8px;
   display: block;
-  margin: 10px auto;
+  /* left-aligned with the text (the column is wide enough now that
+     centering reads as misalignment; upstream full-bleed margins are
+     stripped by the normalizer, so this rule owns the placement) */
+  margin: 10px 0;
   cursor: zoom-in;
 }
 .bp-end {
