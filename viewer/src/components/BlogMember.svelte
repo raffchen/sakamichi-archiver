@@ -34,7 +34,8 @@
   <span class="sp"></span>
 </header>
 
-<div class="screen blog-member">
+<div class="screen">
+  <div class="col blog-member">
   {#if error}
     <div class="muted-note">読み込み失敗 / {error}</div>
   {:else if !entries}
@@ -61,4 +62,5 @@
       </button>
     {/each}
   {/if}
+  </div>
 </div>

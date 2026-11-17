@@ -119,22 +119,24 @@
 </header>
 
 <div class="screen" bind:this={el} onscroll={onScroll}>
-  <div class="thread">
-    <div class="top-load" use:sentinel={{ onLoad: loadOlder, enabled: !atStart }}>
-      {atStart
-        ? `—— 先頭 / start of archive (${member.message_count} messages) ——`
-        : `older messages… ${shown}/${member.message_count}`}
-    </div>
+  <div class="col">
+    <div class="thread">
+      <div class="top-load" use:sentinel={{ onLoad: loadOlder, enabled: !atStart }}>
+        {atStart
+          ? `—— 先頭 / start of archive (${member.message_count} messages) ——`
+          : `older messages… ${shown}/${member.message_count}`}
+      </div>
 
-    {#each blocks as b (b.k)}
-      {#if b.kind === 'sep'}
-        <div class="daysep">{fmtDayLabel(b.at)}</div>
-      {:else if b.kind === 'new'}
-        <div class="newsep">New</div>
-      {:else}
-        <Message m={b.m} {member} {who} onOpenMedia={openMedia} />
-      {/if}
-    {/each}
+      {#each blocks as b (b.k)}
+        {#if b.kind === 'sep'}
+          <div class="daysep">{fmtDayLabel(b.at)}</div>
+        {:else if b.kind === 'new'}
+          <div class="newsep">New</div>
+        {:else}
+          <Message m={b.m} {member} {who} onOpenMedia={openMedia} />
+        {/if}
+      {/each}
+    </div>
   </div>
 
   {#if showJump}

@@ -95,6 +95,7 @@
 </div>
 
 <div class="screen" bind:this={screenEl}>
+  <div class="col">
   {#if !sorted.length}
     <p class="muted-note">該当なし / no media{member.missing ? ` — ${member.missing} 件は未アーカイブ` : ''}</p>
   {:else if filter === 'voice'}
@@ -147,6 +148,7 @@
       </div>
     {/each}
   {/if}
+  </div>
 </div>
 
 {#if filter === 'voice' && sel}
