@@ -108,14 +108,22 @@
       ui.view = 'blog'
       /* #/blog/<site> names a site directory, #/blog alone falls back to the
          current site (the hash effect rewrites it to the explicit form);
-         site keys are ASCII, member keys are 日本語 — they can't collide */
+         site keys are ASCII, member keys are 日本語 — they can't collide.
+         #/blog/<key> = member list page 1;
+         #/blog/<key>/p/<n> = member list on page n;
+         #/blog/<key>/<postId> = single post */
       if (slug && archive.sites[slug]) {
         ui.site = slug
         ui.blogMember = null
         ui.blogPost = null
       } else {
         ui.blogMember = slug
-        ui.blogPost = parts[2] ? Number(parts[2]) : null
+        if (parts[2] === 'p') {
+          ui.blogPost = null
+          ui.blogPage = Math.max(1, Number(parts[3]) || 1)
+        } else {
+          ui.blogPost = parts[2] ? Number(parts[2]) : null
+        }
         /* a deep link names the member — adopt their site so the theme matches */
         if (slug) {
           const bm = archive.blogs?.members.find((b) => b.key === slug)
@@ -174,10 +182,14 @@
   function blogHash() {
     /* directory URLs carry the site explicitly (like #/talk/<site> on the
        Talk tab) so a Sakurazaka blogs link can be shared; member/post URLs
-       imply the site */
+       imply the site.  The member list page is baked in as /p/<n> so links
+       to a specific page are shareable — post IDs are bare numbers and
+       outrank the page suffix. */
     if (!ui.blogMember) return `#/blog/${encodeURIComponent(ui.site)}`
     const m = encodeURIComponent(ui.blogMember)
-    return `#/blog/${m}${ui.blogPost != null ? '/' + ui.blogPost : ''}`
+    if (ui.blogPost != null) return `#/blog/${m}/${ui.blogPost}`
+    if (ui.blogPage > 1) return `#/blog/${m}/p/${ui.blogPage}`
+    return `#/blog/${m}`
   }
 </script>
 

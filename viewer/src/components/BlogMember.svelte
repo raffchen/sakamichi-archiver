@@ -4,7 +4,8 @@
      per page, first/prev/numbered/next/last pager at the bottom (server
      slices via ?limit/?offset). The numbered window is 7 pages, dropping to
      5 when the column sits at its 430px floor — 7 needs ~444px of row, the
-     floor only leaves ~402px after padding. */
+     floor only leaves ~402px after padding. The page is baked into the URL
+     as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
   import { back, openBlog, ui } from '../lib/store.svelte'
   import { fmtBlogStamp } from '../lib/format'
@@ -19,7 +20,6 @@
   let entries = $state<BlogEntry[] | null>(null)
   let total = $state(0)
   let error = $state('')
-  let page = $state(1) // 1-based
   let colW = $state(0) // .col width — picks the numbered-window size
 
   const pages = $derived(Math.max(1, Math.ceil(total / PER_PAGE)))
@@ -30,7 +30,7 @@
   const nums = $derived.by<(number | '…')[]>(() => {
     if (pages <= win) return Array.from({ length: pages }, (_, i) => i + 1)
     const half = (win - 1) / 2
-    let lo = Math.max(1, page - half)
+    let lo = Math.max(1, ui.blogPage - half)
     const hi = Math.min(pages, lo + win - 1)
     lo = Math.max(1, hi - win + 1) // pin the window to the last page
     const out: (number | '…')[] = []
@@ -40,21 +40,11 @@
     return out
   })
 
-  /* refetch on member change AND page change; a member switch resets to page 1
-     (return after bumping `page` so the effect re-runs with clean state) */
-  let lastKey = ''
   let screen = $state<HTMLElement | null>(null)
   $effect(() => {
     const k = key
-    const pg = page
+    const pg = ui.blogPage
     screen?.scrollTo(0, 0) // a page change lands at the top, like a fresh tap
-    if (k !== lastKey) {
-      lastKey = k
-      if (pg !== 1) {
-        page = 1
-        return
-      }
-    }
     entries = null
     error = ''
     fetch(`/api/blog/${encodeURIComponent(k)}?limit=${PER_PAGE}&offset=${(pg - 1) * PER_PAGE}`)
@@ -63,7 +53,6 @@
         if (k !== ui.blogMember) return // raced: member switched mid-flight
         entries = d.entries
         total = d.total
-        if (pg > Math.max(1, Math.ceil(d.total / PER_PAGE))) page = 1 // member shrank under us
       })
       .catch((e) => {
         if (k === ui.blogMember) error = String(e)
@@ -110,10 +99,10 @@
     {/each}
     {#if pages > 1}
       <nav class="blog-pager" aria-label="pagination">
-        <button class="pg-btn" disabled={page <= 1} onclick={() => (page = 1)} aria-label="first page">
+        <button class="pg-btn" disabled={ui.blogPage <= 1} onclick={() => (ui.blogPage = 1)} aria-label="first page">
           <i class="fa-solid fa-angles-left"></i>
         </button>
-        <button class="pg-btn" disabled={page <= 1} onclick={() => page--} aria-label="previous page">
+        <button class="pg-btn" disabled={ui.blogPage <= 1} onclick={() => ui.blogPage--} aria-label="previous page">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
         {#each nums as n (n)}
@@ -122,20 +111,20 @@
           {:else}
             <button
               class="pg-num"
-              class:cur={n === page}
-              aria-current={n === page ? 'page' : undefined}
+              class:cur={n === ui.blogPage}
+              aria-current={n === ui.blogPage ? 'page' : undefined}
               onclick={() => {
-                if (n !== page) page = n
+                if (n !== ui.blogPage) ui.blogPage = n
               }}
             >
               {n}
             </button>
           {/if}
         {/each}
-        <button class="pg-btn" disabled={page >= pages} onclick={() => page++} aria-label="next page">
+        <button class="pg-btn" disabled={ui.blogPage >= pages} onclick={() => ui.blogPage++} aria-label="next page">
           <i class="fa-solid fa-chevron-right"></i>
         </button>
-        <button class="pg-btn" disabled={page >= pages} onclick={() => (page = pages)} aria-label="last page">
+        <button class="pg-btn" disabled={ui.blogPage >= pages} onclick={() => (ui.blogPage = pages)} aria-label="last page">
           <i class="fa-solid fa-angles-right"></i>
         </button>
       </nav>
