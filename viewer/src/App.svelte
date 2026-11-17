@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { closeLightbox, getArchive, getMember, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
+  import { attachGlobalScroll } from './lib/globalScroll'
   import Gallery from './components/Gallery.svelte'
   import Blog from './components/Blog.svelte'
   import Home from './components/Home.svelte'
@@ -133,9 +134,12 @@
     // popstate = browser Back/Forward; hashchange = an edited/pasted #url
     window.addEventListener('popstate', parseHash)
     window.addEventListener('hashchange', parseHash)
+    // desktop: the wheel scrolls the active screen from anywhere in the window
+    const detachScroll = attachGlobalScroll()
     return () => {
       window.removeEventListener('popstate', parseHash)
       window.removeEventListener('hashchange', parseHash)
+      detachScroll()
     }
   })
 
