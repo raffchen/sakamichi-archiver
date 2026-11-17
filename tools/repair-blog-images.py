@@ -217,7 +217,11 @@ def main() -> None:
                   + (f", {fail_n} FAILED" if fail_n else ""))
 
             if not args.dry_run and changed_n:
-                state["entries"] = sorted(entries.values(), key=lambda e: str(e.get("id")))
+                # keep the grabber's canonical order: pubdate ascending,
+                # oldest-first (grab-blog.py sorts by e.get("at") too — do NOT
+                # sort by id, string ids sort lexicographically and scramble
+                # the chronology)
+                state["entries"] = sorted(entries.values(), key=lambda e: e.get("at") or "")
                 tmp = jf.with_name(jf.name + ".tmp")
                 tmp.write_text(json.dumps(state, ensure_ascii=False, indent=1))
                 tmp.replace(jf)
