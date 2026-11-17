@@ -1065,11 +1065,21 @@ const app = http.createServer(async (req, res) => {
         entry: { ...entry, content: prefixLocal(entry.content, dir), lead: blogLead(entry.content) },
       })
     }
+    /* member list is paginated by the viewer (25 per page): ?limit caps the
+       page (default 25, max 200), ?offset skips into the newest-first list.
+       `total` lets the client render page controls without a second fetch. */
+    const q = new URL(req.url, 'http://x').searchParams
+    const limit = Math.min(Math.max(Number(q.get('limit')) || 25, 1), 200)
+    const offset = Math.max(Number(q.get('offset')) || 0, 0)
+    const newestFirst = (state.entries ?? [])
+      .map(({ content, ...e }) => ({ ...e, lead: blogLead(content) }))
+      .reverse()
     return sendJson(res, 200, {
       key,
       member: state.member,
       site: state.site ?? found.site,
-      entries: (state.entries ?? []).map(({ content, ...e }) => ({ ...e, lead: blogLead(content) })).reverse(),
+      total: newestFirst.length,
+      entries: newestFirst.slice(offset, offset + limit),
     })
   }
 

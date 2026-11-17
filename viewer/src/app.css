@@ -1399,6 +1399,39 @@ body:has(.sheet.login) .sheet {
   text-align: right;
   margin-top: auto;
 }
+/* member list pagination: prev/next + "n / m" between the post cards */
+.blog-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 4px 0 8px;
+}
+.blog-pager .pg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bubble);
+  color: var(--accent);
+  cursor: pointer;
+}
+.blog-pager .pg-btn:disabled {
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: default;
+}
+.blog-pager .pg-label {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 52px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* latest feed: member name rides next to the stamp, both right-aligned */
 .blog-post-row .by {
   display: flex;
