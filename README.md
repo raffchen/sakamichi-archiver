@@ -230,6 +230,42 @@ Member roster + generations: `--all` uses `GET /v2/blog-members` (cached under
 official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
 (e.g. 四期生リレー) are skipped.
 
+### 2.3 Backfilling graduated members (sakamichi.co)
+
+The official sites **delete a member's blog when they graduate**, so
+`grab-blog.py` can't touch them anymore. sakamichi.co keeps a public mirror
+of most graduated members' diaries, and `tools/backfill-sakamichi-co.py`
+folds that mirror into the standard layout — same `_blogs.json` schema,
+same `files/` conventions, so the result is indistinguishable from a
+`grab-blog.py` archive:
+
+```bash
+# members.json: one [site, slug, uid, name, archived, posts] record per member
+python3 tools/backfill-sakamichi-co.py members.json              # → media/unlisted/
+python3 tools/backfill-sakamichi-co.py members.json --into media # → media/ directly
+```
+
+The mirror is fetched via `api.sakamichi.co` (list endpoint for metadata,
+per-post detail endpoint for bodies and images); timestamps are UTC on the
+wire and stored as JST. Posts the mirror never archived (its list endpoint
+reports more posts than it has bodies for) are kept as metadata-only entries
+(title/date/link, empty body).
+
+**Keeping members out of the UI:** by default the script writes under
+`media/unlisted/<site>/blogs/<name>/` — a parallel tree that build-index
+never scans (it only looks at `<site>/blogs` one level deep), so archived
+content stays on disk while the directory, search DB and thumbnails ignore
+it. To make a member visible later:
+
+```bash
+mv media/unlisted/<site>/blogs/<name> media/<site>/blogs/
+# then add them to viewer/public/blog-generations.json so the card gets its
+# generation/graduated labels (they deliberately have no entry while hidden)
+```
+
+Incremental and resumable per member (atomic `_blogs.json` writes, existing
+files skipped, single-instance lock) — safe to kill and re-run.
+
 ## 3. How the Message API works
 
 - **Tokens**: access tokens are ~1 h JWTs. The web app renews them via
@@ -257,6 +293,7 @@ official nogizaka member JSONP and the 櫻坂46 wiki. Relay accounts
 | `tools/harvest-session.py` | browser-level cookie read after a login (once per login) |
 | `tools/keep-alive.py` | token renewal via `/v2/update_token` (`--loop 45m` for daemon mode) |
 | `tools/migrate-media-layout.py` | one-shot migration to the group-first `media/<site>/…` layout (dry-run by default) |
+| `tools/backfill-sakamichi-co.py` | graduated-member blog backfill from sakamichi.co into the standard or unlisted tree (§2.3) |
 | `tools/entrypoint.sh` | the syncer container's loop: full/probe rounds, blog phase, heartbeat |
 | `tools/session-upload.py` | push a fresh cookie into a running viewer's `/data/logs` volume |
 | `tools/cdp.py` | Chrome DevTools Protocol helper (auto-probes IPv4/IPv6 loopback) |
