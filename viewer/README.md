@@ -241,7 +241,7 @@ index from disk):
 | `GET /api/search` | two-section search (`?q=&limit=&type=message\|blog`) — FTS5 exact + semantic `related` (stage 5/6); `SEMANTIC_LOG=1` logs score distributions |
 | `GET /api/blog` | newest-posts feed — served from the search DB when present (O(1); thumbs + lead included), file-scan fallback otherwise |
 | `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead`; paginated — `?limit=` (default 25, max 200) + `?offset=`, response includes `total` |
-| `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/<site>/blogs/...`) |
+| `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/<site>/blogs/...`) + `prev`/`next` neighbor stubs (id + title) — the post footer chains from these since the list route is paginated |
 | `POST /api/secrets/session` | syncer uploads rotated session cookies here (guarded by `UPLOAD_TOKEN`) |
 | `GET /api/secrets/status` | token/cookie freshness for monitoring |
 

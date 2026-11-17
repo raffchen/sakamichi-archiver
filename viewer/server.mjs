@@ -1056,13 +1056,20 @@ const app = http.createServer(async (req, res) => {
         : html
     const parts = p.split('/').slice(3).map(decodeURIComponent)
     if (parts[1] != null) {
-      const entry = (state.entries ?? []).find((e) => String(e.id) === parts[1])
-      if (!entry) return sendJson(res, 404, { error: 'no such post' })
+      /* _blogs.json is oldest-first; the post footer's prev/next chain from
+         these stubs — the list route is paginated (25/page), so the client
+         can't see across page boundaries */
+      const list = state.entries ?? []
+      const idx = list.findIndex((e) => String(e.id) === parts[1])
+      if (idx < 0) return sendJson(res, 404, { error: 'no such post' })
+      const stub = (e) => (e ? { id: String(e.id), title: e.title } : null)
       return sendJson(res, 200, {
         key,
         member: state.member,
         site: state.site ?? found.site,
-        entry: { ...entry, content: prefixLocal(entry.content, dir), lead: blogLead(entry.content) },
+        entry: { ...list[idx], content: prefixLocal(list[idx].content, dir), lead: blogLead(list[idx].content) },
+        prev: stub(list[idx + 1]), // older post (further down the list)
+        next: stub(list[idx - 1]), // newer post (closer to the top)
       })
     }
     /* member list is paginated by the viewer (25 per page): ?limit caps the
