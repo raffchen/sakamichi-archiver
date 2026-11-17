@@ -1,8 +1,10 @@
 /* ---------- themes: nogizaka = purple, sakurazaka = pale pink (per screenshots) */
 :root {
-  /* phone width: 430px minimum, ~32% of a 16:9 desktop (620px at 1920),
-     capped so 4K doesn't get silly */
-  --phone-w: clamp(430px, 32vw, 660px);
+  /* phone width: 430px minimum, 42% of the display so the card grids gain
+     columns as the monitor widens (cards keep roughly constant size:
+     3 cols on laptops, 4 at ~1560px, 5 at ~2100px+), capped so ultrawides
+     don't get silly */
+  --phone-w: clamp(430px, 42vw, 1100px);
   /* global UI scale — 1:1 fallback; grows continuously with the viewport
      via the @supports rule below so the app keeps a constant physical
      proportion on any display: 1:1 on phones/laptops/1080p, ~1.25 at
@@ -1504,3 +1506,26 @@ body:has(.sheet.login) .sheet {
 }
 
 
+
+/* ---------- responsive card grids ----------
+   the column tracks 42vw (up to 1100px), so on wider monitors the card
+   grids simply fit more per row while the cards keep roughly their size:
+   3 cols on laptops → 4 at ~1560px → 5 at ~2100px (gallery tiles 4/5/6) */
+@media (min-width: 1560px) {
+  .blog-grid,
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .mgrid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+@media (min-width: 2100px) {
+  .blog-grid,
+  .grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .mgrid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
