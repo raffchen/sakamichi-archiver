@@ -186,14 +186,14 @@
   function blogHash() {
     /* directory URLs carry the site explicitly (like #/talk/<site> on the
        Talk tab) so a Sakurazaka blogs link can be shared; member/post URLs
-       imply the site.  The member list page is baked in as /p/<n> so links
-       to a specific page are shareable — post IDs are bare numbers and
-       outrank the page suffix. */
+       imply the site.  Member list URLs ALWAYS carry /p/<n> — clicking a
+       member lands on /p/1, and any page is linkable. Bare #/blog/<key>
+       still parses (page 1) so older links keep working; post IDs are bare
+       numbers and outrank the page suffix. */
     if (!ui.blogMember) return `#/blog/${encodeURIComponent(ui.site)}`
     const m = encodeURIComponent(ui.blogMember)
     if (ui.blogPost != null) return `#/blog/${m}/${ui.blogPost}`
-    if (ui.blogPage > 1) return `#/blog/${m}/p/${ui.blogPage}`
-    return `#/blog/${m}`
+    return `#/blog/${m}/p/${ui.blogPage}`
   }
 </script>
 
