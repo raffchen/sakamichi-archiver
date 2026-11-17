@@ -71,7 +71,8 @@
   <span class="sp"></span>
 </header>
 
-<div class="screen blog-post" bind:this={screen}>
+<div class="screen" bind:this={screen}>
+  <div class="col blog-post">
   {#if error}
     <div class="muted-note">読み込み失敗 / {error}</div>
   {:else if !entry}
@@ -108,4 +109,5 @@
       </nav>
     {/if}
   {/if}
+  </div>
 </div>

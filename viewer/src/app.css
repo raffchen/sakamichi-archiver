@@ -84,12 +84,15 @@ img {
 .phone {
   /* --app-zoom scales everything; the /zoom keeps the rendered frame at
      exactly one viewport tall/wide (i.e. the layout viewport shrinks,
-     exactly like Ctrl+plus browser zoom) */
+     exactly like Ctrl+plus browser zoom). The frame spans the full window
+     now — the scroll plane (.screen) has to reach every pixel the pointer
+     can sit on, so native wheel / autoscroll / scrollbar work anywhere;
+     the phone column itself is painted by .col inside the screen. */
   height: calc(100dvh / var(--app-zoom));
-  width: min(calc(100vw / var(--app-zoom)), var(--phone-w));
+  width: calc(100vw / var(--app-zoom));
   zoom: var(--app-zoom);
   margin: 0 auto;
-  background: var(--page);
+  background: var(--desk);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -201,7 +204,9 @@ img {
   color: #fff;
 }
 
-/* ---------- scroll area */
+/* ---------- scroll area ----------
+   .screen IS the scroll plane and spans the whole window; the phone column
+   is the centered white .col inside it */
 .screen {
   flex: 1;
   overflow-y: auto;
@@ -209,12 +214,37 @@ img {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+/* the phone column: white page, centered, and positioned so popovers and
+   pills anchor to it exactly like they did when the frame was the column */
+.col {
+  width: min(100%, var(--phone-w));
+  min-height: 100%;
+  margin-inline: auto;
+  background: var(--page);
+  position: relative;
+}
+/* chrome bars center themselves in the window to line up with the column */
+.head,
+.searchbar,
+.sites,
+.tabs-row,
+.tabs {
+  width: min(100%, var(--phone-w));
+  margin-inline: auto;
+}
+/* bars that were transparent over the (white) frame need their own page bg */
+.searchbar,
+.sites {
+  background: var(--page);
+}
 /* floating jump-to-newest chip (official-app parity). Renders inside .screen
    but its containing block is .phone (position:relative), so it escapes the
    scroll clip and stays pinned over the message area */
 .jump-bottom {
   position: absolute;
-  right: 14px;
+  /* containing block is .phone (full window now) — keep the chip pinned to
+     the column's right edge, not the window's */
+  right: max(14px, calc((100% - var(--phone-w)) / 2 + 14px));
   bottom: 78px;
   z-index: 6;
   width: 48px;
@@ -1235,7 +1265,6 @@ body:has(.sheet.login) .sheet {
 }
 .blog-directory {
   padding: 6px 14px 28px;
-  background: var(--page); /* the app's blog screens are all-white */
 }
 .blog-gen {
   text-align: center;
@@ -1306,7 +1335,6 @@ body:has(.sheet.login) .sheet {
 /* member post list */
 .blog-member {
   padding: 12px 14px 28px;
-  background: var(--page);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1380,7 +1408,6 @@ body:has(.sheet.login) .sheet {
 /* post detail */
 .blog-post {
   padding: 16px 18px 40px;
-  background: var(--page);
 }
 .bp-title {
   color: var(--accent);
@@ -1468,11 +1495,3 @@ body:has(.sheet.login) .sheet {
 }
 
 
-/* ---------- desktop: middle-click autoscroll cue ----------
-   while our autoscroll mode is active (middle-click on dead space outside
-   the phone column), the all-scroll cursor signals that mouse movement
-   now drives the active screen */
-body.autoscroll,
-body.autoscroll * {
-  cursor: all-scroll !important;
-}

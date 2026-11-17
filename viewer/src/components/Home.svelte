@@ -91,6 +91,7 @@
 </div>
 
 <div class="screen">
+  <div class="col">
   {#if !members.length}
     <p class="muted-note">
       このサイトはアーカイブされていません<br />
@@ -124,6 +125,7 @@
     sync: {fmtDateTime(lastChecked ?? archive.generated_at)}<br />
     tap a member to open the thread
   </p>
+  </div>
 </div>
 
 {#snippet cell(m: Member)}

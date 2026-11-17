@@ -138,6 +138,7 @@
 </div>
 
 <div class="screen">
+  <div class="col">
   {#if !q}
     <p class="muted-note">
       {#if blogOnly}
@@ -212,6 +213,7 @@
   {:else}
     <p class="muted-note">該当なし / no matches for “{q}”</p>
   {/if}
+  </div>
 </div>
 
 {#snippet hitCard(h: Hit, related = false)}

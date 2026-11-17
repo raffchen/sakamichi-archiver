@@ -140,7 +140,8 @@
     />
   </div>
 
-  <div class="screen blog-directory">
+  <div class="screen">
+    <div class="col blog-directory">
     {#snippet card(b: BlogMemberInfo)}
       <button
         class="blog-card"
@@ -203,5 +204,6 @@
         </div>
       {/each}
     {/if}
+    </div>
   </div>
 {/if}
