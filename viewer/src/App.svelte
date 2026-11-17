@@ -116,13 +116,17 @@
         ui.site = slug
         ui.blogMember = null
         ui.blogPost = null
+        ui.blogPage = 1
       } else {
         ui.blogMember = slug
         if (parts[2] === 'p') {
           ui.blogPost = null
           ui.blogPage = Math.max(1, Number(parts[3]) || 1)
         } else {
+          /* no p/<n> segment = page 1 — set it explicitly so Back from
+             #/blog/<key>/p/2 to #/blog/<key> restores the first page */
           ui.blogPost = parts[2] ? Number(parts[2]) : null
+          ui.blogPage = 1
         }
         /* a deep link names the member — adopt their site so the theme matches */
         if (slug) {
