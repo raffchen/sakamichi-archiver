@@ -191,24 +191,33 @@ def member_url(site: dict, uuid: str, count: int, start: int) -> str:
             .replace("${count}", str(count)).replace("${start}", str(start)))
 
 
-def download_images(member_dir: Path, content: str, thumbnail: str) -> tuple[str, list[str]]:
-    """download content <img> + thumbnail; rewrite HTML to local files/ paths"""
+def download_images(member_dir: Path, eid: str, content: str,
+                    thumbnail: str) -> tuple[str, list[str], str | None]:
+    """download content <img> + thumbnail; rewrite HTML to local files/ paths
+
+    Local filenames are prefixed with the entry id: the official CDNs do NOT
+    give every image a unique basename (old nogizaka posts use 0000.jpeg,
+    0001.jpeg, … inside a per-post directory), so caching by bare basename
+    made every colliding post silently display the first post's images.
+    """
     files_dir = member_dir / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
     saved = []
+    thumb_local: str | None = None
 
     def local_name(url: str) -> str | None:
         base = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
         if not base or "." not in base:
             return None
-        dest = files_dir / base
+        name = f"{eid}_{base}"
+        dest = files_dir / name
         for attempt in (1, 2, 3):  # WSL/office networks flake; retry a bit
             if dest.exists():
-                return base
+                return name
             try:
                 dest.write_bytes(fetch(url, timeout=60))
-                saved.append(base)
-                return base
+                saved.append(name)
+                return name
             except Exception as e:
                 if attempt == 3:
                     print(f"    [img] skip {base}: {e}")
@@ -216,7 +225,7 @@ def download_images(member_dir: Path, content: str, thumbnail: str) -> tuple[str
                 time.sleep(2 * attempt)
 
     if thumbnail:
-        local_name(thumbnail)  # ensure the thumb is archived too
+        thumb_local = local_name(thumbnail)  # ensure the thumb is archived too
     mapping: dict[str, str] = {}
 
     def repl(m: re.Match) -> str:
@@ -228,7 +237,7 @@ def download_images(member_dir: Path, content: str, thumbnail: str) -> tuple[str
         return m.group(0)
 
     content = re.sub(r'(src\s*=\s*["\'])([^"\']+)(["\'])', repl, content or "")
-    return content, saved
+    return content, saved, thumb_local
 
 
 def grab_member(site_key: str, site: dict, members: dict[str, dict],
@@ -264,14 +273,15 @@ def grab_member(site_key: str, site: dict, members: dict[str, dict],
             eid = str(it.get("id"))
             if eid in known and only_new:
                 continue
-            content, saved = download_images(member_dir, it.get("content") or "", it.get("thumbnail") or "")
+            content, saved, thumb = download_images(
+                member_dir, eid, it.get("content") or "", it.get("thumbnail") or "")
             entries[eid] = {
                 "id": it.get("id"),
                 "title": it.get("title"),
                 "creator": it.get("creator"),
                 "at": it.get("pubdate"),
                 "link": it.get("link"),
-                "thumbnail": (lambda b: f"files/{b}" if b and (member_dir / "files" / b).exists() else None)(Path(it.get("thumbnail") or "").name),
+                "thumbnail": thumb,
                 "content": content,
                 "fetched": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
