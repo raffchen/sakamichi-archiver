@@ -105,7 +105,10 @@
         <button class="pg-btn" disabled={ui.blogPage <= 1} onclick={() => ui.blogPage--} aria-label="previous page">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
-        {#each nums as n (n)}
+        <!-- index-keyed: nums can hold TWO '…' markers (window strictly
+             interior), and duplicate string keys break the keyed diff —
+             with 9 pages, page 5 was the only page that hit it -->
+        {#each nums as n, i (i)}
           {#if n === '…'}
             <span class="pg-dots">…</span>
           {:else}
