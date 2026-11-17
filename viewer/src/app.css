@@ -1467,3 +1467,12 @@ body:has(.sheet.login) .sheet {
   align-items: flex-end;
 }
 
+
+/* ---------- desktop: middle-click autoscroll cue ----------
+   while our autoscroll mode is active (middle-click on dead space outside
+   the phone column), the all-scroll cursor signals that mouse movement
+   now drives the active screen */
+body.autoscroll,
+body.autoscroll * {
+  cursor: all-scroll !important;
+}
