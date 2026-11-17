@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { forwardWheel } from './globalScroll'
+import { attachGlobalScroll, forwardWheel, scrollOwner } from './globalScroll'
 
 /* forwardWheel decides which element a wheel event should scroll: the active
    .screen when the pointer is over dead space (body background, header, tab
@@ -78,5 +78,86 @@ describe('forwardWheel', () => {
 
   it('ignores zero-delta events', () => {
     expect(forwardWheel(ev(document.body, 0))).toBe(null)
+  })
+})
+
+describe('scrollOwner', () => {
+  it('classifies dead space vs native scrollers vs overlays', () => {
+    expect(scrollOwner(document.body)).toBe('dead')
+    const screen = host.querySelector<HTMLElement>('.screen')!
+    screen.style.overflowY = 'auto'
+    expect(scrollOwner(screen)).toBe('native')
+    const overlay = document.createElement('div')
+    overlay.style.position = 'fixed'
+    document.body.appendChild(overlay)
+    expect(scrollOwner(overlay)).toBe('native')
+  })
+})
+
+describe('middle-click autoscroll mode', () => {
+  const down = (target: EventTarget, button = 1) =>
+    target.dispatchEvent(
+      new MouseEvent('mousedown', { button, bubbles: true, cancelable: true }),
+    )
+
+  it('engages on middle-click over dead space, ends on the next click', () => {
+    const detach = attachGlobalScroll()
+    try {
+      const md = new MouseEvent('mousedown', { button: 1, bubbles: true, cancelable: true })
+      Object.defineProperty(md, 'clientX', { value: 100 })
+      Object.defineProperty(md, 'clientY', { value: 200 })
+      document.body.dispatchEvent(md)
+      expect(document.body.classList.contains('autoscroll')).toBe(true)
+      // any further click ends the mode
+      document.body.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }))
+      expect(document.body.classList.contains('autoscroll')).toBe(false)
+    } finally {
+      detach()
+    }
+  })
+
+  it('stays out of the way over native scrollers, overlays and links', () => {
+    const detach = attachGlobalScroll()
+    try {
+      const screen = host.querySelector<HTMLElement>('.screen')!
+      screen.style.overflowY = 'auto'
+      down(screen) // native autoscroll owns this
+      expect(document.body.classList.contains('autoscroll')).toBe(false)
+
+      const overlay = document.createElement('div')
+      overlay.style.position = 'fixed'
+      document.body.appendChild(overlay)
+      down(overlay)
+      expect(document.body.classList.contains('autoscroll')).toBe(false)
+
+      const a = document.createElement('a')
+      document.body.appendChild(a)
+      down(a)
+      expect(document.body.classList.contains('autoscroll')).toBe(false)
+    } finally {
+      detach()
+    }
+  })
+
+  it('Escape ends the mode', () => {
+    const detach = attachGlobalScroll()
+    try {
+      down(document.body)
+      expect(document.body.classList.contains('autoscroll')).toBe(true)
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(document.body.classList.contains('autoscroll')).toBe(false)
+    } finally {
+      detach()
+    }
+  })
+
+  it('left clicks never engage the mode', () => {
+    const detach = attachGlobalScroll()
+    try {
+      down(document.body, 0)
+      expect(document.body.classList.contains('autoscroll')).toBe(false)
+    } finally {
+      detach()
+    }
   })
 })
