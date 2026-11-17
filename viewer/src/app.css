@@ -213,10 +213,19 @@ img {
   overflow-x: hidden; /* zoomed layouts can phantom-overflow horizontally */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* reserve the classic-scrollbar gutter on both edges so the column keeps
+     centering on the window axis (a classic scrollbar would otherwise eat
+     15px on the right and shift .col off the chrome bars by half of it;
+     overlay-scrollbar platforms reserve nothing, so mobile is unaffected) */
+  scrollbar-gutter: stable both-edges;
 }
 /* the phone column: white page, centered, and positioned so popovers and
-   pills anchor to it exactly like they did when the frame was the column */
+   pills anchor to it exactly like they did when the frame was the column.
+   flow-root keeps children's margins inside the white box (margins used to
+   collapse through .screen's overflow clip; .col would let them through,
+   pushing the column down and showing desk above it) */
 .col {
+  display: flow-root;
   width: min(100%, var(--phone-w));
   min-height: 100%;
   margin-inline: auto;
