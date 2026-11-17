@@ -21,6 +21,7 @@ export const ui = $state({
   /* blog tab: directory -> member post list -> post detail */
   blogMember: null as string | null, // directory key under media/blogs/
   blogPost: null as number | null,
+  blogPage: 1 as number, // member-list page (1-based); baked into the URL as #/blog/<key>/p/<n>
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
 })
@@ -54,6 +55,7 @@ export function goHome() {
 export function openBlog(member: string | null = null, post: number | null = null) {
   ui.view = 'blog'
   ui.searchScope = 'message'
+  if (member !== ui.blogMember) ui.blogPage = 1
   ui.blogMember = member
   ui.blogPost = post
 }
