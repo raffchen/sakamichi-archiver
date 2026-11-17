@@ -1068,8 +1068,8 @@ const app = http.createServer(async (req, res) => {
         member: state.member,
         site: state.site ?? found.site,
         entry: { ...list[idx], content: prefixLocal(list[idx].content, dir), lead: blogLead(list[idx].content) },
-        prev: stub(list[idx + 1]), // older post (further down the list)
-        next: stub(list[idx - 1]), // newer post (closer to the top)
+        prev: stub(list[idx - 1]), // older post (file is oldest-first)
+        next: stub(list[idx + 1]), // newer post
       })
     }
     /* member list is paginated by the viewer (25 per page): ?limit caps the
