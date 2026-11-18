@@ -23,13 +23,20 @@
       .reduce((n, m) => n + unreadCount(m.slug, m.messages), 0),
   )
 
-  const onTalk = () => ui.view === 'home' || ui.view === 'thread' || ui.view === 'gallery'
+  const onTalk = () =>
+    ui.view === 'home' ||
+    ui.view === 'thread' ||
+    ui.view === 'gallery' ||
+    (ui.view === 'search' && (ui.searchScope === 'message' || ui.searchScope === 'message-member'))
+  const onBlog = () =>
+    ui.view === 'blog' ||
+    (ui.view === 'search' && (ui.searchScope === 'blog' || ui.searchScope === 'blog-member'))
 </script>
 
 <nav class="tabs">
   {#each tabs as t (t.id)}
     <button
-      class:on={(t.id === 'talk' && onTalk()) || (t.id === 'blog' && (ui.view === 'blog' || (ui.view === 'search' && ui.searchScope === 'blog')))}
+      class:on={(t.id === 'talk' && onTalk()) || (t.id === 'blog' && onBlog())}
       class:locked={t.locked}
       disabled={t.locked}
       title={t.locked ? 'not part of the archive' : ''}

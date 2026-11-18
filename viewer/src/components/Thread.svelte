@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { fade } from 'svelte/transition'
   import type { Archive, Member, Msg } from '../lib/types'
-  import { markSeen, openGallery, seenAt, showLightbox, ui, ensureFullTexts } from '../lib/store.svelte'
+  import { markSeen, openGallery, openMemberSearch, seenAt, showLightbox, ui, ensureFullTexts } from '../lib/store.svelte'
   import { dayKey, fmtDayLabel } from '../lib/format'
   import { disp } from '../lib/display'
   import { sentinel } from '../lib/actions'
@@ -108,6 +108,14 @@
     <i class="fa-solid fa-chevron-left"></i>
   </button>
   <span class="title-left">{who}</span>
+  <button
+    class="ic"
+    title="search this member’s messages"
+    aria-label="search this member’s messages"
+    onclick={() => openMemberSearch(member.slug)}
+  >
+    {@html icon('search')}
+  </button>
   <button
     class="ic"
     title="this member’s media"

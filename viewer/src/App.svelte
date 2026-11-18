@@ -26,7 +26,9 @@
 
   /* the login gate covers every talk view; blog views (both blog searches,
      directory-wide and per-member) are public. A message lightbox is gated. */
-  const publicBlogSearch = $derived(ui.view === 'search' && ui.searchScope !== 'message')
+  const publicBlogSearch = $derived(
+    ui.view === 'search' && (ui.searchScope === 'blog' || ui.searchScope === 'blog-member'),
+  )
   const talkView = $derived(!(ui.view === 'blog' || publicBlogSearch))
 
   /* the active site drives the whole theme (purple / pale pink) */
@@ -69,7 +71,14 @@
     const parts = location.hash.replace(/^#\/?/, '').split('/')
     /* 'site' is the pre-2026-02 name of the talk-directory route — kept as a
        legacy alias so old shared links still resolve */
-    const route = (parts[0] || 'talk') as View | 'talk' | 'site' | 'media' | 'blog-search' | 'blog-member-search'
+    const route = (parts[0] || 'talk') as
+      | View
+      | 'talk'
+      | 'site'
+      | 'media'
+      | 'blog-search'
+      | 'blog-member-search'
+      | 'member-search'
     const slug = parts[1] ? decodeURIComponent(parts[1]) : null
     const focus = parts[2] ? Number(parts[2]) : null
     const hit = slug ? archive.members.find((m) => m.slug === slug) : null
@@ -135,21 +144,32 @@
           if (bm?.site) ui.site = bm.site
         }
       }
-    } else if (route === 'search' || route === 'blog-search' || route === 'blog-member-search') {
+    } else if (
+      route === 'search' ||
+      route === 'blog-search' ||
+      route === 'blog-member-search' ||
+      route === 'member-search'
+    ) {
       ui.view = 'search'
-      ui.slug = null
       ui.focusId = null
       ui.blogPost = null
-      /* #/blog-search — directory-wide; #/blog-member-search/<key> — one
-         member's posts (back returns to that member's list). The key also
-         adopts its site theme on reload/deep link. */
-      if (route === 'blog-member-search' && slug) {
+      /* #/blog-search directory-wide; #/blog-member-search/<key> one member's
+         posts (back → their list); #/member-search/<slug> one member's
+         messages from the thread header (back → the thread). The key/slug
+         also adopts its site theme on reload/deep link. */
+      if (route === 'member-search' && slug) {
+        ui.searchScope = 'message-member'
+        ui.slug = slug
+        ui.blogMember = null
+      } else if (route === 'blog-member-search' && slug) {
         ui.searchScope = 'blog-member'
         ui.blogMember = slug
+        ui.slug = null
         const bm = archive.blogs?.members.find((b) => b.key === slug)
         if (bm?.site) ui.site = bm.site
       } else {
         ui.searchScope = route === 'blog-search' ? 'blog' : 'message'
+        ui.slug = null
         ui.blogMember = null
       }
     } else {
@@ -176,8 +196,9 @@
 
   function searchHash() {
     if (ui.searchScope === 'blog-member') return `#/blog-member-search/${encodeURIComponent(ui.blogMember ?? '')}`
+    if (ui.searchScope === 'message-member') return `#/member-search/${encodeURIComponent(ui.slug ?? '')}`
     if (ui.searchScope === 'blog') return '#/blog-search'
-    return hashFor('search', ui.slug, ui.focusId)
+    return '#/search'
   }
 
   $effect(() => {

@@ -63,10 +63,11 @@ Per-site theming (nogizaka purple / sakurazaka pink) matches the official apps.
   (`#/blog/sakurazaka46`)
 - **Gallery** — per-member photos/videos as a month-grouped grid + voice list
   with a bottom player bar
-- **Search** — three scoped search bars: the Talk page's searches
+- **Search** — four scoped searches: the Talk page's bar searches
   **messages**, the Blog tab's (under the site pills) searches **blog posts**,
-  and a member list's searches just **that member's blog posts**. All are
-  server-backed (`/api/search`) with two sections — `完全一致 / exact matches`
+  a member list's bar searches just **that member's blog posts**, and a
+  thread's magnifier (next to the media button) searches just **that member's
+  messages**. All are server-backed (`/api/search`) with two sections — `完全一致 / exact matches`
   (FTS5 substring search, reading-aware: ひかり finds 光, さくら finds 桜) and
   `おすすめ / related` (semantic: local ONNX embeddings rank posts/messages by
   meaning, so English queries surface Japanese content, with % similarity

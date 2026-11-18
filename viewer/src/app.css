@@ -149,6 +149,11 @@ img {
 .head .ic .fa-solid {
   font-size: 19px;
 }
+/* inline-SVG header buttons (thread search, blog sort) size to the button */
+.head .ic svg {
+  width: 20px;
+  height: 20px;
+}
 .head .ic.back .fa-solid {
   font-size: 18px;
 }
