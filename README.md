@@ -55,15 +55,17 @@ Per-site theming (nogizaka purple / sakurazaka pink) matches the official apps.
 - **Blog tab** — directory of every blog member grouped by 期生 → member post
   list (thumbnail, pink title, lead, stamp) → post detail rendering the
   archived HTML — tapping an image opens the same shared lightbox viewer as
-  message media. A search bar under the site
-  pills opens blog-post-only search; a `⇅` menu switches the directory sort
+  message media. A search bar under the site pills opens blog-post-only
+  search; the bar above each member's post list searches only that member's
+  posts. A `⇅` menu switches the directory sort
   (generation old→new / new→old, name A→Z / Z→A, newest/oldest posts across
   all members); site switcher pills and per-site shareable URLs
   (`#/blog/sakurazaka46`)
 - **Gallery** — per-member photos/videos as a month-grouped grid + voice list
   with a bottom player bar
-- **Search** — two scoped search bars: the Talk page's searches **messages**,
-  the Blog tab's (under the site pills) searches **blog posts**. Both are
+- **Search** — three scoped search bars: the Talk page's searches
+  **messages**, the Blog tab's (under the site pills) searches **blog posts**,
+  and a member list's searches just **that member's blog posts**. All are
   server-backed (`/api/search`) with two sections — `完全一致 / exact matches`
   (FTS5 substring search, reading-aware: ひかり finds 光, さくら finds 桜) and
   `おすすめ / related` (semantic: local ONNX embeddings rank posts/messages by

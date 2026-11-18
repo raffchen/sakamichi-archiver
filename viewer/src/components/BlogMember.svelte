@@ -16,6 +16,7 @@
 
   const key = $derived(ui.blogMember!)
   const info = $derived(archive.blogs?.members.find((b) => b.key === key) ?? null)
+  const memberName = $derived(info?.name ?? key.replace(/_/g, ' '))
 
   let entries = $state<BlogEntry[] | null>(null)
   let total = $state(0)
@@ -66,9 +67,26 @@
   <button class="ic back" aria-label="back" onclick={() => back(null)}>
     <i class="fa-solid fa-chevron-left"></i>
   </button>
-  <h1>{info?.name ?? key.replace(/_/g, ' ')}</h1>
+  <h1>{memberName}</h1>
   <span class="sp"></span>
 </header>
+
+<div class="searchbar">
+  <input
+    type="search"
+    placeholder={`search ${memberName}'s blog posts`}
+    aria-label={`search ${memberName}'s blog posts`}
+    value={ui.query}
+    onfocus={() => {
+      ui.blogMember = key
+      ui.searchScope = 'blog-member'
+      ui.view = 'search'
+    }}
+    onkeydown={(e) =>
+      e.key === 'Enter' && ((ui.blogMember = key), (ui.searchScope = 'blog-member'), (ui.view = 'search'))}
+    oninput={(e) => (ui.query = e.currentTarget.value)}
+  />
+</div>
 
 <div class="screen" bind:this={screen}>
   <div class="col blog-member" bind:clientWidth={colW}>

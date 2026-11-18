@@ -588,9 +588,11 @@ const app = http.createServer(async (req, res) => {
     const qp = new URL(req.url, 'http://localhost').searchParams
     const raw = (qp.get('q') ?? '').trim()
     const limit = Math.min(Number(qp.get('limit')) || 30, 100)
-    // scope: ?type=blog (the Blog tab's search bar) or ?type=message — omit
-    // for the Talk page's everything-search
+    // scope: ?type=blog (the Blog tab's / a member's search bar) or
+    // ?type=message — omit for the Talk page's everything-search. ?member=<key>
+    // narrows the blog corpus to one member's posts.
     const scope = qp.get('type') === 'blog' || qp.get('type') === 'message' ? qp.get('type') : null
+    const memberKey = qp.get('member') || null
     const t0 = Date.now()
     // stage 3: match readings, not just surface text. Normalize the query the
     // same way the indexer normalized the readings: katakana → hiragana (incl.
@@ -665,15 +667,20 @@ const app = http.createServer(async (req, res) => {
         // Column weights (title, body, reading / text, reading): surface hits
         // rank well above reading-only hits.
         if (scope !== 'message') {
+          const memberWhere = memberKey ? ' AND p.member_key = ?' : ''
           const posts = db
           .prepare(
             `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member,
                     p.at, p.body, bm25(posts_fts, 10.0, 10.0, 1.0) AS score,
                     snippet(posts_fts, -1, '<mark>', '</mark>', '…', 16) AS snippet
              FROM posts_fts JOIN posts p ON p.rowid = posts_fts.rowid
-             WHERE posts_fts MATCH ? ORDER BY score LIMIT ?`,
+             WHERE posts_fts MATCH ?${memberWhere} ORDER BY score LIMIT ?`,
           )
-          .all(`"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`, limit)
+          .all(
+            `"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`,
+            ...(memberKey ? [memberKey] : []),
+            limit,
+          )
           for (const r of posts) {
             r.snippet = realSnippet(r.snippet, `${r.title ?? ''} ${r.body ?? ''}`)
             results.push({ type: 'blog', ...r })
@@ -713,12 +720,13 @@ const app = http.createServer(async (req, res) => {
         // <3 code points: below the trigram minimum — instr() scan instead
         // (over surface AND reading columns)
         if (scope !== 'message') {
+          const memberWhere = memberKey ? ' AND member_key = ?' : ''
           const posts = db
             .prepare(
               `SELECT member_key AS "key", site, post_id AS id, title, member_name AS member, at, body, reading
-               FROM posts WHERE instr(title, ?) > 0 OR instr(body, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
+               FROM posts WHERE (instr(title, ?) > 0 OR instr(body, ?) > 0 OR instr(reading, ?) > 0)${memberWhere} LIMIT ?`,
             )
-            .all(raw, raw, normalized, limit)
+            .all(raw, raw, normalized, ...(memberKey ? [memberKey] : []), limit)
           for (const r of posts) {
             const hay = r.title.includes(raw) ? r.title : r.body
             const i = hay.indexOf(raw)
@@ -783,8 +791,11 @@ const app = http.createServer(async (req, res) => {
             const members = new Map(
               (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
             )
+            // scoped search needs a wider net: most of the nearest chunks can
+            // belong to other members, even though only this member is shown
+            const knnLimit = memberKey ? 200 : 60
             const knnPosts = db
-              .prepare(`SELECT rowid, distance FROM vec_posts WHERE embedding MATCH ? ORDER BY distance LIMIT 60`)
+              .prepare(`SELECT rowid, distance FROM vec_posts WHERE embedding MATCH ? ORDER BY distance LIMIT ${knnLimit}`)
               .all(qbuf)
             const resolve = db.prepare(
               `SELECT p.member_key AS "key", p.site, p.post_id AS id, p.title, p.member_name AS member, p.at, p.body
@@ -794,7 +805,7 @@ const app = http.createServer(async (req, res) => {
             for (const k of knnPosts) {
               dists.push(k.distance)
               const p = resolve.get(k.rowid)
-              if (!p) continue
+              if (!p || (memberKey && p.key !== memberKey)) continue
               const cos = 1 - k.distance
               const kkey = `${p.key}/${p.id}`
               const cur = byPost.get(kkey)
@@ -812,9 +823,10 @@ const app = http.createServer(async (req, res) => {
               .filter((c) => !exactBlog.has(`${c.key}/${c.id}`) && c.score >= SEMANTIC_MIN_COS)
               .sort((a, b) => b.score - a.score)
             const best = cand[0]?.score ?? 0
+            let blogAdded = 0
             for (const c of cand) {
               if (c.score < best - SEMANTIC_GAP) break
-              if (related.length >= blogCap) break
+              if (blogAdded >= blogCap) break
               related.push({
                 type: 'blog',
                 key: c.key,
@@ -826,41 +838,48 @@ const app = http.createServer(async (req, res) => {
                 score: c.score,
                 snippet: (c.body ?? '').slice(0, 120) + ((c.body ?? '').length > 120 ? '…' : ''),
               })
+              blogAdded++
             }
-            // stage 6: whole-message vectors (second rank group, same cutoffs)
-            const knnMsgs = db
-              .prepare(`SELECT rowid, distance FROM vec_messages WHERE embedding MATCH ? ORDER BY distance LIMIT 60`)
-              .all(qbuf)
-            const resolveMsg = db.prepare(
-              `SELECT slug, msg_id AS id, at, type, text FROM messages WHERE vec_rowid = ?`,
-            )
-            const candMsg = []
-            for (const k of knnMsgs) {
-              dists.push(k.distance)
-              const m = resolveMsg.get(k.rowid)
-              if (!m) continue
-              const cos = 1 - k.distance
-              if (exactMsg.has(`${m.slug}/${m.id}`) || cos < SEMANTIC_MIN_COS) continue
-              const mem = members.get(m.slug)
-              candMsg.push({
-                type: 'message',
-                slug: m.slug,
-                id: m.id,
-                at: m.at,
-                mtype: m.type,
-                member: mem ? (mem.roman ?? mem.name) : m.slug.replace(/_/g, ' '),
-                site: mem?.site ?? null,
-                avatar: mem?.avatar ?? null,
-                score: cos,
-                snippet: (m.text ?? '').slice(0, 120) + ((m.text ?? '').length > 120 ? '…' : ''),
-              })
-            }
-            candMsg.sort((a, b) => b.score - a.score)
-            const bestMsg = candMsg[0]?.score ?? 0
-            for (const c of candMsg) {
-              if (c.score < bestMsg - SEMANTIC_GAP) break
-              if (related.length >= blogCap + msgCap) break
-              related.push(c)
+            // stage 6: whole-message vectors (second rank group, same cutoffs).
+            // Skip the query entirely when the scope excludes messages —
+            // otherwise sparse blog results would leave room for messages.
+            if (msgCap > 0) {
+              const knnMsgs = db
+                .prepare(`SELECT rowid, distance FROM vec_messages WHERE embedding MATCH ? ORDER BY distance LIMIT 60`)
+                .all(qbuf)
+              const resolveMsg = db.prepare(
+                `SELECT slug, msg_id AS id, at, type, text FROM messages WHERE vec_rowid = ?`,
+              )
+              const candMsg = []
+              for (const k of knnMsgs) {
+                dists.push(k.distance)
+                const m = resolveMsg.get(k.rowid)
+                if (!m) continue
+                const cos = 1 - k.distance
+                if (exactMsg.has(`${m.slug}/${m.id}`) || cos < SEMANTIC_MIN_COS) continue
+                const mem = members.get(m.slug)
+                candMsg.push({
+                  type: 'message',
+                  slug: m.slug,
+                  id: m.id,
+                  at: m.at,
+                  mtype: m.type,
+                  member: mem ? (mem.roman ?? mem.name) : m.slug.replace(/_/g, ' '),
+                  site: mem?.site ?? null,
+                  avatar: mem?.avatar ?? null,
+                  score: cos,
+                  snippet: (m.text ?? '').slice(0, 120) + ((m.text ?? '').length > 120 ? '…' : ''),
+                })
+              }
+              candMsg.sort((a, b) => b.score - a.score)
+              const bestMsg = candMsg[0]?.score ?? 0
+              let msgAdded = 0
+              for (const c of candMsg) {
+                if (c.score < bestMsg - SEMANTIC_GAP) break
+                if (msgAdded >= msgCap) break
+                related.push(c)
+                msgAdded++
+              }
             }
             /* group order is preserved (blog first, then messages) — the client
                renders them as separate subsections; no cross-corpus merge sort,

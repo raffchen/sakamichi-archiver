@@ -15,9 +15,10 @@ export const ui = $state({
   focusId: null as number | null,
   site: 'nogizaka46',
   query: '',
-  /* search scope: the Talk page's bar searches messages only, the Blog tab's
-     searches blog posts only (?type=... on /api/search) */
-  searchScope: 'message' as 'message' | 'blog',
+  /* search scope: the Talk page's bar searches messages, the Blog directory's
+     searches all posts, a member's bar searches just their posts (?type=blog
+     plus ?member=<key> on /api/search) */
+  searchScope: 'message' as 'message' | 'blog' | 'blog-member',
   /* blog tab: directory -> member post list -> post detail */
   blogMember: null as string | null, // directory key under media/blogs/
   blogPost: null as number | null,
@@ -63,6 +64,7 @@ export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
   else if (ui.view === 'blog' && ui.blogPost != null) openBlog(ui.blogMember)
   else if (ui.view === 'blog' && ui.blogMember) openBlog()
+  else if (ui.view === 'search' && ui.searchScope === 'blog-member') openBlog(ui.blogMember)
   else if (ui.view === 'search' && ui.searchScope === 'blog') {
     ui.searchScope = 'message'
     openBlog()

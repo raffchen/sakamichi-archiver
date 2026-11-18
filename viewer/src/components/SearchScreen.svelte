@@ -8,8 +8,10 @@
   let { archive }: { archive: Archive } = $props()
 
   /* scope: the Talk page's bar searches messages (?type=message), the Blog
-     tab's searches blog posts (?type=blog) */
-  const blogOnly = $derived(ui.searchScope === 'blog')
+     directory's searches all posts (?type=blog), a member's bar adds
+     ?member=<key> to stay inside their own blog */
+  const blogOnly = $derived(ui.searchScope !== 'message')
+  const scopedMember = $derived(ui.searchScope === 'blog-member' ? ui.blogMember : null)
 
   let input = $state<HTMLInputElement | undefined>()
   const q = $derived(ui.query.trim())
@@ -39,6 +41,9 @@
 
   const memberBySlug = $derived.by(() => new Map(archive.members.map((m) => [m.slug, m])))
   const blogByKey = $derived.by(() => new Map((archive.blogs?.members ?? []).map((m) => [m.key, m])))
+  const scopedName = $derived(
+    scopedMember ? (blogByKey.get(scopedMember)?.name ?? scopedMember.replace(/_/g, ' ')) : null,
+  )
 
   /* client-side fallback scan (messages only — blog bodies aren't in index.json).
      Only valid while the index still carries full texts (vite dev); once the
@@ -64,6 +69,7 @@
   $effect(() => {
     const query = q
     const scoped = blogOnly // re-run when the scope flips too
+    const member = scopedMember
     seq++
     const mySeq = seq
     if (!query) {
@@ -74,7 +80,12 @@
     searching = true
     const ctrl = new AbortController()
     const timer = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(query)}${scoped ? '&type=blog' : '&type=message'}`, { signal: ctrl.signal })
+      fetch(
+        `/api/search?q=${encodeURIComponent(query)}` +
+          `${scoped ? '&type=blog' : '&type=message'}` +
+          `${member ? `&member=${encodeURIComponent(member)}` : ''}`,
+        { signal: ctrl.signal },
+      )
         .then((r) => {
           if (r.status === 401) requireLogin() // message search is gated
           return r.json()
@@ -110,7 +121,8 @@
   }
 
   const goBack = () => {
-    if (blogOnly) {
+    if (ui.searchScope === 'blog-member') openBlog(ui.blogMember)
+    else if (blogOnly) {
       ui.searchScope = 'message'
       openBlog()
     } else ui.view = 'home'
@@ -132,7 +144,11 @@
     type="search"
     bind:this={input}
     bind:value={ui.query}
-    placeholder={blogOnly ? 'ブログを検索 / search blog posts' : 'キーワード / keyword'}
+    placeholder={scopedName
+      ? `search ${scopedName}'s blog posts`
+      : blogOnly
+        ? 'ブログを検索 / search blog posts'
+        : 'キーワード / keyword'}
     aria-label="search"
   />
 </div>
@@ -142,7 +158,7 @@
   {#if !q}
     <p class="muted-note">
       {#if blogOnly}
-        ブログ記事を検索 / searching blog posts
+        {scopedName ? `searching ${scopedName}'s blog posts` : 'ブログ記事を検索 / searching blog posts'}
       {:else}
         {archive.totals.messages} 件のメッセージから検索 / searching {archive.totals.messages} messages
       {/if}
