@@ -11,9 +11,14 @@ import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { EMBED_DIM } from './embed.mjs'
+import { EMBED_DIM, EMBED_MODEL } from './embed.mjs'
 
-const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
+
+/* identifies the *derived* search-DB shape: a change here (schema step, model,
+   dim) means every vector must be rebuilt even when the media is unchanged —
+   build-index compares this against the DB's stored build_sig to decide. */
+export const dbSignature = () => `v${SCHEMA_VERSION}:${EMBED_MODEL}:${EMBED_DIM}`
 const md5 = (s) => createHash('md5').update(s ?? '').digest('hex')
 
 const SCHEMA = `
@@ -72,13 +77,13 @@ INSERT INTO posts_fts (rowid, title, body, reading)
 INSERT INTO messages_fts (rowid, text, reading)
   SELECT rowid, text, reading FROM messages WHERE rowid NOT IN (SELECT rowid FROM messages_fts);`
 
-/* stage 5: semantic layer. Chunks (≈480-char sentence-boundary windows) of
-   every blog body, embedded by a local ONNX model (scripts/embed.mjs); the
-   vec0 table is sqlite-vec (cosine distance). chunk id == vec rowid. The
-   vec table is only created when an embedder is wired in; without one the
-   search stays exact-only. Both tables are derived from posts and dropped on
-   migration — the next build re-embeds everything (chunks_md5 gate makes it
-   one-time). */
+/* stage 5: semantic layer. Per post: one standalone cleaned-title vector
+   (idx -1) plus ≈280-char sentence-boundary body chunks, embedded by a local
+   ONNX model (scripts/embed.mjs); the vec0 table is sqlite-vec (cosine
+   distance). chunk id == vec rowid. The vec table is only created when an
+   embedder is wired in; without one the search stays exact-only. Both tables
+   are derived from posts and dropped on migration — the next build re-embeds
+   everything (chunks_md5 gate makes it one-time). */
 const SCHEMA_VEC = `
 CREATE TABLE IF NOT EXISTS post_chunks (
   id         INTEGER PRIMARY KEY,
@@ -91,12 +96,21 @@ CREATE TABLE IF NOT EXISTS post_chunks (
 CREATE VIRTUAL TABLE IF NOT EXISTS vec_posts USING vec0(embedding float[${EMBED_DIM}] distance_metric=cosine);
 CREATE VIRTUAL TABLE IF NOT EXISTS vec_messages USING vec0(embedding float[${EMBED_DIM}] distance_metric=cosine);`
 
-/* sentence-boundary chunking for e5-small's 512-token context; hard-splits
-   pathological sentences. ~480 chars ≈ the model's window for Japanese. */
-export function chunkText(text, size = 480, overlap = 80) {
+/* sentence-boundary chunking for the embedding model's context. ~280 chars is
+   ~160 tokens for XLM-R on Japanese — comfortably inside the 512-token window,
+   while small enough that one chunk ≈ one topic (the eval in
+   scripts/eval-semantic.mjs found 480-char chunks blur subtopics; halving the
+   size roughly halved the excerpt mean rank). Hard-splits pathological
+   sentences. Sentences join with NO space after CJK text (the tokenizer else
+   injects a standalone '▁' token per join — measured noise), but keep a space
+   after ASCII so English doesn't glue. */
+export function chunkText(text, size = 280, overlap = 60) {
   const body = String(text ?? '').trim()
   if (!body) return []
   const sentences = body.split(/(?<=[。！？!?\n])/)
+  // CJK ideographs / kana / fullwidth forms (incl. long-vowel ー) → no space
+  const sepAfter = (s) =>
+    /[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]/.test(s.replace(/\s+$/, '').slice(-1)) ? '' : ' '
   const out = []
   let cur = ''
   for (const s of sentences) {
@@ -105,14 +119,39 @@ export function chunkText(text, size = 480, overlap = 80) {
       for (let i = 0; i < s.length; i += size - overlap) out.push(s.slice(i, i + size).trim())
       continue
     }
-    if ((cur + ' ' + s).trim().length > size) {
+    const joined = cur + (cur && !/\s$/.test(cur) ? sepAfter(cur) : '') + s
+    if (joined.trim().length > size) {
       if (cur) out.push(cur.trim())
       cur = s
-    } else cur = (cur + ' ' + s).trim()
+    } else cur = joined
     if (cur.length >= size - overlap) { out.push(cur); cur = '' }
   }
   if (cur.trim()) out.push(cur.trim())
   return out.filter(Boolean)
+}
+
+/* The stored title repeats the member name and hashtag (e.g.
+   "はじまるよ五百城 茉央 #きっきのにっき") across a member's posts, which turns
+   their title vectors into near-duplicates. The title VECTOR embeds this
+   cleaned form (the eval's clean-title variant lifted title R@1 0.87→0.99);
+   the stored/displayed title is unchanged. */
+export function cleanTitle(title, memberName) {
+  let t = String(title ?? '').replace(/#\S+/g, ' ')
+  const tc = t.replace(/\s+/g, '')
+  const mn = String(memberName ?? '').replace(/\s+/g, '')
+  const i = mn ? tc.indexOf(mn) : -1
+  if (i >= 0) t = tc.slice(0, i)
+  return t.replace(/\s+/g, ' ').trim()
+}
+
+/* The per-post vector set: a standalone cleaned-title vector (idx -1) plus the
+   body chunks (idx 0..n-1). The digest gates re-embedding and covers both. */
+export function postVectors(body, title, memberName) {
+  const clean = cleanTitle(title, memberName)
+  const work = []
+  if (clean) work.push({ idx: -1, text: clean })
+  for (const [i, c] of chunkText(body).entries()) work.push({ idx: i, text: c })
+  return { work, digest: md5(work.map((w) => w.text).join('\u0000')) }
 }
 
 /**
@@ -171,7 +210,34 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
       db.exec('DROP TABLE IF EXISTS vec_messages')
       log('search schema v4 → v5: message vectors + post thumbs')
     }
-    if (embed) db.exec(SCHEMA_VEC)
+    if (ver > 0 && ver < 6) {
+      // v6: embedding model switched (384→768 dims) + a per-post cleaned-title
+      // vector. Everything here is derived → drop the vector tables (they carry
+      // the float[N] dim) and NULL the gates so the next build re-embeds all.
+      const cols = (t) => db.prepare(`PRAGMA table_info(${t})`).all().map((r) => r.name)
+      db.exec('DROP TABLE IF EXISTS post_chunks; DROP TABLE IF EXISTS vec_posts; DROP TABLE IF EXISTS vec_messages')
+      if (cols('posts').includes('chunks_md5')) db.exec('UPDATE posts SET chunks_md5 = NULL')
+      if (cols('messages').includes('embed_md5')) db.exec('UPDATE messages SET embed_md5 = NULL, vec_rowid = NULL')
+      log('search schema v5 → v6: model change (dim bump + title vectors) — vectors reset, will re-embed')
+    }
+    // Robust model/dim switch: the vec tables bake in float[EMBED_DIM], so a
+    // different EMBED_MODEL must recreate them even when SCHEMA_VERSION didn't
+    // move (the v6 step only covers the first e5→granite transition). Derived
+    // data, so a reset is always safe — the gates make the build re-embed it.
+    const embedSig = `${EMBED_MODEL}:${EMBED_DIM}`
+    const prevEmbedSig = db.prepare('SELECT value FROM meta WHERE key = ?').get('embed_sig')?.value ?? null
+    if (embed && ver > 0 && prevEmbedSig && prevEmbedSig !== embedSig) {
+      db.exec('DROP TABLE IF EXISTS post_chunks; DROP TABLE IF EXISTS vec_posts; DROP TABLE IF EXISTS vec_messages')
+      db.exec('UPDATE posts SET chunks_md5 = NULL')
+      db.exec('UPDATE messages SET embed_md5 = NULL, vec_rowid = NULL')
+      log(`embedding model changed (${prevEmbedSig} → ${embedSig}) — vectors reset, will re-embed`)
+    }
+    if (embed) {
+      db.exec(SCHEMA_VEC)
+      db.prepare(
+        'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      ).run('embed_sig', embedSig)
+    }
     db.exec(SCHEMA_FTS)
     // readings for any base row that lacks one (the v3 migration lands here;
     // idempotent — only NULL rows are tokenized, so warm restarts are free).
@@ -255,24 +321,23 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
           vecIns = db.prepare('INSERT INTO vec_posts (embedding) VALUES (?)')
           setChunksMd5 = db.prepare('UPDATE posts SET chunks_md5 = ? WHERE rowid = ?')
         }
-        const embedBody = async (rowid, body) => {
-          const chunks = chunkText(body)
-          const want = md5(chunks.join('\u0000'))
+        const embedBody = async (rowid, body, title, memberName) => {
+          const { work, digest } = postVectors(body, title, memberName)
           for (const r of selChunkIds.all(rowid)) vecDel.run(r.vec_rowid)
           delChunks.run(rowid)
           let ok = true
-          for (const [idx, c] of chunks.entries()) {
-            const v = await embed.passage(c).catch(() => null)
+          for (const { idx, text } of work) {
+            const v = await embed.passage(text).catch(() => null)
             if (!v) {
               ok = false
               continue
             }
             const { lastInsertRowid } = vecIns.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength))
-            insChunk.run(lastInsertRowid, rowid, idx, md5(c))
+            insChunk.run(lastInsertRowid, rowid, idx, md5(text))
             stat.embedded++
           }
-          // only mark clean when every chunk embedded — partial failures retry
-          if (ok) setChunksMd5.run(want, rowid)
+          // only mark clean when every vector embedded — partial failures retry
+          if (ok) setChunksMd5.run(digest, rowid)
         }
         const dropChunks = (rowid) => {
           if (!embed) return
@@ -293,13 +358,14 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
             const seen = new Set()
             for (const p of m.posts) {
               seen.add(String(p.id))
-              // digest covers title + thumb too (they feed /api/blog + the UI),
-              // but chunks_md5 stays body-only so text edits don't re-embed
+              // digest covers title + thumb too (they feed /api/blog + the UI)
               const digest = md5(`${p.body}\u0000${p.title ?? ''}\u0000${p.thumb ?? ''}`)
-              const wantChunks = md5(chunkText(p.body).join('\u0000'))
+              // the vector digest additionally covers the cleaned-title vector, so
+              // a title edit re-embeds even when the body is untouched
+              const wantChunks = postVectors(p.body, p.title, m.name).digest
               const prev = existing.get(String(p.id))
               let rowid
-              // chunk work needed only when the body (not the digest) changed
+              // vector work needed only when the vector set (title + body) changed
               const dirty = !!embed && (!prev || prev.chunks !== wantChunks)
               if (!prev) {
                 const reading = tokenize?.(`${p.title ?? ''} ${p.body ?? ''}`) ?? null
@@ -319,7 +385,7 @@ export async function openSearchDb(dbPath, log = () => {}, tokenize = null, embe
                 rowid = prev.rowid
                 stat.unchanged++
               }
-              if (dirty) await embedBody(rowid, p.body)
+              if (dirty) await embedBody(rowid, p.body, p.title, m.name)
             }
             for (const [gone, prev] of existing) {
               if (!seen.has(gone)) {

@@ -163,10 +163,12 @@ a bottom player bar (leaving the tab stops playback)
   fetch (~250 ms), ranked by bm25. **Reading-aware** (stage 3): hiragana
   queries hit kanji text and vice versa — ひかり finds 光, さくら finds 桜.
   **Semantic** (stages 5/6): a `おすすめ / related` section ranks content by
-  embedding similarity (local ONNX e5-small via sqlite-vec, whole corpus —
-  messages too) — English queries surface Japanese content; hits carry a %
-  similarity chip, exact hits are never duplicated, and the section hides
-  when empty. In the unscoped API search both corpora appear as two labelled
+  embedding similarity (local ONNX granite-embedding-278m via sqlite-vec,
+  whole corpus — messages too) — English queries surface Japanese content;
+  each blog post gets a standalone *cleaned-title* vector (idx -1) beside its
+  ~280-char body chunks, so title-like and content-like queries both land;
+  hits carry a % similarity chip, exact hits are never duplicated, and the
+  section hides when empty. In the unscoped API search both corpora appear as two labelled
   subgroups (ブログ / blog posts, メッセージ / messages) since their scores
   don't share a scale. The Talk-side search falls back to the instant
   client-side scan (messages only) when the served index still carries full
@@ -224,8 +226,8 @@ nothing touches the search DB):
   across configurations
 
 ```sh
-node --no-warnings scripts/eval-semantic.mjs --model=e5       # current: multilingual-e5-small (384d)
-node --no-warnings scripts/eval-semantic.mjs --model=granite  # granite-embedding-278m-multilingual (768d)
+node --no-warnings scripts/eval-semantic.mjs --model=e5       # multilingual-e5-small (384d, previous default)
+node --no-warnings scripts/eval-semantic.mjs --model=granite  # granite-embedding-278m-multilingual (768d, current)
 node --no-warnings scripts/eval-semantic.mjs --model=bge      # bge-m3 (1024d)
 ```
 
@@ -234,30 +236,30 @@ so only the model varies; MRR / R@5 on the labeled set, mean rank on excerpt):
 
 | model | labeled MRR | labeled R@5 | excerpt meanRank |
 |---|---|---|---|
-| e5-small (384d, current) | 0.376 | 0.485 | 78.7 |
+| e5-small (384d) | 0.376 | 0.485 | 78.7 |
 | granite-278m (768d) | 0.521 | 0.667 | 54.2 |
 | bge-m3 (1024d) | 0.638 | 0.727 | 62.6 |
 
-Findings:
+Findings (the archive ships **granite-embedding-278m**, switched from e5-small
+on this evidence):
 
-- **e5-small is clearly the weakest** on cross-lingual paraphrase queries;
+- **e5-small was clearly the weakest** on cross-lingual paraphrase queries;
   both larger XLM-R models beat it substantially.
 - **bge-m3 is the strongest cross-lingual** retriever and most consistent on the
   labeled set, but it is ~2× the size of granite (570 vs 279 MB) and ~3–4×
   slower to embed on CPU (roughly 10× e5-small) — heavier rebuilds and a
-  slower `related` section.
-- **granite-embedding-278m is the pragmatic upgrade**: best body localization
+  slower `related` section. Not worth it for a personal archive.
+- **granite-embedding-278m is the chosen upgrade**: best body localization
   here, near-bge cross-lingual quality, at a fraction of the cost.
 - **Model conventions differ** and must be wired per model: e5 uses **mean**
   pooling with `query:`/`passage:` prefixes; bge-m3 and granite use **CLS**
   pooling + L2 norm and no prefixes. Cosine scales differ sharply (body-chunk
-  median ≈ 0.83 e5 / 0.59 granite / 0.39 bge), so **`SEMANTIC_MIN_COS` must be
-  recalibrated on any switch** — the current `0.65` is e5-tuned and would
-  nearly empty the `related` section for bge-m3.
-
-The same harness also settled the chunking design (small ~280-char chunks, a
-separate *cleaned*-title vector per post, no ASCII-space joins); run it with
-no `--model` filter to see the full variant table.
+  median ≈ 0.83 e5 / 0.59 granite / 0.39 bge), so `SEMANTIC_MIN_COS` is
+  model-specific — the default is now `0.45` (granite); e5 used `0.65`.
+- The harness also settled the chunking design now in production: ~280-char
+  body chunks, a separate *cleaned*-title vector per post, and no ASCII-space
+  joins. Switching model or chunking is a `SCHEMA_VERSION` bump + full
+  re-embed (the build detects it via a stored `build_sig`).
 
 ## Login gate (production container)
 

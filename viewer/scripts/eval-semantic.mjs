@@ -257,7 +257,7 @@ for (const [name, build] of Object.entries(variants)) {
   const t0 = Date.now()
   const vectors = []
   for (const p of posts) for (const t of build(p)) vectors.push({ ...t, vec: await vec(t.text, 'passage') })
-  // embed queries with the e5 `query:` prefix
+  // embed queries with the query-side prefix (none for granite/bge)
   for (const qt of queryTypes)
     for (const q of qt[1]) if (!q.__vec) q.__vec = await vec(q.q, 'query')
   const res = {}
