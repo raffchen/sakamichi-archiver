@@ -225,7 +225,10 @@ def download_images(member_dir: Path, eid: str, content: str,
                 time.sleep(2 * attempt)
 
     if thumbnail:
-        thumb_local = local_name(thumbnail)  # ensure the thumb is archived too
+        n = local_name(thumbnail)  # ensure the thumb is archived too
+        # store with the files/ prefix — blogMedia()/build-index join the
+        # thumbnail onto …/blog/ directly, same as content <img> refs
+        thumb_local = f"files/{n}" if n else None
     mapping: dict[str, str] = {}
 
     def repl(m: re.Match) -> str:
