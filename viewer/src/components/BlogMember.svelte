@@ -74,8 +74,8 @@
 <div class="searchbar">
   <input
     type="search"
-    placeholder={`search ${memberName}'s blog posts`}
-    aria-label={`search ${memberName}'s blog posts`}
+    placeholder={`Search ${memberName}'s blog posts`}
+    aria-label={`Search ${memberName}'s blog posts`}
     value={ui.query}
     onfocus={() => {
       ui.blogMember = key
