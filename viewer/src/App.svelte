@@ -1,6 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { closeLightbox, getArchive, getMember, info, lightbox, showLightbox, ui, type View } from './lib/store.svelte'
+  import {
+    closeLightbox,
+    getArchive,
+    getMember,
+    info,
+    lightbox,
+    searchBarContext,
+    showLightbox,
+    ui,
+    type View,
+  } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
   import Blog from './components/Blog.svelte'
   import Home from './components/Home.svelte'
@@ -30,6 +40,19 @@
     ui.view === 'search' && (ui.searchScope === 'blog' || ui.searchScope === 'blog-member'),
   )
   const talkView = $derived(!(ui.view === 'blog' || publicBlogSearch))
+
+  /* Clear the shared search query when the visible search context changes, so
+     a search in one scope doesn't linger in another (blog tab → talk tab, a
+     member's blog search → the blog list, …). Screens without a bar report
+     null and are ignored, so an open-and-return through a result keeps the
+     search. Runs before paint, so the destination bar never flashes stale. */
+  let lastBarCtx: string | null = null
+  $effect(() => {
+    const ctx = searchBarContext()
+    if (ctx === null || ctx === lastBarCtx) return
+    lastBarCtx = ctx
+    ui.query = ''
+  })
 
   /* the active site drives the whole theme (purple / pale pink) */
   $effect(() => {
