@@ -122,7 +122,10 @@ exact matches are FTS5 with reading-aware matching, and the おすすめ / relat
 section ranks posts and messages by embedding similarity (fully local — no
 API, content never leaves the box). The index lives in the `viewer-db`
 volume (stays warm across deploys) and the embedding model in `viewer-model`
-(downloads ~120 MB once).
+(downloads ~120 MB once). The current model is `Xenova/multilingual-e5-small`
+(384d); `viewer/scripts/eval-semantic.mjs` benchmarks it against larger
+multilingual models on a labeled cross-lingual query set — see the viewer
+README's *Semantic model evaluation* for the results.
 
 ### 1.2 Deploy to a server
 
