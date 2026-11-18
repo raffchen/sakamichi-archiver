@@ -54,6 +54,27 @@ export function goHome() {
   ui.focusId = null
 }
 /* search one member's messages, opened from the thread header's magnifier */
+/* Identifies the search context a visible search bar belongs to. The App
+   clears the shared query whenever this changes, so a query typed for one
+   scope (talk / a member's blog / the full blog list) never lingers in
+   another. Screens with no search bar (thread, gallery, blog post) return
+   null — the context is left untouched, so opening a hit and returning keeps
+   the search. A list and its own search screen are deliberately distinct
+   contexts, so going back from a member's blog search clears that bar. */
+export function searchBarContext(): string | null {
+  if (ui.view === 'search') {
+    const member =
+      ui.searchScope === 'blog-member' ? ui.blogMember : ui.searchScope === 'message-member' ? ui.slug : ''
+    return `search:${ui.searchScope}${member ? ':' + member : ''}`
+  }
+  if (ui.view === 'home') return 'talk'
+  if (ui.view === 'blog') {
+    if (ui.blogPost != null) return null // post detail has no bar
+    return ui.blogMember ? `blog-member:${ui.blogMember}` : 'blog'
+  }
+  return null // thread / gallery — no bar
+}
+
 export function openMemberSearch(slug: string) {
   ui.view = 'search'
   ui.slug = slug

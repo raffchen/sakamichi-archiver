@@ -157,7 +157,9 @@ a bottom player bar (leaving the tab stops playback)
   magnifier in a thread header (next to the media button) searches just **that
   member's messages** (`#/member-search/<member-slug>`, back returns to the
   thread). The scope applies to both sections — each searches its own corpus
-  exactly and semantically. They hit the same server search
+  exactly and semantically. Moving to a different search surface (tab change,
+  back from a member's search) clears the query, while opening a result and
+  returning keeps it. They hit the same server search
   (`/api/search?type=message|blog`, plus `&member=<key>` for a member scope)
   and get
   two sections: `完全一致 / exact matches` via FTS5 (trigram tokenizer — real

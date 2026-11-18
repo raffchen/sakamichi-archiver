@@ -88,6 +88,29 @@ describe('navigation state', () => {
     expect(store.ui.focusId).toBeNull()
   })
 
+  it('searchBarContext names each search surface distinctly', () => {
+    store.goHome()
+    expect(store.searchBarContext()).toBe('talk')
+    store.ui.view = 'search'
+    store.ui.searchScope = 'message'
+    expect(store.searchBarContext()).toBe('search:message')
+  })
+
+  it('searchBarContext separates a member list from its scoped search', () => {
+    store.openBlog('teresa-ikeda')
+    expect(store.searchBarContext()).toBe('blog-member:teresa-ikeda')
+    store.ui.view = 'search'
+    store.ui.searchScope = 'blog-member'
+    expect(store.searchBarContext()).toBe('search:blog-member:teresa-ikeda')
+  })
+
+  it('searchBarContext returns null where there is no search bar', () => {
+    store.openMember('teresa-ikeda')
+    expect(store.searchBarContext()).toBeNull()
+    store.openBlog('teresa-ikeda', 3) // blog post detail
+    expect(store.searchBarContext()).toBeNull()
+  })
+
   it('openBlog resets the search scope and supports member/post drill-down', () => {
     store.ui.searchScope = 'blog'
     store.openBlog('teresa-ikeda', 3)
