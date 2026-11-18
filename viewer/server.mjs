@@ -689,14 +689,20 @@ const app = http.createServer(async (req, res) => {
           }
         }
         if (scope !== 'blog') {
+          // ?member=<slug> narrows the message corpus to one member's thread
+          const memberWhere = memberKey ? ' AND m.slug = ?' : ''
           const msgs = db
           .prepare(
             `SELECT m.slug, m.msg_id AS id, m.at, m.type, bm25(messages_fts, 10.0, 1.0) AS score,
                     snippet(messages_fts, 0, '<mark>', '</mark>', '…', 16) AS snippet
              FROM messages_fts JOIN messages m ON m.rowid = messages_fts.rowid
-             WHERE messages_fts MATCH ? ORDER BY score LIMIT ?`,
+             WHERE messages_fts MATCH ?${memberWhere} ORDER BY score LIMIT ?`,
           )
-          .all(`"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`, limit)
+          .all(
+            `"${raw.replaceAll('"', '""')}" OR "${normalized.replaceAll('"', '""')}"`,
+            ...(memberKey ? [memberKey] : []),
+            limit,
+          )
           // slug → display name/site comes from the JSON index (search DB stays name-free)
           const members = new Map(
             (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
@@ -746,11 +752,12 @@ const app = http.createServer(async (req, res) => {
           }
         }
         if (scope !== 'blog') {
+          const memberWhere = memberKey ? ' AND slug = ?' : ''
           const msgs = db
             .prepare(
-              `SELECT slug, msg_id AS id, at, type, reading FROM messages WHERE instr(text, ?) > 0 OR instr(reading, ?) > 0 LIMIT ?`,
+              `SELECT slug, msg_id AS id, at, type, reading FROM messages WHERE (instr(text, ?) > 0 OR instr(reading, ?) > 0)${memberWhere} LIMIT ?`,
             )
-            .all(raw, normalized, limit)
+            .all(raw, normalized, ...(memberKey ? [memberKey] : []), limit)
           const members = new Map(
             (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
           )
@@ -849,8 +856,11 @@ const app = http.createServer(async (req, res) => {
             // Skip the query entirely when the scope excludes messages —
             // otherwise sparse blog results would leave room for messages.
             if (msgCap > 0) {
+              // like posts: a member scope needs a wider net to find that
+              // member's nearest messages among everyone else's
+              const knnLimitMsg = memberKey ? 400 : 60
               const knnMsgs = db
-                .prepare(`SELECT rowid, distance FROM vec_messages WHERE embedding MATCH ? ORDER BY distance LIMIT 60`)
+                .prepare(`SELECT rowid, distance FROM vec_messages WHERE embedding MATCH ? ORDER BY distance LIMIT ${knnLimitMsg}`)
                 .all(qbuf)
               const resolveMsg = db.prepare(
                 `SELECT slug, msg_id AS id, at, type, text FROM messages WHERE vec_rowid = ?`,
@@ -859,7 +869,7 @@ const app = http.createServer(async (req, res) => {
               for (const k of knnMsgs) {
                 dists.push(k.distance)
                 const m = resolveMsg.get(k.rowid)
-                if (!m) continue
+                if (!m || (memberKey && m.slug !== memberKey)) continue
                 const cos = 1 - k.distance
                 if (exactMsg.has(`${m.slug}/${m.id}`) || cos < SEMANTIC_MIN_COS) continue
                 const mem = members.get(m.slug)

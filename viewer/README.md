@@ -59,6 +59,7 @@ Hash routes, so Back / reload / pasting a link all work:
                                    photo/video/voice is deep-linkable
 #/gallery/<member-slug>            that member's media
 #/search                           two-section search (messages + blog posts)
+#/member-search/<member-slug>      one member's messages only (back returns to their thread)
 #/blog-search                      blog-only search (opened from the Blogs header)
 #/blog-member-search/<member-key>  one member's blog posts only (back returns to their list)
 #/blog                             → rewritten to #/blog/<current-site>
@@ -148,14 +149,16 @@ thing; the whole UI renders at a 125% app zoom, `--app-zoom` in `app.css`).
   are a 4-per-row square grid grouped in ascending month sections, with
 duration badges on videos; the Voice tab is a flat list with unread dots and
 a bottom player bar (leaving the tab stops playback)
-- **Search** — three search bars, three scopes: the Talk page's bar searches
+- **Search** — four scoped searches: the Talk page's bar searches
   **messages**; the Blog tab's search bar (under the site pills) searches
   **blog posts** (`#/blog-search`, back returns to Blogs); the bar above a
   member's post list searches just **that member's posts**
-  (`#/blog-member-search/<member-key>`, back returns to their list). The scope
-  applies to both sections — each bar searches its own corpus exactly and
-  semantically. They hit the same server search
-  (`/api/search?type=message|blog`, plus `&member=<key>` for a member's bar)
+  (`#/blog-member-search/<member-key>`, back returns to their list); and the
+  magnifier in a thread header (next to the media button) searches just **that
+  member's messages** (`#/member-search/<member-slug>`, back returns to the
+  thread). The scope applies to both sections — each searches its own corpus
+  exactly and semantically. They hit the same server search
+  (`/api/search?type=message|blog`, plus `&member=<key>` for a member scope)
   and get
   two sections: `完全一致 / exact matches` via FTS5 (trigram tokenizer — real
   substring matching for Japanese; 1–2 char words go through an `instr()`

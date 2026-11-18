@@ -16,9 +16,9 @@ export const ui = $state({
   site: 'nogizaka46',
   query: '',
   /* search scope: the Talk page's bar searches messages, the Blog directory's
-     searches all posts, a member's bar searches just their posts (?type=blog
-     plus ?member=<key> on /api/search) */
-  searchScope: 'message' as 'message' | 'blog' | 'blog-member',
+     searches all posts, and a member's bar/icon searches just their own posts
+     or messages (?type=message|blog plus ?member=<key> on /api/search) */
+  searchScope: 'message' as 'message' | 'message-member' | 'blog' | 'blog-member',
   /* blog tab: directory -> member post list -> post detail */
   blogMember: null as string | null, // directory key under media/blogs/
   blogPost: null as number | null,
@@ -53,6 +53,12 @@ export function goHome() {
   ui.slug = null
   ui.focusId = null
 }
+/* search one member's messages, opened from the thread header's magnifier */
+export function openMemberSearch(slug: string) {
+  ui.view = 'search'
+  ui.slug = slug
+  ui.searchScope = 'message-member'
+}
 export function openBlog(member: string | null = null, post: number | null = null) {
   ui.view = 'blog'
   ui.searchScope = 'message'
@@ -64,6 +70,7 @@ export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
   else if (ui.view === 'blog' && ui.blogPost != null) openBlog(ui.blogMember)
   else if (ui.view === 'blog' && ui.blogMember) openBlog()
+  else if (ui.view === 'search' && ui.searchScope === 'message-member') ui.view = 'thread'
   else if (ui.view === 'search' && ui.searchScope === 'blog-member') openBlog(ui.blogMember)
   else if (ui.view === 'search' && ui.searchScope === 'blog') {
     ui.searchScope = 'message'

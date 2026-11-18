@@ -4,14 +4,18 @@
   import { openMember, openBlog, ui } from '../lib/store.svelte'
   import { requireLogin } from '../lib/auth.svelte'
   import { fmtDateTime } from '../lib/format'
+  import { disp } from '../lib/display'
 
   let { archive }: { archive: Archive } = $props()
 
-  /* scope: the Talk page's bar searches messages (?type=message), the Blog
-     directory's searches all posts (?type=blog), a member's bar adds
-     ?member=<key> to stay inside their own blog */
-  const blogOnly = $derived(ui.searchScope !== 'message')
-  const scopedMember = $derived(ui.searchScope === 'blog-member' ? ui.blogMember : null)
+  /* scope: the Talk page's bar searches messages (?type=message); the Blog
+     directory's searches all posts (?type=blog); a member-scoped bar adds
+     ?member= plus the matching type — the blog member list for their posts,
+     the thread's search icon for their messages */
+  const blogCorpus = $derived(ui.searchScope === 'blog' || ui.searchScope === 'blog-member')
+  const scopedBlogMember = $derived(ui.searchScope === 'blog-member' ? ui.blogMember : null)
+  const scopedMsgMember = $derived(ui.searchScope === 'message-member' ? ui.slug : null)
+  const scopedMember = $derived(scopedBlogMember ?? scopedMsgMember)
 
   let input = $state<HTMLInputElement | undefined>()
   const q = $derived(ui.query.trim())
@@ -42,15 +46,21 @@
   const memberBySlug = $derived.by(() => new Map(archive.members.map((m) => [m.slug, m])))
   const blogByKey = $derived.by(() => new Map((archive.blogs?.members ?? []).map((m) => [m.key, m])))
   const scopedName = $derived(
-    scopedMember ? (blogByKey.get(scopedMember)?.name ?? scopedMember.replace(/_/g, ' ')) : null,
+    scopedBlogMember ? (blogByKey.get(scopedBlogMember)?.name ?? scopedBlogMember.replace(/_/g, ' ')) : null,
   )
+  const scopedMsgName = $derived.by(() => {
+    if (!scopedMsgMember) return null
+    const m = memberBySlug.get(scopedMsgMember)
+    if (!m) return scopedMsgMember.replace(/_/g, ' ')
+    return ui.site === 'sakurazaka46' ? m.name : disp(m)
+  })
 
   /* client-side fallback scan (messages only — blog bodies aren't in index.json).
      Only valid while the index still carries full texts (vite dev); once the
      server slims it, old texts aren't on the client and search is server-only. */
   type LocalHit = { m: Member; msg: Msg }
   const localHits = $derived.by(() => {
-    if (!q || blogOnly || results?.available || archive.textsTruncated) return [] as LocalHit[]
+    if (!q || blogCorpus || scopedMsgMember || results?.available || archive.textsTruncated) return [] as LocalHit[]
     const needle = q.toLowerCase()
     const out: LocalHit[] = []
     for (const mem of archive.members) {
@@ -68,7 +78,7 @@
   let seq = 0
   $effect(() => {
     const query = q
-    const scoped = blogOnly // re-run when the scope flips too
+    const scoped = blogCorpus // re-run when the scope flips too
     const member = scopedMember
     seq++
     const mySeq = seq
@@ -121,8 +131,9 @@
   }
 
   const goBack = () => {
-    if (ui.searchScope === 'blog-member') openBlog(ui.blogMember)
-    else if (blogOnly) {
+    if (ui.searchScope === 'message-member') ui.view = 'thread'
+    else if (ui.searchScope === 'blog-member') openBlog(ui.blogMember)
+    else if (blogCorpus) {
       ui.searchScope = 'message'
       openBlog()
     } else ui.view = 'home'
@@ -135,7 +146,7 @@
   <button class="ic back" aria-label="back" onclick={goBack}>
     <i class="fa-solid fa-chevron-left"></i>
   </button>
-  <span class="title-left">{blogOnly ? 'Blog search' : 'Search'}</span>
+  <span class="title-left">{blogCorpus ? 'Blog search' : 'Search'}</span>
   <span class="sp"></span>
 </header>
 
@@ -146,9 +157,11 @@
     bind:value={ui.query}
     placeholder={scopedName
       ? `search ${scopedName}'s blog posts`
-      : blogOnly
-        ? 'ブログを検索 / search blog posts'
-        : 'キーワード / keyword'}
+      : scopedMsgName
+        ? `search ${scopedMsgName}'s messages`
+        : blogCorpus
+          ? 'ブログを検索 / search blog posts'
+          : 'キーワード / keyword'}
     aria-label="search"
   />
 </div>
@@ -157,8 +170,10 @@
   <div class="col">
   {#if !q}
     <p class="muted-note">
-      {#if blogOnly}
+      {#if blogCorpus}
         {scopedName ? `searching ${scopedName}'s blog posts` : 'ブログ記事を検索 / searching blog posts'}
+      {:else if scopedMsgName}
+        searching {scopedMsgName}'s messages
       {:else}
         {archive.totals.messages} 件のメッセージから検索 / searching {archive.totals.messages} messages
       {/if}
@@ -199,9 +214,9 @@
         {/if}
       {/if}
     {/if}
-  {:else if searching && (blogOnly || archive.textsTruncated)}
+  {:else if searching && (blogCorpus || archive.textsTruncated)}
     <p class="muted-note">検索中…</p>
-  {:else if blogOnly}
+  {:else if blogCorpus}
     <p class="muted-note">ブログ検索にはアーカイブサーバーが必要 / blog search needs the archive server</p>
   {:else if archive.textsTruncated}
     <p class="muted-note">検索にはアーカイブサーバーが必要 / search needs the archive server</p>
