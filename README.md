@@ -122,10 +122,10 @@ exact matches are FTS5 with reading-aware matching, and the おすすめ / relat
 section ranks posts and messages by embedding similarity (fully local — no
 API, content never leaves the box). The index lives in the `viewer-db`
 volume (stays warm across deploys) and the embedding model in `viewer-model`
-(downloads ~120 MB once). The current model is `Xenova/multilingual-e5-small`
-(384d); `viewer/scripts/eval-semantic.mjs` benchmarks it against larger
-multilingual models on a labeled cross-lingual query set — see the viewer
-README's *Semantic model evaluation* for the results.
+(downloads ~279 MB once). The model is `yuiseki/granite-embedding-278m-multilingual`
+(768d); `viewer/scripts/eval-semantic.mjs` benchmarks it against e5-small and
+bge-m3 on a labeled cross-lingual query set — see the viewer README's
+*Semantic model evaluation* for the results.
 
 ### 1.2 Deploy to a server
 
@@ -305,7 +305,7 @@ files skipped, single-instance lock) — safe to kill and re-run.
 | `viewer/` | the web viewer — **`viewer/README.md`** has the deep-dive |
 | `viewer/scripts/db.mjs` | derived SQLite search index (§1.1) |
 | `viewer/scripts/tokenize.mjs` | kuromoji wrapper — hiragana readings for the reading columns |
-| `viewer/scripts/embed.mjs` | local ONNX embedder (multilingual-e5-small q8) for the semantic section |
+| `viewer/scripts/embed.mjs` | local ONNX embedder (granite-embedding-278m-multilingual q8; e5/bge selectable) for the semantic section |
 | `docs/api.md` | reverse-engineered API reference (auth, endpoints, schemas, pagination) |
 | `logs/` | tokens, session cookies, blog roster cache |
 | `deploy.sh` | push + rebuild + health-check (§1.2) |

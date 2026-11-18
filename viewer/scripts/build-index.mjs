@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { openSearchDb, readDbMeta } from './db.mjs'
+import { dbSignature, openSearchDb, readDbMeta } from './db.mjs'
 import { buildTokenizer } from './tokenize.mjs'
 import { buildEmbedder } from './embed.mjs'
 import { fileURLToPath } from 'node:url'
@@ -518,7 +518,13 @@ if (!contentChanged) {
 // Skipped only when the DB itself carries this exact content hash — a hash
 // match on index.json alone is not enough, because a killed sync leaves
 // partial progress (per-member commits) that must heal on the next build.
-if (!contentChanged && fs.existsSync(DB_PATH) && readDbMeta(DB_PATH, 'content_hash') === hash) {
+const dbSig = dbSignature()
+if (
+  !contentChanged &&
+  fs.existsSync(DB_PATH) &&
+  readDbMeta(DB_PATH, 'content_hash') === hash &&
+  readDbMeta(DB_PATH, 'build_sig') === dbSig
+) {
   say(`search DB already in sync — skipped`)
 } else {
   const tokenize = await buildTokenizer(say) // null ⇒ surface-only search
@@ -533,6 +539,10 @@ if (!contentChanged && fs.existsSync(DB_PATH) && readDbMeta(DB_PATH, 'content_ha
       // mark only after both syncs completed — a kill must leave the DB
       // unmarked so the next build retries
       db.setMeta('content_hash', hash)
+      // only pin the build signature once an embedder actually loaded —
+      // otherwise a transient model-download failure would mark the DB "in
+      // sync" with no vectors and never retry
+      if (embedder) db.setMeta('build_sig', dbSig)
       say(
         `db: posts +${ps.added}/~${ps.updated}/-${ps.removed} (${ps.unchanged} unchanged), ` +
           `messages +${ms.added}/~${ms.updated}/-${ms.removed} (${ms.unchanged} unchanged)` +

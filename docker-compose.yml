@@ -33,6 +33,7 @@ services:
       LOGS_DIR: /data/logs
       DB_PATH: /data/db/index.sqlite
       MODEL_DIR: /data/model
+      EMBED_MODEL: ${EMBED_MODEL:-granite}   # e5|granite|bge (viewer/scripts/embed.mjs)
       UPLOAD_TOKEN: ${UPLOAD_TOKEN:-}   # unset = endpoint disabled
       VIEWER_PASSWORD: ${VIEWER_PASSWORD:-}  # unset = no login gate (blog + talk both public)
     restart: unless-stopped

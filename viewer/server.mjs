@@ -146,10 +146,12 @@ const getEmbedder = () =>
     .then((m) => m.buildEmbedder(say))
     .catch(() => null))
 
-/* semantic cutoffs: e5-small's absolute cosines run high (anisotropy), so the
-   floor alone can't separate — hits must also be within GAP of the best hit.
-   Both tunable per env (stage 6 tunes them with logged distributions). */
-const SEMANTIC_MIN_COS = Number(process.env.SEMANTIC_MIN_COS) || 0.65
+/* semantic cutoffs: absolute cosines are model-specific (median body-chunk cos
+   ≈0.83 e5-small / 0.59 granite / 0.39 bge-m3), so the default tracks the
+   configured model — here granite-embedding-278m (the scripts/eval-semantic
+   harness). The floor alone can't separate, so hits must also be within GAP of
+   the best hit. Both tunable per env. */
+const SEMANTIC_MIN_COS = Number(process.env.SEMANTIC_MIN_COS) || 0.45
 const SEMANTIC_GAP = Number(process.env.SEMANTIC_GAP) || 0.06
 /* unscoped (mixed-corpus) related budgets per group; a scoped search gives the
    active group the full 20 */
@@ -792,8 +794,11 @@ const app = http.createServer(async (req, res) => {
               (JSON.parse(readIndexJson() ?? '[]')?.members ?? []).map((m) => [m.slug, m]),
             )
             // scoped search needs a wider net: most of the nearest chunks can
-            // belong to other members, even though only this member is shown
-            const knnLimit = memberKey ? 200 : 60
+            // belong to other members, even though only this member is shown.
+            // ~280-char chunks (plus a title vector) roughly double the vector
+            // count vs the old 480s, so the limits are sized to still cover the
+            // same number of distinct posts.
+            const knnLimit = memberKey ? 800 : 150
             const knnPosts = db
               .prepare(`SELECT rowid, distance FROM vec_posts WHERE embedding MATCH ? ORDER BY distance LIMIT ${knnLimit}`)
               .all(qbuf)
