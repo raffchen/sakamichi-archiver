@@ -207,6 +207,58 @@ indexed into `index.json` as `blogs.members[]`:
   list endpoint strips HTML to a 140-char lead and the detail endpoint returns
   the full post
 
+## Semantic model evaluation
+
+The `related` section is only as good as its embedding model. `scripts/eval-semantic.mjs`
+is a dev-only harness that scores a model + chunking configuration against
+three query sets (vectors are built in memory with the real q8 ONNX models;
+nothing touches the search DB):
+
+- **title / excerpt** (automatic, ~1000 queries): a post's cleaned title, and a
+  40-char window from the middle of its body, must retrieve that post —
+  measuring title signal and body-localization granularity
+- **labeled** (`scripts/eval-queries.json`, 33 queries): hand-written English
+  and reworded Japanese queries with recorded target post(s), deliberately not
+  substrings so they exercise semantic rather than lexical matching. Only the
+  listed targets count, so absolute numbers are pessimistic but comparable
+  across configurations
+
+```sh
+node --no-warnings scripts/eval-semantic.mjs --model=e5       # current: multilingual-e5-small (384d)
+node --no-warnings scripts/eval-semantic.mjs --model=granite  # granite-embedding-278m-multilingual (768d)
+node --no-warnings scripts/eval-semantic.mjs --model=bge      # bge-m3 (1024d)
+```
+
+Model comparison on the current 522-post archive (current 480-char chunking,
+so only the model varies; MRR / R@5 on the labeled set, mean rank on excerpt):
+
+| model | labeled MRR | labeled R@5 | excerpt meanRank |
+|---|---|---|---|
+| e5-small (384d, current) | 0.376 | 0.485 | 78.7 |
+| granite-278m (768d) | 0.521 | 0.667 | 54.2 |
+| bge-m3 (1024d) | 0.638 | 0.727 | 62.6 |
+
+Findings:
+
+- **e5-small is clearly the weakest** on cross-lingual paraphrase queries;
+  both larger XLM-R models beat it substantially.
+- **bge-m3 is the strongest cross-lingual** retriever and most consistent on the
+  labeled set, but it is ~2× the size of granite (570 vs 279 MB) and ~3–4×
+  slower to embed on CPU (roughly 10× e5-small) — heavier rebuilds and a
+  slower `related` section.
+- **granite-embedding-278m is the pragmatic upgrade**: best body localization
+  here, near-bge cross-lingual quality, at a fraction of the cost.
+- **Model conventions differ** and must be wired per model: e5 uses **mean**
+  pooling with `query:`/`passage:` prefixes; bge-m3 and granite use **CLS**
+  pooling + L2 norm and no prefixes. Cosine scales differ sharply (body-chunk
+  median ≈ 0.83 e5 / 0.59 granite / 0.39 bge), so **`SEMANTIC_MIN_COS` must be
+  recalibrated on any switch** — the current `0.65` is e5-tuned and would
+  nearly empty the `related` section for bge-m3.
+
+The same harness also settled the chunking design (small ~280-char chunks, a
+separate *cleaned*-title vector per post, no ASCII-space joins); run it with
+no `--model` filter to see the full variant table.
+
 ## Login gate (production container)
 
 Set `VIEWER_PASSWORD` in the environment and the **Talk/message side requires
