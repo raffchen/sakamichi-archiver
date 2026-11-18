@@ -24,9 +24,10 @@
 
   let routed = $state(false)
 
-  /* the login gate covers every talk view; blog views (and blog-scope search)
-     are public. ui.view === 'media' is a message lightbox — gated. */
-  const talkView = $derived(!(ui.view === 'blog' || (ui.view === 'search' && ui.searchScope === 'blog')))
+  /* the login gate covers every talk view; blog views (both blog searches,
+     directory-wide and per-member) are public. A message lightbox is gated. */
+  const publicBlogSearch = $derived(ui.view === 'search' && ui.searchScope !== 'message')
+  const talkView = $derived(!(ui.view === 'blog' || publicBlogSearch))
 
   /* the active site drives the whole theme (purple / pale pink) */
   $effect(() => {
@@ -36,7 +37,7 @@
        intentionally lingers when a blog is open, so the blog view must be
        checked first */
     let who: string
-    if (ui.view === 'blog' || (ui.view === 'search' && ui.searchScope === 'blog')) {
+    if (ui.view === 'blog' || publicBlogSearch) {
       const b = archive.blogs?.members.find((m) => m.key === ui.blogMember)
       who = ui.blogMember ? (b?.name ?? ui.blogMember.replace(/_/g, ' ')) : 'Blogs'
     } else if (current) {
@@ -68,7 +69,7 @@
     const parts = location.hash.replace(/^#\/?/, '').split('/')
     /* 'site' is the pre-2026-02 name of the talk-directory route — kept as a
        legacy alias so old shared links still resolve */
-    const route = (parts[0] || 'talk') as View | 'talk' | 'site' | 'media' | 'blog-search'
+    const route = (parts[0] || 'talk') as View | 'talk' | 'site' | 'media' | 'blog-search' | 'blog-member-search'
     const slug = parts[1] ? decodeURIComponent(parts[1]) : null
     const focus = parts[2] ? Number(parts[2]) : null
     const hit = slug ? archive.members.find((m) => m.slug === slug) : null
@@ -134,12 +135,23 @@
           if (bm?.site) ui.site = bm.site
         }
       }
-    } else if (route === 'search' || route === 'blog-search') {
+    } else if (route === 'search' || route === 'blog-search' || route === 'blog-member-search') {
       ui.view = 'search'
-      /* #/blog-search — the Blog tab's scoped search (back returns to Blogs) */
-      ui.searchScope = window.location.hash.startsWith('#/blog-search') ? 'blog' : 'message'
       ui.slug = null
       ui.focusId = null
+      ui.blogPost = null
+      /* #/blog-search — directory-wide; #/blog-member-search/<key> — one
+         member's posts (back returns to that member's list). The key also
+         adopts its site theme on reload/deep link. */
+      if (route === 'blog-member-search' && slug) {
+        ui.searchScope = 'blog-member'
+        ui.blogMember = slug
+        const bm = archive.blogs?.members.find((b) => b.key === slug)
+        if (bm?.site) ui.site = bm.site
+      } else {
+        ui.searchScope = route === 'blog-search' ? 'blog' : 'message'
+        ui.blogMember = null
+      }
     } else {
       ui.view = 'home'
       ui.slug = null
@@ -162,12 +174,15 @@
     }
   })
 
+  function searchHash() {
+    if (ui.searchScope === 'blog-member') return `#/blog-member-search/${encodeURIComponent(ui.blogMember ?? '')}`
+    if (ui.searchScope === 'blog') return '#/blog-search'
+    return hashFor('search', ui.slug, ui.focusId)
+  }
+
   $effect(() => {
     if (!routed) return
-    const want =
-      ui.view === 'blog'
-        ? blogHash()
-        : hashFor((ui.view === 'search' && ui.searchScope === 'blog' ? 'blog-search' : ui.view) as View, ui.slug, ui.focusId)
+    const want = ui.view === 'blog' ? blogHash() : ui.view === 'search' ? searchHash() : hashFor(ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
     /* on the media route, every change (next/prev, ✕/Back-close) edits the
        same history entry — Back exits the viewer in one step; opening the

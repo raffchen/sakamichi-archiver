@@ -60,6 +60,7 @@ Hash routes, so Back / reload / pasting a link all work:
 #/gallery/<member-slug>            that member's media
 #/search                           two-section search (messages + blog posts)
 #/blog-search                      blog-only search (opened from the Blogs header)
+#/blog-member-search/<member-key>  one member's blog posts only (back returns to their list)
 #/blog                             → rewritten to #/blog/<current-site>
 #/blog/<site-key>                  Blog directory for a site (e.g. #/blog/sakurazaka46)
 #/blog/<member-key>                one member's blog post list
@@ -147,11 +148,15 @@ thing; the whole UI renders at a 125% app zoom, `--app-zoom` in `app.css`).
   are a 4-per-row square grid grouped in ascending month sections, with
 duration badges on videos; the Voice tab is a flat list with unread dots and
 a bottom player bar (leaving the tab stops playback)
-- **Search** — two search bars, two scopes: the Talk page's bar searches
+- **Search** — three search bars, three scopes: the Talk page's bar searches
   **messages**; the Blog tab's search bar (under the site pills) searches
-  **blog posts** (`#/blog-search`, back returns to Blogs). The scope applies
-  to both sections — each bar searches its own corpus exactly and semantically.
-  Both hit the same server search (`/api/search?type=message|blog`) and get
+  **blog posts** (`#/blog-search`, back returns to Blogs); the bar above a
+  member's post list searches just **that member's posts**
+  (`#/blog-member-search/<member-key>`, back returns to their list). The scope
+  applies to both sections — each bar searches its own corpus exactly and
+  semantically. They hit the same server search
+  (`/api/search?type=message|blog`, plus `&member=<key>` for a member's bar)
+  and get
   two sections: `完全一致 / exact matches` via FTS5 (trigram tokenizer — real
   substring matching for Japanese; 1–2 char words go through an `instr()`
   path), `<mark>`-highlighted snippets, Blog/Message type badges, debounced
@@ -175,7 +180,8 @@ a bottom player bar (leaving the tab stops playback)
   (`/api/blog?site=&limit=&order=`). Site switcher pills; the directory URL
   carries the site (`#/blog/sakurazaka46`) so each site's blogs are
   linkable. Member view is a thumbnail post list (pink title, two-line
-  lead, stamp). Post view renders the archived HTML; tapping an image opens
+  lead, stamp) with a `search <member>'s blog posts` bar that opens the
+  member-scoped search. Post view renders the archived HTML; tapping an image opens
   the same shared lightbox as message media (counter, download, Esc/backdrop
   close) with the post title as the caption.
 
@@ -238,7 +244,7 @@ index from disk):
 | `GET /api/version` | index build stamp — clients poll it and reload when the index changes |
 | `GET /api/index` | the built `index.json`, **slimmed**: message texts for all but the 5 most recent messages per member are dropped (`textsTruncated` flags mark it) — keeps the payload flat as the archive grows |
 | `GET /api/member/<slug>` | one member, full texts — thread/gallery fetch this when the slim index says `textsTruncated` |
-| `GET /api/search` | two-section search (`?q=&limit=&type=message\|blog`) — FTS5 exact + semantic `related` (stage 5/6); `SEMANTIC_LOG=1` logs score distributions |
+| `GET /api/search` | two-section search (`?q=&limit=&type=message\|blog`, optional `member=<blog member key>` to filter posts to one author) — FTS5 exact + semantic `related` (stage 5/6); `SEMANTIC_LOG=1` logs score distributions |
 | `GET /api/blog` | newest-posts feed — served from the search DB when present (O(1); thumbs + lead included), file-scan fallback otherwise |
 | `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead`; paginated — `?limit=` (default 25, max 200) + `?offset=`, response includes `total` |
 | `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/<site>/blogs/...`) + `prev`/`next` neighbor stubs (id + title) — the post footer chains from these since the list route is paginated |
