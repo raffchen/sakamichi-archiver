@@ -3,7 +3,7 @@
   import type { Archive, Member, Msg } from '../lib/types'
   import { openMember, openBlog, ui } from '../lib/store.svelte'
   import { requireLogin } from '../lib/auth.svelte'
-  import { fmtDateTime } from '../lib/format'
+  import { fmtFull } from '../lib/format'
   import { disp } from '../lib/display'
 
   let { archive }: { archive: Archive } = $props()
@@ -232,7 +232,7 @@
       >
         <img class="ava" src={h.m.avatar ?? h.m.home ?? ''} alt="" loading="lazy" />
         <span>
-          <span class="m">{h.m.roman ?? h.m.name} · {fmtDateTime(h.msg.at)} · {h.msg.type}</span>
+          <span class="m">{h.m.roman ?? h.m.name} · {fmtFull(h.msg.at)} · {h.msg.type}</span>
           <span class="t">
             {#each localParts(h.msg.text ?? '') as p}
               {#if p.hit}<mark>{p.s}</mark>{:else}{p.s}{/if}
@@ -263,7 +263,7 @@
       <span class="m">
         <span class="badge" class:blog={h.type === 'blog'}>{h.type === 'blog' ? 'Blog' : 'Message'}</span>
         {(h.type === 'blog' ? blogByKey.get(h.key ?? '')?.name : memberBySlug.get(h.slug ?? '')?.name) ?? h.member}
-        · {h.type === 'blog' ? (h.at ?? '').slice(0, 10) : h.at ? fmtDateTime(h.at) : ''}{#if h.type === 'message'} · {h.mtype}{/if}
+        · {h.type === 'blog' ? (h.at ?? '').slice(0, 10) : h.at ? fmtFull(h.at) : ''}{#if h.type === 'message'} · {h.mtype}{/if}
       </span>
       {#if h.type === 'blog' && h.title}
         <span class="t">{h.title}</span>

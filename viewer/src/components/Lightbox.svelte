@@ -2,7 +2,7 @@
   import { fade } from 'svelte/transition'
   import { keynav, noPageZoom } from '../lib/actions'
   import { closeLightbox, claimMedia, releaseMedia, lightbox, stepLightbox } from '../lib/store.svelte'
-  import { fmtDateTime } from '../lib/format'
+  import { fmtFull } from '../lib/format'
   import { icon } from '../lib/icons'
   import { loadVolume, saveVolume, loadPosition, savePosition, clearPosition } from '../lib/mediaPersist'
 
@@ -493,7 +493,7 @@
 >
   <div class="lb-top">
     <span>{lightbox.i + 1} / {n}</span>
-    {#if m}<span>{fmtDateTime(m.at)}</span> · <span>{m.type}</span>{/if}
+    {#if m}<span>{fmtFull(m.at)}</span> · <span>{m.type}</span>{/if}
     {#if m?.file || m?.thumb}
       <a class="dl" href={m.file ?? m.thumb!} download={fileName(m)} aria-label="download" title="download">{@html icon('download')}</a>
     {/if}
