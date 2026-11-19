@@ -1273,6 +1273,11 @@ body:has(.sheet.login) .sheet {
   color: var(--accent);
   font-weight: 700;
 }
+/* settings toggles keep their check visible even when off — greyed out */
+.blog-sort-menu button.off svg {
+  color: var(--ink);
+  opacity: 0.25;
+}
 .blog-sort-menu button svg {
   width: 15px;
   height: 15px;

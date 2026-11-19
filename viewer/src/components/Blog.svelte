@@ -150,9 +150,15 @@
         onclick={() => (settingsOpen = false)}
       ></button>
       <div class="blog-sort-menu" role="menu">
-        <button role="menuitemcheckbox" aria-checked={ui.blogHideGraduated} class:on={ui.blogHideGraduated} onclick={toggleGrad}>
-          <span>卒業生を隠す</span>
-          {#if ui.blogHideGraduated}{@html icon('check')}{/if}
+        <button
+          role="menuitemcheckbox"
+          aria-checked={ui.blogHideGraduated}
+          class:on={ui.blogHideGraduated}
+          class:off={!ui.blogHideGraduated}
+          onclick={toggleGrad}
+        >
+          <span>Hide graduated members</span>
+          {@html icon('check')}
         </button>
       </div>
     {/if}
