@@ -5,7 +5,7 @@
      the directory sort: generation (either direction), flat by name, or the
      official "newest posts" cross-member feed. */
   import type { Archive, BlogMemberInfo } from '../lib/types'
-  import { openBlog, setHideGraduated, ui, type BlogSort } from '../lib/store.svelte'
+  import { openBlog, setHideGraduated, toggleTheme, ui, type BlogSort } from '../lib/store.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
   import BlogMember from './BlogMember.svelte'
@@ -131,6 +131,14 @@
       onclick={() => ((settingsOpen = !settingsOpen), (menuOpen = false))}
     >
       {@html icon('gear')}
+    </button>
+    <!-- dark-mode toggle, rightmost like on the Talk header -->
+    <button
+      class="ic"
+      aria-label={ui.theme === 'dark' ? 'ライトモード / light mode' : 'ダークモード / dark mode'}
+      onclick={toggleTheme}
+    >
+      {@html icon(ui.theme === 'dark' ? 'sun' : 'moon')}
     </button>
     {#if menuOpen}
       <button class="menu-backdrop" aria-label="close menu" onclick={() => (menuOpen = false)}></button>

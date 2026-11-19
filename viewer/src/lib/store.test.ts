@@ -408,3 +408,37 @@ describe('setArchive (in-place swap, docs/inplace-reindex.md)', () => {
     expect(store.getMember(a2, 'teresa-ikeda')).toBe(a2.members[0])
   })
 })
+
+describe('theme (dark mode preference)', () => {
+  it('defaults to light; toggleTheme flips and persists', () => {
+    expect(store.ui.theme).toBe('light')
+    store.toggleTheme()
+    expect(store.ui.theme).toBe('dark')
+    expect(localStorage.getItem('sakamichi-viewer:theme')).toBe('dark')
+    store.toggleTheme()
+    expect(store.ui.theme).toBe('light')
+    expect(localStorage.getItem('sakamichi-viewer:theme')).toBeNull() // light = no key
+  })
+
+  it('setTheme accepts explicit values', () => {
+    store.setTheme('dark')
+    expect(store.ui.theme).toBe('dark')
+    store.setTheme('light')
+    expect(store.ui.theme).toBe('light')
+    expect(localStorage.getItem('sakamichi-viewer:theme')).toBeNull()
+  })
+
+  it('restores the dark preference on load', async () => {
+    localStorage.setItem('sakamichi-viewer:theme', 'dark')
+    vi.resetModules()
+    store = await import('./store.svelte')
+    expect(store.ui.theme).toBe('dark')
+  })
+
+  it('anything but "dark" falls back to light', async () => {
+    localStorage.setItem('sakamichi-viewer:theme', 'DARK') // exact-match check
+    vi.resetModules()
+    store = await import('./store.svelte')
+    expect(store.ui.theme).toBe('light')
+  })
+})

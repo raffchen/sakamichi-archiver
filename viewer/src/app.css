@@ -27,6 +27,24 @@
   --line: #ececef;
   --desk: #e8e8ee;
   --bar: #f8f8f9;
+  /* elevated surfaces (menus, sheet cards, popovers) — sit above --page */
+  --raise: #ffffff;
+  /* site-switch pills */
+  --pill-bg: #f1f1f4;
+  --pill-ink: #7c7c82;
+  /* search input */
+  --input-bg: #f6f6f8;
+  /* pressed/hover feedback on chrome */
+  --press: rgba(0, 0, 0, 0.05);
+  /* image placeholder / loading tile */
+  --ph: #dcdce2;
+  /* slider & scrubber unfilled track */
+  --track: #d9dce3;
+  /* search-hit highlight */
+  --mark-bg: #ffe9a8;
+  /* inactive tab-bar icons */
+  --tab-ink: #b4b4b9;
+  color-scheme: light;
 }
 /* continuous UI scale replacing the 1:1 fallback above (see the comment in
    :root). tan(atan2()) is the CSS idiom for the ratio of two lengths (calc
@@ -53,6 +71,32 @@ html[data-site='sakurazaka46'] {
   --section: #de8fa9;
   --ava-bg: #4d648a;
   --badge: #e2879f;
+}
+
+/* ---------- dark mode ----------
+   Set on <html> as data-theme (index.html inline script pre-paint; App keeps
+   it in sync). Surfaces invert; the per-site headers/acents above keep their
+   official-app colors in both themes (sakura's pale pink header is a pending
+   decision). color-scheme follows so native scrollbars/controls do too. */
+html[data-theme='dark'] {
+  --page: #19191d;
+  --ink: #e8e8ee;
+  --muted: #96969e;
+  --bubble: #26262c;
+  --bubble-ink: #e4e4ea;
+  --line: #2c2c32;
+  --desk: #0b0b0e;
+  --bar: #202026;
+  --raise: #24242b;
+  --pill-bg: #2c2c33;
+  --pill-ink: #9c9ca4;
+  --input-bg: #24242b;
+  --press: rgba(255, 255, 255, 0.08);
+  --ph: #33333a;
+  --track: #3c3c44;
+  --mark-bg: #64511a;
+  --tab-ink: #787880;
+  color-scheme: dark;
 }
 
 * {
@@ -203,8 +247,8 @@ img {
   border-radius: 999px;
   font-size: 13.5px;
   font-weight: 700;
-  background: #f1f1f4;
-  color: #7c7c82;
+  background: var(--pill-bg);
+  color: var(--pill-ink);
 }
 .sites button.on {
   background: var(--accent);
@@ -291,7 +335,7 @@ img {
   padding: 18px 12px 2px;
 }
 .sec.dark {
-  color: #2f2f33;
+  color: var(--ink);
 }
 .rule {
   height: 1px;
@@ -363,7 +407,7 @@ img {
   padding: 9px 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #f6f6f8;
+  background: var(--input-bg);
   font: inherit;
   font-size: 14.5px;
 }
@@ -396,7 +440,7 @@ img {
   margin-bottom: 3px;
 }
 .hit mark {
-  background: #ffe9a8;
+  background: var(--mark-bg);
   color: inherit;
 }
 
@@ -456,14 +500,14 @@ img {
 .msg .kebab:hover,
 .msg .kebab[aria-expanded='true'] {
   color: var(--ink);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--press);
 }
 .msg .menu {
   position: absolute;
   top: calc(100% + 2px);
   right: 0;
   z-index: 30;
-  background: #fff;
+  background: var(--raise);
   border-radius: 10px;
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.16),
@@ -521,7 +565,7 @@ img {
   border-radius: 10px;
   width: 100%;
   cursor: zoom-in;
-  background: #dcdce2;
+  background: var(--ph);
 }
 .shot-btn {
   display: flex;
@@ -613,7 +657,7 @@ img {
   bottom: calc(100% + 4px);
   left: 50%;
   transform: translateX(-50%);
-  background: #fff;
+  background: var(--raise);
   border-radius: 12px;
   padding: 10px 5px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
@@ -647,7 +691,7 @@ img {
   appearance: none;
   -webkit-appearance: none;
   border-radius: 2px;
-  background: linear-gradient(to top, var(--accent) var(--v, 100%), #d9dce3 var(--v, 100%));
+  background: linear-gradient(to top, var(--accent) var(--v, 100%), var(--track) var(--v, 100%));
   cursor: pointer;
 }
 .vol-slider::-webkit-slider-thumb {
@@ -699,7 +743,7 @@ img {
   appearance: none;
   -webkit-appearance: none;
   border-radius: 2px;
-  background: linear-gradient(to right, var(--accent) var(--p, 0%), #d9dce3 var(--p, 0%));
+  background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--track) var(--p, 0%));
   cursor: pointer;
   min-width: 0;
 }
@@ -729,9 +773,9 @@ img {
   text-align: right;
 }
 .missing {
-  color: #9a9aa0;
+  color: var(--muted);
   font-size: 13.5px;
-  background: #f4f4f6;
+  background: var(--bubble);
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -741,7 +785,7 @@ img {
   align-items: center;
   gap: 10px;
   margin: 20px 14px 14px;
-  color: #9c9ca2;
+  color: var(--muted);
   font-size: 12.5px;
   /* scroll-into-view landing pad: the divider opens the thread */
   scroll-margin-top: 14px;
@@ -787,7 +831,7 @@ img {
 .tabs-row button {
   position: relative;
   padding: 10px 22px 9px;
-  color: #b4b4b9;
+  color: var(--tab-ink);
 }
 .tabs-row button svg {
   width: 26px;
@@ -826,7 +870,7 @@ img {
   margin: 0;
   border-radius: 6px;
   overflow: hidden;
-  background: #e6e6ea;
+  background: var(--ph);
   aspect-ratio: 1;
 }
 .mgrid .gbtn img {
@@ -1166,7 +1210,7 @@ img {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  color: #b4b4b9;
+  color: var(--tab-ink);
   font-size: 11.5px;
   position: relative;
 }
@@ -1222,7 +1266,7 @@ body:has(.sheet.login) .sheet {
      rendered max-height stays 78dvh and the card never exceeds the window */
   width: calc(100% / var(--app-zoom));
   max-width: var(--phone-w);
-  background: #fff;
+  background: var(--raise);
   border-radius: 16px 16px 0 0;
   padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
   max-height: calc(78dvh / var(--app-zoom));
@@ -1264,7 +1308,7 @@ body:has(.sheet.login) .sheet {
   line-height: 1.8;
 }
 .fatal code {
-  background: #f1f1f4;
+  background: var(--pill-bg);
   padding: 2px 6px;
   border-radius: 5px;
 }
@@ -1293,7 +1337,7 @@ body:has(.sheet.login) .sheet {
   right: 10px;
   z-index: 31;
   min-width: 180px;
-  background: #fff;
+  background: var(--raise);
   border-radius: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   padding: 6px;
