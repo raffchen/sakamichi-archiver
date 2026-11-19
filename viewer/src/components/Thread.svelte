@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { fade } from 'svelte/transition'
   import type { Archive, Member, Msg } from '../lib/types'
-  import { markSeen, openGallery, openMemberSearch, seenAt, showLightbox, ui, ensureFullTexts } from '../lib/store.svelte'
+  import { markSeen, openGallery, openMemberSearch, seenAt, showLightbox, toggleTheme, ui, ensureFullTexts } from '../lib/store.svelte'
   import { dayKey, fmtDayLabel } from '../lib/format'
   import { disp } from '../lib/display'
   import { sentinel } from '../lib/actions'
@@ -123,6 +123,15 @@
     onclick={() => openGallery(member.slug)}
   >
     <i class="fa-solid fa-images"></i>
+  </button>
+  <!-- dark-mode toggle, rightmost like on the blog screens -->
+  <button
+    class="ic"
+    title={ui.theme === 'dark' ? 'ライトモード / light mode' : 'ダークモード / dark mode'}
+    aria-label={ui.theme === 'dark' ? 'ライトモード / light mode' : 'ダークモード / dark mode'}
+    onclick={toggleTheme}
+  >
+    {@html icon(ui.theme === 'dark' ? 'sun' : 'moon')}
   </button>
 </header>
 

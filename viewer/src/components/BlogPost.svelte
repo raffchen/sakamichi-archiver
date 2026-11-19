@@ -3,9 +3,10 @@
      post HTML with locally archived images. Tapping an image opens the shared
      global lightbox (same viewer as message media). */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { back, openBlog, showBlogLightbox, ui } from '../lib/store.svelte'
+  import { back, openBlog, showBlogLightbox, toggleTheme, ui } from '../lib/store.svelte'
   import { fmtFull } from '../lib/format'
   import { normalizeBlogContent } from '../lib/blog-html'
+  import { icon } from '../lib/icons'
 
   let { archive }: { archive: Archive } = $props()
 
@@ -60,7 +61,15 @@
     <i class="fa-solid fa-chevron-left"></i>
   </button>
   <h1>{entry?.creator ?? ''}</h1>
-  <span class="sp"></span>
+  <!-- dark-mode toggle in the trailing slot — keeps the title centered, and
+       the theme is reachable on every blog screen -->
+  <button
+    class="ic"
+    aria-label={ui.theme === 'dark' ? 'ライトモード / light mode' : 'ダークモード / dark mode'}
+    onclick={toggleTheme}
+  >
+    {@html icon(ui.theme === 'dark' ? 'sun' : 'moon')}
+  </button>
 </header>
 
 <div class="screen" bind:this={screen}>
