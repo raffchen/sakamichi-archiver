@@ -9,6 +9,16 @@ export type View = 'home' | 'thread' | 'gallery' | 'search' | 'blog'
    cross-member newest-posts feed */
 export type BlogSort = 'gen-asc' | 'gen-desc' | 'name-asc' | 'name-desc' | 'latest' | 'oldest'
 
+const HIDE_GRAD_KEY = 'sakamichi-viewer:blog-hide-graduated'
+
+function loadHideGraduated(): boolean {
+  try {
+    return localStorage.getItem(HIDE_GRAD_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export const ui = $state({
   view: 'home' as View,
   slug: null as string | null,
@@ -25,7 +35,19 @@ export const ui = $state({
   blogPage: 1 as number, // member-list page (1-based); baked into the URL as #/blog/<key>/p/<n>
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
+  /* directory setting: hide graduated members' cards (the ⚙ menu). A device
+     preference, so it persists like volume does. */
+  blogHideGraduated: loadHideGraduated(),
 })
+
+export function setHideGraduated(v: boolean) {
+  ui.blogHideGraduated = v
+  try {
+    localStorage.setItem(HIDE_GRAD_KEY, v ? '1' : '0')
+  } catch {
+    /* private mode — the toggle just won't survive reloads */
+  }
+}
 
 export const lightbox = $state({
   open: false,

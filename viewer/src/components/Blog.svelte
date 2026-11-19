@@ -5,7 +5,7 @@
      the directory sort: generation (either direction), flat by name, or the
      official "newest posts" cross-member feed. */
   import type { Archive, BlogMemberInfo } from '../lib/types'
-  import { openBlog, ui, type BlogSort } from '../lib/store.svelte'
+  import { openBlog, setHideGraduated, ui, type BlogSort } from '../lib/store.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
   import BlogMember from './BlogMember.svelte'
@@ -14,7 +14,16 @@
   let { archive }: { archive: Archive } = $props()
 
   const siteKeys = $derived(Object.keys(archive.sites))
-  const siteMembers = $derived((archive.blogs?.members ?? []).filter((b) => b.site === ui.site))
+  const siteMembers = $derived(
+    (archive.blogs?.members ?? [])
+      .filter((b) => b.site === ui.site)
+      .filter((b) => !(ui.blogHideGraduated && b.graduated)),
+  )
+  /* every member key that's graduated — the newest-posts feed has no flag of
+     its own, only the directory key, so it filters against this set */
+  const graduatedKeys = $derived(
+    new Set((archive.blogs?.members ?? []).filter((b) => b.graduated).map((b) => b.key)),
+  )
 
   type SortId = BlogSort
   const sortOptions: { id: SortId; label: string }[] = [
@@ -85,14 +94,26 @@
     }
   })
 
+  /* the feed is filtered reactively (not at fetch time) so toggling the
+     setting doesn't refetch — it just reshapes what's already here */
+  const latestShown = $derived(
+    latest && ui.blogHideGraduated && graduatedKeys.size
+      ? latest.filter((p) => !graduatedKeys.has(p.key))
+      : latest,
+  )
+
   let menuOpen = $state(false)
+  let settingsOpen = $state(false)
   function pickSort(id: SortId) {
     ui.blogSort = id
     menuOpen = false
   }
+  function toggleGrad() {
+    setHideGraduated(!ui.blogHideGraduated)
+  }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (menuOpen = false)} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && ((menuOpen = false), (settingsOpen = false))} />
 
 {#if ui.blogPost != null && ui.blogMember}
   <BlogPost {archive} />
@@ -101,8 +122,15 @@
 {:else}
   <header class="head">
     <span class="title-left blog-title">Blogs</span>
-    <button class="ic" aria-label="sort" onclick={() => (menuOpen = !menuOpen)}>
+    <button class="ic" aria-label="sort" onclick={() => ((menuOpen = !menuOpen), (settingsOpen = false))}>
       {@html icon('sort')}
+    </button>
+    <button
+      class="ic"
+      aria-label="settings"
+      onclick={() => ((settingsOpen = !settingsOpen), (menuOpen = false))}
+    >
+      {@html icon('gear')}
     </button>
     {#if menuOpen}
       <button class="menu-backdrop" aria-label="close menu" onclick={() => (menuOpen = false)}></button>
@@ -113,6 +141,19 @@
             {#if ui.blogSort === o.id}{@html icon('check')}{/if}
           </button>
         {/each}
+      </div>
+    {/if}
+    {#if settingsOpen}
+      <button
+        class="menu-backdrop"
+        aria-label="close settings"
+        onclick={() => (settingsOpen = false)}
+      ></button>
+      <div class="blog-sort-menu" role="menu">
+        <button role="menuitemcheckbox" aria-checked={ui.blogHideGraduated} class:on={ui.blogHideGraduated} onclick={toggleGrad}>
+          <span>卒業生を隠す</span>
+          {#if ui.blogHideGraduated}{@html icon('check')}{/if}
+        </button>
       </div>
     {/if}
   </header>
@@ -165,11 +206,11 @@
     {#if ui.blogSort === 'latest' || ui.blogSort === 'oldest'}
       {#if latestErr}
         <div class="muted-note">読み込み失敗 / {latestErr}</div>
-      {:else if !latest}
+      {:else if !latestShown}
         <div class="muted-note">読み込み中…</div>
       {:else}
         <div class="blog-latest">
-          {#each latest as p (p.key + '/' + p.id)}
+          {#each latestShown as p (p.key + '/' + p.id)}
             <button class="blog-post-row" onclick={() => openBlog(p.key, Number(p.id))}>
               {#if p.thumbnail}
                 <img src={p.thumbnail} loading="lazy" alt="" />
