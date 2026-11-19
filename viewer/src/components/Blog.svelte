@@ -151,6 +151,7 @@
       ></button>
       <div class="blog-sort-menu" role="menu">
         <button
+          class="setting-row"
           role="menuitemcheckbox"
           aria-checked={ui.blogHideGraduated}
           class:on={ui.blogHideGraduated}

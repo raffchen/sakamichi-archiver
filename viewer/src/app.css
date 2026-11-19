@@ -1278,6 +1278,11 @@ body:has(.sheet.login) .sheet {
   color: var(--ink);
   opacity: 0.25;
 }
+/* settings toggles lead with the check (a checkbox look), not the trailing
+   accent tick the sort rows use */
+.blog-sort-menu button.setting-row {
+  flex-direction: row-reverse;
+}
 .blog-sort-menu button svg {
   width: 15px;
   height: 15px;
