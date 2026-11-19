@@ -989,6 +989,10 @@ img {
   inset: 0;
   display: grid;
   place-items: center;
+  /* hand every gesture over to the app: the browser must not page-zoom or
+     pan here (the viewport meta allows page pinch-zoom, and iOS ignores
+     user-scalable=no anyway) — touch-action is the only reliable switch */
+  touch-action: none;
 }
 /* placeholder on a voice slide sliding by — the real audio bar mounts only
    when the slide becomes current */
@@ -1055,22 +1059,22 @@ img {
   position: relative;
   z-index: 2;
 }
-/* full-size zoom (mouse): a shrunken image invites a click; the 100% view
-   pans with the grab cursor and a click without a drag returns to fit */
+/* zoom (mouse + touch): a shrunken image invites a click/double-tap; the
+   zoomed view pans with the grab cursor and a click without a drag returns
+   to fit. The zoom itself renders as a transform on the fitted img. */
 .lb-media img.zoomable {
   cursor: zoom-in;
 }
 .lb-media img.zoomed {
-  /* drop the fitted-mode constraints: the img renders at its natural size,
-     placed by the component's zoomLeft/zoomTop inline styles */
-  inset: auto;
-  margin: 0;
-  max-width: none;
-  max-height: none;
   cursor: grab;
+  will-change: transform;
 }
 .lb-media img.zoomed.panning {
   cursor: grabbing;
+}
+/* touch-initiated zoom changes animate; the gesture's own frames don't */
+.lb-media img.zanim {
+  transition: transform 220ms cubic-bezier(0.25, 1, 0.4, 1);
 }
 /* the visible chevron: a small bare arrow pinned to the screen edge — no
    circle, nothing blurring the media underneath. Hovering the click zone
