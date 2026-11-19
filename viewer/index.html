@@ -4,6 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#a03fbf" />
+    <!-- dark mode before first paint: reads the same key the store persists
+         (lib/store.svelte.ts). App.svelte keeps data-theme in sync after. -->
+    <script>
+      try {
+        if (localStorage.getItem('sakamichi-viewer:theme') === 'dark')
+          document.documentElement.dataset.theme = 'dark'
+      } catch {}
+    </script>
     <title>坂道 Message アーカイブ</title>
   </head>
   <body>

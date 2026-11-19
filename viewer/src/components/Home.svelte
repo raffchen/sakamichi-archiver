@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { Archive, Member } from '../lib/types'
-  import { openMember, ui, unreadCount } from '../lib/store.svelte'
+  import { openMember, toggleTheme, ui, unreadCount } from '../lib/store.svelte'
+  import { icon } from '../lib/icons'
   import { daysAgo, fmtDateTime } from '../lib/format'
   import { disp } from '../lib/display'
 
@@ -64,7 +65,15 @@
 <header class="head">
   <span class="sp"></span>
   <h1>Talk</h1>
-  <span class="sp"></span>
+  <!-- dark-mode toggle: shows the icon you'd switch to (moon in light, sun
+       in dark); the 34px slot keeps the centered title balanced -->
+  <button
+    class="ic"
+    aria-label={ui.theme === 'dark' ? 'ライトモード / light mode' : 'ダークモード / dark mode'}
+    onclick={toggleTheme}
+  >
+    {@html icon(ui.theme === 'dark' ? 'sun' : 'moon')}
+  </button>
 </header>
 
 <div class="sites">

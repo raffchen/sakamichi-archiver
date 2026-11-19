@@ -54,9 +54,16 @@
     ui.query = ''
   })
 
-  /* the active site drives the whole theme (purple / pale pink) */
+  /* the active site drives the whole theme (purple / pale pink); the theme
+     attribute mirrors the store (index.html set it pre-paint) */
   $effect(() => {
     document.documentElement.dataset.site = ui.site
+    document.documentElement.dataset.theme = ui.theme
+    /* the browser chrome bar follows the header, which keeps its site colors
+       in both themes — dark mode changes surfaces, not the header */
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', ui.site === 'sakurazaka46' ? '#f9d6e0' : '#a03fbf')
     /* title follows the topmost screen: thread/gallery member, blog member
        (or the Blogs directory), "Messages" on the talk side — ui.slug
        intentionally lingers when a blog is open, so the blog view must be

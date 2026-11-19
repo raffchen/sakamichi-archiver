@@ -19,6 +19,20 @@ function loadHideGraduated(): boolean {
   }
 }
 
+/* dark mode: a binary device preference, persisted like volume and the blog
+   settings. The index.html inline script reads the same key before first
+   paint so a reload in dark doesn't flash light. */
+export type Theme = 'light' | 'dark'
+const THEME_KEY = 'sakamichi-viewer:theme'
+
+function loadTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
 export const ui = $state({
   view: 'home' as View,
   slug: null as string | null,
@@ -38,6 +52,9 @@ export const ui = $state({
   /* directory setting: hide graduated members' cards (the ⚙ menu). A device
      preference, so it persists like volume does. */
   blogHideGraduated: loadHideGraduated(),
+  /* light/dark surfaces (index.html applies it pre-paint; App keeps it in
+     sync). The per-site header colors are theme-independent for now. */
+  theme: loadTheme(),
 })
 
 export function setHideGraduated(v: boolean) {
@@ -47,6 +64,20 @@ export function setHideGraduated(v: boolean) {
   } catch {
     /* private mode — the toggle just won't survive reloads */
   }
+}
+
+export function setTheme(t: Theme) {
+  ui.theme = t
+  try {
+    if (t === 'dark') localStorage.setItem(THEME_KEY, 'dark')
+    else localStorage.removeItem(THEME_KEY) // light is the default — no key
+  } catch {
+    /* private mode — the toggle just won't survive reloads */
+  }
+}
+
+export function toggleTheme() {
+  setTheme(ui.theme === 'dark' ? 'light' : 'dark')
 }
 
 export const lightbox = $state({
