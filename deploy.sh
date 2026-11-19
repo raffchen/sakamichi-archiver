@@ -4,14 +4,23 @@
 #   ./deploy.sh          # full deploy
 #   ./deploy.sh --no-push  # rebuild/restart from what's already on the server
 #
+# Machine-specific targets (server, app dir, public URL) live in deploy.env —
+# gitignored, this machine only; deploy.env.example is the tracked template.
+#
 # The server's appdata dir is a git remote (`omv`) with
 # receive.denyCurrentBranch=updateInstead, so `git push` updates the working
 # tree there directly — only changed files cross the wire.
 set -euo pipefail
 
-SSH_TARGET="SERVER-REDACTED"
-APP_DIR="/srv/DISK-UUID-REDACTED/appdata/Sakamichi Archive"
-HEALTH_URL="https://PUBLIC-URL-REDACTED"
+if [[ ! -f deploy.env ]]; then
+    echo "ERROR: deploy.env not found — copy deploy.env.example and fill in this machine's targets" >&2
+    exit 1
+fi
+# shellcheck source=deploy.env
+source deploy.env
+: "${SSH_TARGET:?set SSH_TARGET in deploy.env}"
+: "${APP_DIR:?set APP_DIR in deploy.env}"
+: "${HEALTH_URL:?set HEALTH_URL in deploy.env}"
 
 if [[ "${1:-}" != "--no-push" ]]; then
     echo "==> pushing code"

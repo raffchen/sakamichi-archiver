@@ -10,13 +10,14 @@ design decisions see the local `docs/search-db.md` (untracked, see §7).
 | Piece | Value |
 |---|---|
 | Local repo | `/mnt/c/Users/raffe/Desktop/projects/sakamichi-archiver` (WSL, Windows drive) |
-| Server | `SERVER-REDACTED` (OMV NAS, over Tailscale) |
-| Server app dir | `/srv/DISK-UUID-REDACTED/appdata/Sakamichi Archive` |
-| Public URL | `https://PUBLIC-URL-REDACTED` (login-gated talk side — `VIEWER_PASSWORD` in the server's `.env`; blog endpoints + `/api/blog` are public, message endpoints answer 401 to curl) |
+| Server | see **`deploy.env`** (gitignored; `deploy.env.example` is the tracked template) — OMV NAS over Tailscale |
+| Server app dir | see `deploy.env` (`APP_DIR`) — also the `omv` git remote (`receive.denyCurrentBranch=updateInstead`, push = deploy's code step) |
+| Public URL | see `deploy.env` (`HEALTH_URL`) — login-gated talk side (`VIEWER_PASSWORD` in the server's `.env`; blog endpoints + `/api/blog` are public, message endpoints answer 401 to curl) |
 | Local test | `http://127.0.0.1:8080` (docker, container `sakamichi-archiver-viewer-1`) |
-| Server API tests | `http://172.17.0.1:8484` via ssh (viewer port is not exposed publicly) |
-| Remotes | `omv` = the appdata dir itself (`receive.denyCurrentBranch=updateInstead`, push = deploy's code step); `github` = mirror (`raffchen/sakamichi-archiver`) |
+| Server API tests | `http://172.17.0.1:$VIEWER_PORT` via ssh (docker bridge gateway; the viewer port is not exposed publicly) |
+| Remotes | `omv` = the appdata dir itself (see `deploy.env`); `github` = mirror (`raffchen/sakamichi-archiver`) |
 | Archive data | `media/` — bind-mounted into containers; **never in git, never in an image** |
+| Machine secrets | `ssh-creds.txt`, `deploy.env` — gitignored, this machine only |
 
 Server-host facts: **no node** on the OMV host — pipe JSON through local node
 (`ssh … curl … | node -e …`). Docker on the server is rootless-ish? No — run
