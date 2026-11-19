@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade } from 'svelte/transition'
-  import { keynav } from '../lib/actions'
+  import { keynav, noPageZoom } from '../lib/actions'
   import { closeLightbox, claimMedia, releaseMedia, lightbox, stepLightbox } from '../lib/store.svelte'
   import { fmtDateTime } from '../lib/format'
   import { icon } from '../lib/icons'
@@ -59,13 +59,75 @@
   /* touch drag — vertical drags stay with the caption scroll, and touches
      that begin on a button/link never drag the track. Videos DO drag, except
      over their own controls strip (bottom edge of the element): that area is
-     the seek bar, and horizontal drags there must keep seeking. */
-  let mode: '' | 'x' | 'y' = ''
+     the seek bar, and horizontal drags there must keep seeking. While zoomed
+     a one-finger drag on the image pans it instead of swiping (slides change
+     only when fit); two fingers pinch-zoom with the midpoint's content
+     pinned; a quick tap pairs with the previous one into a double-tap
+     (fit ↔ 2× fit, centered on the tap — same geometry as the mouse). */
+  let mode: '' | 'x' | 'y' | 'pan' | 'pinch' = ''
   let startX = 0
   let startY = 0
   let lastX = 0
   let lastT = 0
   let vel = 0 /* px/ms, for flick detection */
+  let tapMoved = 0 /* furthest finger travel since touchstart — tap eligibility */
+  let panZx0 = 0
+  let panZy0 = 0
+  let pinchD0 = 0
+  let pinchScale0 = 1
+  let pinchRaw = 1 /* undamped scale, settles on release */
+  let pinchCx = 0.5 /* content fraction under the pinch midpoint */
+  let pinchCy = 0.5
+  let lastTapT = 0
+  let lastTapX = 0
+  let lastTapY = 0
+
+  function startPinch(e: TouchEvent) {
+    const a = e.touches[0]
+    const b = e.touches[1]
+    const tr = trackEl?.getBoundingClientRect()
+    if (!tr || !a || !b) return
+    pinchD0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+    if (!pinchD0) return
+    const img = curImgEl
+    if (!img) return
+    const ir = img.getBoundingClientRect() /* includes any current transform */
+    const mx = (a.clientX + b.clientX) / 2 - tr.left
+    const my = (a.clientY + b.clientY) / 2 - tr.top
+    pinchCx = (mx - (ir.left - tr.left)) / ir.width
+    pinchCy = (my - (ir.top - tr.top)) / ir.height
+    pinchScale0 = scale
+    pinchRaw = scale
+    zoomAnim = false
+    dragPx = 0 /* a second finger mid-swipe cancels the swipe */
+    mode = 'pinch'
+  }
+
+  function noteTap(e: TouchEvent) {
+    const t = e.changedTouches[0]
+    if (!t) return
+    if (!(e.target as HTMLElement)?.closest?.('.lb-media img')) return
+    const now = performance.now()
+    if (now - lastTapT < 300 && Math.hypot(t.clientX - lastTapX, t.clientY - lastTapY) < 30) {
+      lastTapT = 0
+      /* fit → 2× fit (capped at natural), zoomed → back to fit; the tapped
+         point centers, edge-flush when it can't */
+      if (scale > 1) animateZoom(zoomOut)
+      else if (shrunk) {
+        const tr = trackEl?.getBoundingClientRect()
+        const ir = curImgEl?.getBoundingClientRect()
+        if (!tr || !ir) return
+        animateZoom(() =>
+          zoomAt((t.clientX - ir.left) / ir.width, (t.clientY - ir.top) / ir.height, Math.min(2, sNat)),
+        )
+      }
+      return
+    }
+    lastTapT = now
+    lastTapX = t.clientX
+    lastTapY = t.clientY
+  }
+
   function onTouchStart(e: TouchEvent) {
     if (settling || (e.target as HTMLElement)?.closest('button, a')) {
       mode = 'y'
@@ -79,18 +141,65 @@
         return
       }
     }
+    /* second finger down: pinch (unless the first touch owns a caption
+       scroll); a swipe in flight is cancelled by startPinch */
+    if (mode !== 'y' && e.touches.length >= 2 && nat.w > 0) {
+      startPinch(e)
+      return
+    }
     startX = e.touches[0].clientX
     startY = e.touches[0].clientY
     lastX = startX
     lastT = performance.now()
     vel = 0
+    tapMoved = 0
+    if (scale > 1) {
+      /* zoomed: one finger on the image pans, everything else is dead —
+         slides change only when fit */
+      if ((e.target as HTMLElement)?.closest('.lb-media img')) {
+        mode = 'pan'
+        panZx0 = zx
+        panZy0 = zy
+      } else {
+        mode = 'y'
+      }
+      return
+    }
     mode = ''
   }
   function onTouchMove(e: TouchEvent) {
     if (settling || mode === 'y') return
+    if (mode === 'pinch') {
+      if (e.touches.length < 2) return
+      const a = e.touches[0]
+      const b = e.touches[1]
+      const tr = trackEl?.getBoundingClientRect()
+      if (!tr || !pinchD0) return
+      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+      pinchRaw = pinchScale0 * (d / pinchD0)
+      /* elastic below fit and past the ceiling — settles on release */
+      scale =
+        pinchRaw < 1 ? 1 - (1 - pinchRaw) * 0.3 : pinchRaw > sMax ? sMax + (pinchRaw - sMax) * 0.3 : pinchRaw
+      /* keep the pinch midpoint's content under the (moving) midpoint */
+      const mx = (a.clientX + b.clientX) / 2 - tr.left
+      const my = (a.clientY + b.clientY) / 2 - tr.top
+      zx = clampZ(mx - pinchCx * dw, dw, bodyW)
+      zy = clampZ(my - pinchCy * dh, dh, bodyH)
+      return
+    }
+    if (mode === 'pan') {
+      const t = e.touches[0]
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      tapMoved = Math.max(tapMoved, Math.hypot(dx, dy))
+      zx = clampZ(panZx0 + dx, dw, bodyW)
+      zy = clampZ(panZy0 + dy, dh, bodyH)
+      return
+    }
     const t = e.touches[0]
     const dx = t.clientX - startX
     const dy = t.clientY - startY
+    tapMoved = Math.max(tapMoved, Math.hypot(dx, dy))
     if (!mode) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
       mode = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'
@@ -107,8 +216,53 @@
       lastT = now
     }
   }
-  function onTouchEnd() {
+  function onTouchEnd(e: TouchEvent) {
+    if (mode === 'pinch') {
+      if (e.touches.length === 1) {
+        /* one finger left: the pinch ends here (browsers lift fingers one
+           touchend at a time, so this fires even for a two-finger release)
+           — settle the elastic scale, then the finger pans at that scale */
+        const t = e.touches[0]
+        startX = t.clientX
+        startY = t.clientY
+        tapMoved = 99 /* the remaining finger is not a tap */
+        const settled = Math.min(Math.max(pinchRaw, 1), sMax)
+        animateZoom(() => {
+          if (settled <= 1) zoomOut()
+          else {
+            scale = settled
+            zx = clampZ(zx, dw, bodyW)
+            zy = clampZ(zy, dh, bodyH)
+          }
+        })
+        panZx0 = zx
+        panZy0 = zy
+        mode = 'pan'
+        return
+      }
+      if (e.touches.length === 0) {
+        mode = ''
+        if (pinchRaw < 1) {
+          animateZoom(zoomOut) /* pinched past fit — snap back */
+          return
+        }
+        /* settle the elastic overshoot above the ceiling, re-clamp the pan
+           for the settled scale */
+        animateZoom(() => {
+          scale = Math.min(Math.max(pinchRaw, 1), sMax)
+          zx = clampZ(zx, dw, bodyW)
+          zy = clampZ(zy, dh, bodyH)
+        })
+      }
+      return /* 3+ fingers — wait for the count to settle */
+    }
+    if (mode === 'pan') {
+      mode = ''
+      if (tapMoved < 10) noteTap(e)
+      return
+    }
     if (mode !== 'x' || settling) {
+      if (mode === '' && !settling && tapMoved < 10) noteTap(e)
       mode = ''
       return
     }
@@ -124,26 +278,26 @@
 
   /* ---- full-size zoom (mouse) ----
      A fitted image smaller than its natural size offers a zoom-in cursor;
-     clicking it zooms to 100% centered on the clicked point (the click's
-     x/y fraction of the fitted image maps onto the same fraction of the
-     full-size one — no dumping at the top-left corner). While zoomed the
-     cursor is grab and dragging pans freely; a release that moved <5px is
-     a click and zooms back out to fit. Mouse only — touch keeps the 1:1
-     swipe; arrow keys still step slides (the new slide opens fitted). */
-  let zoomed = $state(false)
-  let panX = $state(0)
-  let panY = $state(0)
-  /* the zoom-in click's fraction of the image — state, so re-zooming at a
-     new point re-centers instead of keeping the first click's anchor */
-  let anchorX = $state(0.5)
-  let anchorY = $state(0.5)
+     clicking it zooms to 100% centered on the clicked point. While zoomed
+     the cursor is grab and dragging pans freely; a release that moved <5px
+     is a click and zooms back out to fit. One zoom model, three inputs:
+     mouse click = jump to 100% natural, double-tap = 2× fit, pinch =
+     continuous between fit and min(4× fit, natural) with the midpoint's
+     content pinned. Scale 1 = fitted; while zoomed one finger pans and
+     swiping navigates only when fit (zoom-out-first). Arrow keys still
+     step slides while zoomed (the new slide opens fitted). */
+  let scale = $state(1) /* 1 = fitted; >1 = zoomed; pinch may dip <1 (elastic) */
+  let zx = $state(0) /* zoomed image top-left, box-relative px */
+  let zy = $state(0)
   let dragging = $state(false)
   let downX = 0
   let downY = 0
-  let downPanX = 0
-  let downPanY = 0
+  let downZx = 0
+  let downZy = 0
   let moved = 0
   let bodyH = $state(0)
+  let trackEl = $state<HTMLElement>()
+  let curImgEl = $state<HTMLImageElement>()
 
   /* natural sizes by src: a neighbour that later becomes the current slide
      reuses its element without a fresh load event, so per-src is the only
@@ -162,38 +316,62 @@
     return natSizes.get(curSrc) ?? { w: 0, h: 0 }
   })
   /* the fitted view shrinks the image when the slide box is smaller than it */
-  const shrunk = $derived(nat.w > 0 && (nat.w > bodyW || nat.h > bodyH))
+  const fitScale = $derived(nat.w > 0 ? Math.min(bodyW / nat.w, bodyH / nat.h, 1) : 1)
+  const fitW = $derived(nat.w * fitScale)
+  const fitH = $derived(nat.h * fitScale)
+  const sNat = $derived(fitW > 0 ? nat.w / fitW : 1) /* 100% natural, in fit units */
+  const shrunk = $derived(sNat > 1)
+  const sMax = $derived(Math.min(4, sNat)) /* pinch ceiling: 4× fit, never past natural */
+  const dw = $derived(fitW * scale)
+  const dh = $derived(fitH * scale)
 
-  /* pan along one axis, clamped to the coverage range (0 = pinned when the
-     image doesn't fill the box) — clamping at write time keeps the state in
-     range so reversing a drag doesn't eat distance against the limit */
-  function clampPan(v: number, natDim: number, box: number, anchor: number) {
-    if (natDim <= box) return 0
-    const lo = box / 2 - natDim * (1 - anchor)
-    const hi = anchor * natDim - box / 2
-    return Math.min(Math.max(v, lo), hi)
+  /* coverage clamp: an axis the image fills keeps its edges flush with the
+     box (pan range [box-d, 0]); a narrower axis is centered. Clamped at
+     write time so reversing a drag doesn't eat distance against the limit. */
+  function clampZ(v: number, d: number, box: number) {
+    return d > box ? Math.min(Math.max(v, box - d), 0) : (box - d) / 2
+  }
+  const zxView = $derived(clampZ(zx, dw, bodyW))
+  const zyView = $derived(clampZ(zy, dh, bodyH))
+  /* the img keeps its fitted layout; zoom is transform-only (compositor, no
+     layout per pinch frame): translate so zxView/zyView land as top-left
+     after scaling about the (always box-centered) layout center */
+  const tx = $derived(zxView - (bodyW - dw) / 2)
+  const ty = $derived(zyView - (bodyH - dh) / 2)
+  /* zoom-initiated changes (double-tap, pinch release snap) animate; the
+     pinching/panning itself tracks the finger with no transition */
+  let zoomAnim = $state(false)
+  let zoomAnimTimer: ReturnType<typeof setTimeout> | undefined
+  function animateZoom(fn: () => void) {
+    zoomAnim = true
+    fn()
+    clearTimeout(zoomAnimTimer)
+    zoomAnimTimer = setTimeout(() => (zoomAnim = false), 260)
   }
 
-  /* the 100% view's top-left: the anchored point sits dead center, plus the
-     accumulated pan — clamped so an axis the image fills never shows a gap
-     (the image edge stops flush with the box edge and no further), while an
-     axis narrower than the box stays centered with no pan at all */
-  const zoomLeft = $derived.by(() => {
-    if (nat.w <= bodyW) return (bodyW - nat.w) / 2
-    return bodyW / 2 - anchorX * nat.w + clampPan(panX, nat.w, bodyW, anchorX)
-  })
-  const zoomTop = $derived.by(() => {
-    if (nat.h <= bodyH) return (bodyH - nat.h) / 2
-    return bodyH / 2 - anchorY * nat.h + clampPan(panY, nat.h, bodyH, anchorY)
-  })
+  /* shared zoom-in: put content fraction (fx, fy) of the image at the box
+     center (a point near an edge can't be centered — not enough content
+     beyond it — so the view settles with that edge flush instead) */
+  function zoomAt(fx: number, fy: number, target: number) {
+    const w = fitW * target
+    const h = fitH * target
+    zx = clampZ(bodyW / 2 - fx * w, w, bodyW)
+    zy = clampZ(bodyH / 2 - fy * h, h, bodyH)
+    scale = target
+  }
+  function zoomOut() {
+    scale = 1
+    zx = 0
+    zy = 0
+  }
 
   /* any slide change (or close) returns to the fitted view */
   $effect(() => {
     void lightbox.i
     void lightbox.open
-    zoomed = false
-    panX = 0
-    panY = 0
+    scale = 1
+    zx = 0
+    zy = 0
   })
 
   function zoomDown(e: PointerEvent) {
@@ -202,8 +380,8 @@
     moved = 0
     downX = e.clientX
     downY = e.clientY
-    downPanX = panX
-    downPanY = panY
+    downZx = zx
+    downZy = zy
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
   function zoomMove(e: PointerEvent) {
@@ -211,9 +389,9 @@
     const dx = e.clientX - downX
     const dy = e.clientY - downY
     moved = Math.max(moved, Math.hypot(dx, dy))
-    if (zoomed) {
-      panX = clampPan(downPanX + dx, nat.w, bodyW, anchorX)
-      panY = clampPan(downPanY + dy, nat.h, bodyH, anchorY)
+    if (scale > 1) {
+      zx = clampZ(downZx + dx, dw, bodyW)
+      zy = clampZ(downZy + dy, dh, bodyH)
     }
   }
   function zoomUp(e: PointerEvent) {
@@ -221,21 +399,13 @@
     dragging = false
     if (moved >= 5) return /* a pan, not a click — keep the zoom */
     const img = e.currentTarget as HTMLImageElement
-    if (zoomed) {
-      zoomed = false
-      panX = 0
-      panY = 0
+    if (scale > 1) {
+      zoomOut()
       return
     }
     if (!shrunk || !img.naturalWidth) return
     const r = img.getBoundingClientRect()
-    anchorX = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1)
-    anchorY = Math.min(Math.max((e.clientY - r.top) / r.height, 0), 1)
-    /* start in range: a point near an edge can't be centered (not enough
-       content beyond it) — the view settles with that edge flush instead */
-    panX = clampPan(0, nat.w, bodyW, anchorX)
-    panY = clampPan(0, nat.h, bodyH, anchorY)
-    zoomed = true
+    zoomAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, sNat)
   }
 
   /* decode the neighbours ahead of the drag — otherwise the incoming slide is
@@ -314,6 +484,7 @@
   class="lb"
   transition:fade={{ duration: 130 }}
   use:keynav={{ onLeft: () => step(-1), onRight: () => step(1), onEsc: closeLightbox }}
+  use:noPageZoom
   onclick={onBackdrop}
   ontouchstart={onTouchStart}
   ontouchmove={onTouchMove}
@@ -331,23 +502,22 @@
 
   <div class="lb-body">
     {#if m}
-      <div class="lb-track" bind:clientWidth={bodyW} bind:clientHeight={bodyH} class:settle={settling} style:transform={`translateX(${dragPx}px)`}>
+      <div class="lb-track" bind:this={trackEl} bind:clientWidth={bodyW} bind:clientHeight={bodyH} class:settle={settling} style:transform={`translateX(${dragPx}px)`}>
         {#each slides as s (s.it.id)}
           <div class="lb-media" style:transform={`translateX(${(s.k - lightbox.i) * 100}%)`}>
             {#if s.k === lightbox.i}
               {#if s.it.type === 'picture'}
                 <img
+                  bind:this={curImgEl}
                   src={s.it.file ?? s.it.thumb ?? ''}
                   alt=""
                   draggable="false"
                   onload={noteImg}
-                  class:zoomable={!zoomed && shrunk}
-                  class:zoomed
-                  class:panning={zoomed && dragging}
-                  style:left={zoomed ? `${zoomLeft}px` : null}
-                  style:top={zoomed ? `${zoomTop}px` : null}
-                  style:width={zoomed ? `${nat.w}px` : null}
-                  style:height={zoomed ? `${nat.h}px` : null}
+                  class:zoomable={scale <= 1 && shrunk}
+                  class:zoomed={scale > 1}
+                  class:panning={scale > 1 && dragging}
+                  class:zanim={zoomAnim}
+                  style:transform={scale !== 1 ? `translate(${tx}px, ${ty}px) scale(${scale})` : null}
                   onpointerdown={zoomDown}
                   onpointermove={zoomMove}
                   onpointerup={zoomUp}

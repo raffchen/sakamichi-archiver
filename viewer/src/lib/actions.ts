@@ -69,3 +69,16 @@ export const keynav: Action<HTMLElement, { onLeft?: () => void; onRight?: () => 
     },
   }
 }
+
+/** Safari announces multi-touch pinches with proprietary gesturestart
+    events and will page-zoom unless they're prevented — the lightbox
+    handles pinches itself (touch-action: none covers the other engines). */
+export const noPageZoom: Action<HTMLElement> = (node) => {
+  const onGesture = (e: Event) => e.preventDefault()
+  node.addEventListener('gesturestart', onGesture)
+  return {
+    destroy() {
+      node.removeEventListener('gesturestart', onGesture)
+    },
+  }
+}
