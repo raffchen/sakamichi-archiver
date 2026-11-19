@@ -999,11 +999,24 @@ img {
   width: 44px;
   height: 44px;
 }
+/* % max-height is unreliable on grid items here: .lb-media's row is
+   auto-sized from the content, so a tall image resolved max-height against
+   its own height and spilled past the body (bottom cut off on wide screens).
+   Absolute + inset 0 + margin auto centers inside a definite box instead —
+   small images keep their natural size, tall ones fit fully. z-index keeps
+   the media above the nav layers (the rule further down used to do that via
+   position: relative, which broke the fit). */
 .lb-body img,
 .lb-body video {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  z-index: 2;
 }
 .lb-audio {
   color: #ddd;
@@ -1036,8 +1049,8 @@ img {
   position: relative;
   z-index: 2;
 }
-.lb-body img,
-.lb-body video,
+/* the audio bar rides the media layers above the backdrop (images/videos get
+   theirs from the sizing rule above) */
 .lb-audio {
   position: relative;
   z-index: 2;
