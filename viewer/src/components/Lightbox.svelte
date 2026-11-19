@@ -133,8 +133,10 @@
   let zoomed = $state(false)
   let panX = $state(0)
   let panY = $state(0)
-  let anchorX = 0.5 /* the zoom-in click's fraction of the image */
-  let anchorY = 0.5
+  /* the zoom-in click's fraction of the image — state, so re-zooming at a
+     new point re-centers instead of keeping the first click's anchor */
+  let anchorX = $state(0.5)
+  let anchorY = $state(0.5)
   let dragging = $state(false)
   let downX = 0
   let downY = 0
@@ -162,10 +164,28 @@
   /* the fitted view shrinks the image when the slide box is smaller than it */
   const shrunk = $derived(nat.w > 0 && (nat.w > bodyW || nat.h > bodyH))
 
+  /* pan along one axis, clamped to the coverage range (0 = pinned when the
+     image doesn't fill the box) — clamping at write time keeps the state in
+     range so reversing a drag doesn't eat distance against the limit */
+  function clampPan(v: number, natDim: number, box: number, anchor: number) {
+    if (natDim <= box) return 0
+    const lo = box / 2 - natDim * (1 - anchor)
+    const hi = anchor * natDim - box / 2
+    return Math.min(Math.max(v, lo), hi)
+  }
+
   /* the 100% view's top-left: the anchored point sits dead center, plus the
-     accumulated pan */
-  const zoomLeft = $derived(bodyW / 2 - anchorX * nat.w + panX)
-  const zoomTop = $derived(bodyH / 2 - anchorY * nat.h + panY)
+     accumulated pan — clamped so an axis the image fills never shows a gap
+     (the image edge stops flush with the box edge and no further), while an
+     axis narrower than the box stays centered with no pan at all */
+  const zoomLeft = $derived.by(() => {
+    if (nat.w <= bodyW) return (bodyW - nat.w) / 2
+    return bodyW / 2 - anchorX * nat.w + clampPan(panX, nat.w, bodyW, anchorX)
+  })
+  const zoomTop = $derived.by(() => {
+    if (nat.h <= bodyH) return (bodyH - nat.h) / 2
+    return bodyH / 2 - anchorY * nat.h + clampPan(panY, nat.h, bodyH, anchorY)
+  })
 
   /* any slide change (or close) returns to the fitted view */
   $effect(() => {
@@ -192,8 +212,8 @@
     const dy = e.clientY - downY
     moved = Math.max(moved, Math.hypot(dx, dy))
     if (zoomed) {
-      panX = downPanX + dx
-      panY = downPanY + dy
+      panX = clampPan(downPanX + dx, nat.w, bodyW, anchorX)
+      panY = clampPan(downPanY + dy, nat.h, bodyH, anchorY)
     }
   }
   function zoomUp(e: PointerEvent) {
@@ -211,8 +231,10 @@
     const r = img.getBoundingClientRect()
     anchorX = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1)
     anchorY = Math.min(Math.max((e.clientY - r.top) / r.height, 0), 1)
-    panX = 0
-    panY = 0
+    /* start in range: a point near an edge can't be centered (not enough
+       content beyond it) — the view settles with that edge flush instead */
+    panX = clampPan(0, nat.w, bodyW, anchorX)
+    panY = clampPan(0, nat.h, bodyH, anchorY)
     zoomed = true
   }
 
