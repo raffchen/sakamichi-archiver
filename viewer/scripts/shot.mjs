@@ -1,16 +1,26 @@
-/* dev-only: drive the viewer in headless Chrome and screenshot each screen
-   (node scripts/shot.mjs). Uses the CDP HTTP+WS endpoints directly. */
+/* drive the BUILT viewer in headless Chrome and screenshot each screen
+   (node scripts/shot.mjs — run it with Windows node; CHROME/TEMP are Windows
+   paths). Uses the CDP HTTP+WS endpoints directly.
+
+   BASE is the local docker container (127.0.0.1:8080, never localhost —
+   runbook §5.1) because vite dev can't serve the API routes: /api/blog etc.
+   fall back to the SPA's index.html and screens that fetch them render
+   errors. Rebuild the container first (docker compose build viewer &&
+   docker compose up -d viewer) or you'll screenshot the old bundle.
+   Override with SHOT_BASE=http://127.0.0.1:<port> to target vite dev or a
+   bare server.mjs for a quick pure-frontend pass. */
 const CHROME =
   process.env.CHROME ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9323
-const BASE = `http://localhost:5173`
+const BASE = process.env.SHOT_BASE ?? `http://127.0.0.1:8080`
 const args = [
   '--headless=new',
   `--remote-debugging-port=${PORT}`,
   '--disable-gpu',
   '--no-first-run',
   '--window-size=440,940',
-  '--user-data-dir=' + process.env.TEMP + '\\cdp-shot-profile',
+  // unique per run (runbook §5.3): a persistent profile serves cached bundles
+  '--user-data-dir=' + process.env.TEMP + '\\cdp-shot-profile-' + Date.now(),
   'about:blank',
 ]
 const { spawn } = await import('node:child_process')
