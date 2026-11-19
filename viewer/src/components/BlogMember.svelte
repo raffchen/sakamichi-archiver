@@ -7,8 +7,9 @@
      floor only leaves ~402px after padding. The page is baked into the URL
      as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { back, openBlog, ui } from '../lib/store.svelte'
+  import { back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
   import { fmtBlogStamp } from '../lib/format'
+  import { icon } from '../lib/icons'
 
   let { archive }: { archive: Archive } = $props()
 
@@ -68,7 +69,15 @@
     <i class="fa-solid fa-chevron-left"></i>
   </button>
   <h1>{memberName}</h1>
-  <span class="sp"></span>
+  <!-- dark-mode toggle in the trailing slot — keeps the title centered, and
+       the theme is reachable on every blog screen -->
+  <button
+    class="ic"
+    aria-label={ui.theme === 'dark' ? 'ライトモード / light mode' : 'ダークモード / dark mode'}
+    onclick={toggleTheme}
+  >
+    {@html icon(ui.theme === 'dark' ? 'sun' : 'moon')}
+  </button>
 </header>
 
 <div class="searchbar">
