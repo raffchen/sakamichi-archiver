@@ -132,6 +132,34 @@ describe('normalizeBlogContent', () => {
     expect(normalizeBlogContent(html)).toBe('<div><img src="files/z.jpg" style="width: calc(100% + 48px)"></div>')
   })
 
+  it('drops dead dcimg.awalker.jp images (host is offline)', () => {
+    expect(normalizeBlogContent('今日の一枚<br><img src="http://dcimg.awalker.jp/view2.php?u=abc123"><br>またね')).toBe(
+      '<div>今日の一枚</div><div>またね</div>'
+    )
+  })
+
+  it('unwraps anchors to the dead host, keeping their label text', () => {
+    expect(normalizeBlogContent('写真↑<br><a href="http://dcimg.awalker.jp/view2.php?u=abc">もっと見る</a><br>バイバイ')).toBe(
+      '<div>写真↑</div><div>もっと見る</div><div>バイバイ</div>'
+    )
+  })
+
+  it('removes an anchor+img pair to the dead host entirely', () => {
+    expect(normalizeBlogContent('<a href="http://dcimg.awalker.jp/x"><img src="http://dcimg.awalker.jp/x"></a>おわり')).toBe(
+      '<div>おわり</div>'
+    )
+  })
+
+  it('keeps live images and other links untouched', () => {
+    expect(normalizeBlogContent('<a href="https://example.com">link</a><br><img src="files/ok.jpg">')).toBe(
+      '<div><a href="https://example.com">link</a></div><img src="files/ok.jpg">'
+    )
+  })
+
+  it('strips dead images even when there is no <br> (fast-path must not skip it)', () => {
+    expect(normalizeBlogContent('<div><img src="https://dcimg.awalker.jp/view2.php?u=abc"></div>')).toBe('<div></div>')
+  })
+
   it('is idempotent', () => {
     const samples = [
       '<p><br/><br/>ブログを開いて下さり、ありがとうございます。<br/>光莉🦋<br/></p>',

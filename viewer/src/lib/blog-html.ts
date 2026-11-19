@@ -101,16 +101,44 @@ function stripImageMargins(root: ParentNode) {
   }
 }
 
+/** dead hotlink hosts: dcimg.awalker.jp served old moblog photos through a
+    referer gate that has since gone offline — every such link is a dead
+    image now. Drop the <img> and unwrap anchors pointing there (keeping any
+    text they carry) instead of rendering broken-image placeholders. */
+const DEAD_HOST = /dcimg\.awalker\.jp/i
+
+function stripDeadImages(root: ParentNode) {
+  for (const img of [...root.querySelectorAll('img')]) {
+    if (!DEAD_HOST.test(img.getAttribute('src') ?? '')) continue
+    const prev = img.previousElementSibling
+    const next = img.nextElementSibling
+    img.remove()
+    // the image usually sat on its own line — drop one of the <br>s that
+    // surrounded it so its removal doesn't leave a stray blank line
+    if (prev?.tagName === 'BR' && next?.tagName === 'BR') prev.remove()
+  }
+  for (const a of [...root.querySelectorAll('a')]) {
+    if (!DEAD_HOST.test(a.getAttribute('href') ?? '')) continue
+    a.replaceWith(...a.childNodes) // keep the label text; the link is dead
+  }
+}
+
 /** rewrite translation-hostile bodies into line-per-block HTML (no-op when
     there's no <br> anywhere, and for subtrees that are already block-per-line) */
 export function normalizeBlogContent(html: string): string {
   if (!html) return html
   // fast path: nothing can collapse (no <br>, not a legacy <html> document)
   // and no inline margins to strip — leave the string untouched
-  if (!/<br[\s/>]/i.test(html) && !/^<(!doctype|html)/i.test(html.trim()) && !/margin/i.test(html))
+  if (
+    !/<br[\s/>]/i.test(html) &&
+    !/^<(!doctype|html)/i.test(html.trim()) &&
+    !/margin/i.test(html) &&
+    !DEAD_HOST.test(html)
+  )
     return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
   // parsing full <html> documents (legacy captures) drops head/meta for us
+  stripDeadImages(doc.body)
   const frag = doc.createElement('div')
   for (const el of blocks(doc, [...doc.body.childNodes])) frag.appendChild(el)
   stripImageMargins(frag)
