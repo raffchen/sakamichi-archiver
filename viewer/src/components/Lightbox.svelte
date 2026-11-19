@@ -122,6 +122,100 @@
     beginSettle(canCommit && (far || flick) ? -towards * bodyW : 0)
   }
 
+  /* ---- full-size zoom (mouse) ----
+     A fitted image smaller than its natural size offers a zoom-in cursor;
+     clicking it zooms to 100% centered on the clicked point (the click's
+     x/y fraction of the fitted image maps onto the same fraction of the
+     full-size one — no dumping at the top-left corner). While zoomed the
+     cursor is grab and dragging pans freely; a release that moved <5px is
+     a click and zooms back out to fit. Mouse only — touch keeps the 1:1
+     swipe, and prev/next keys are dead while zoomed. */
+  let zoomed = $state(false)
+  let panX = $state(0)
+  let panY = $state(0)
+  let anchorX = 0.5 /* the zoom-in click's fraction of the image */
+  let anchorY = 0.5
+  let dragging = $state(false)
+  let downX = 0
+  let downY = 0
+  let downPanX = 0
+  let downPanY = 0
+  let moved = 0
+  let bodyH = $state(0)
+
+  /* natural sizes by src: a neighbour that later becomes the current slide
+     reuses its element without a fresh load event, so per-src is the only
+     reliable key; imgTick makes the deriveds re-read the map on any load */
+  const natSizes = new Map<string, { w: number; h: number }>()
+  let imgTick = $state(0)
+  function noteImg(e: Event) {
+    const el = e.currentTarget as HTMLImageElement
+    if (!el.naturalWidth) return
+    natSizes.set(el.getAttribute('src') ?? '', { w: el.naturalWidth, h: el.naturalHeight })
+    imgTick++
+  }
+  const curSrc = $derived(lightbox.items[lightbox.i]?.file ?? lightbox.items[lightbox.i]?.thumb ?? '')
+  const nat = $derived.by(() => {
+    void imgTick
+    return natSizes.get(curSrc) ?? { w: 0, h: 0 }
+  })
+  /* the fitted view shrinks the image when the slide box is smaller than it */
+  const shrunk = $derived(nat.w > 0 && (nat.w > bodyW || nat.h > bodyH))
+
+  /* the 100% view's top-left: the anchored point sits dead center, plus the
+     accumulated pan */
+  const zoomLeft = $derived(bodyW / 2 - anchorX * nat.w + panX)
+  const zoomTop = $derived(bodyH / 2 - anchorY * nat.h + panY)
+
+  /* any slide change (or close) returns to the fitted view */
+  $effect(() => {
+    void lightbox.i
+    void lightbox.open
+    zoomed = false
+    panX = 0
+    panY = 0
+  })
+
+  function zoomDown(e: PointerEvent) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    dragging = true
+    moved = 0
+    downX = e.clientX
+    downY = e.clientY
+    downPanX = panX
+    downPanY = panY
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  function zoomMove(e: PointerEvent) {
+    if (!dragging) return
+    const dx = e.clientX - downX
+    const dy = e.clientY - downY
+    moved = Math.max(moved, Math.hypot(dx, dy))
+    if (zoomed) {
+      panX = downPanX + dx
+      panY = downPanY + dy
+    }
+  }
+  function zoomUp(e: PointerEvent) {
+    if (!dragging) return
+    dragging = false
+    if (moved >= 5) return /* a pan, not a click — keep the zoom */
+    const img = e.currentTarget as HTMLImageElement
+    if (zoomed) {
+      zoomed = false
+      panX = 0
+      panY = 0
+      return
+    }
+    if (!shrunk || !img.naturalWidth) return
+    const r = img.getBoundingClientRect()
+    anchorX = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1)
+    anchorY = Math.min(Math.max((e.clientY - r.top) / r.height, 0), 1)
+    panX = 0
+    panY = 0
+    zoomed = true
+  }
+
   /* decode the neighbours ahead of the drag — otherwise the incoming slide is
      blank until its image loads and the drag shows nothing arriving */
   $effect(() => {
@@ -197,7 +291,11 @@
 <div
   class="lb"
   transition:fade={{ duration: 130 }}
-  use:keynav={{ onLeft: () => step(-1), onRight: () => step(1), onEsc: closeLightbox }}
+  use:keynav={{
+    onLeft: () => !zoomed && step(-1),
+    onRight: () => !zoomed && step(1),
+    onEsc: closeLightbox,
+  }}
   onclick={onBackdrop}
   ontouchstart={onTouchStart}
   ontouchmove={onTouchMove}
@@ -215,12 +313,28 @@
 
   <div class="lb-body">
     {#if m}
-      <div class="lb-track" bind:clientWidth={bodyW} class:settle={settling} style:transform={`translateX(${dragPx}px)`}>
+      <div class="lb-track" bind:clientWidth={bodyW} bind:clientHeight={bodyH} class:settle={settling} style:transform={`translateX(${dragPx}px)`}>
         {#each slides as s (s.it.id)}
           <div class="lb-media" style:transform={`translateX(${(s.k - lightbox.i) * 100}%)`}>
             {#if s.k === lightbox.i}
               {#if s.it.type === 'picture'}
-                <img src={s.it.file ?? s.it.thumb ?? ''} alt="" />
+                <img
+                  src={s.it.file ?? s.it.thumb ?? ''}
+                  alt=""
+                  draggable="false"
+                  onload={noteImg}
+                  class:zoomable={!zoomed && shrunk}
+                  class:zoomed
+                  class:panning={zoomed && dragging}
+                  style:left={zoomed ? `${zoomLeft}px` : null}
+                  style:top={zoomed ? `${zoomTop}px` : null}
+                  style:width={zoomed ? `${nat.w}px` : null}
+                  style:height={zoomed ? `${nat.h}px` : null}
+                  onpointerdown={zoomDown}
+                  onpointermove={zoomMove}
+                  onpointerup={zoomUp}
+                  onpointercancel={() => (dragging = false)}
+                />
               {:else if s.it.type === 'video'}
                 <!-- no caption track exists for these clips; the message text is shown below -->
                 <!-- svelte-ignore a11y_media_has_caption -->

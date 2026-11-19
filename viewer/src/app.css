@@ -1055,6 +1055,23 @@ img {
   position: relative;
   z-index: 2;
 }
+/* full-size zoom (mouse): a shrunken image invites a click; the 100% view
+   pans with the grab cursor and a click without a drag returns to fit */
+.lb-media img.zoomable {
+  cursor: zoom-in;
+}
+.lb-media img.zoomed {
+  /* drop the fitted-mode constraints: the img renders at its natural size,
+     placed by the component's zoomLeft/zoomTop inline styles */
+  inset: auto;
+  margin: 0;
+  max-width: none;
+  max-height: none;
+  cursor: grab;
+}
+.lb-media img.zoomed.panning {
+  cursor: grabbing;
+}
 /* the visible chevron: a small bare arrow pinned to the screen edge — no
    circle, nothing blurring the media underneath. Hovering the click zone
    lights it up with the same faint round fill the header's ✕/download
