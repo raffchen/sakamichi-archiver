@@ -101,6 +101,59 @@ function stripImageMargins(root: ParentNode) {
   }
 }
 
+/** relative luminance (WCAG) of an 0..1 sRGB channel triplet */
+function luminance(r: number, g: number, b: number): number {
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/** is this CSS color value too dark to read on dark surfaces? Black and the
+    official pages' dark-gray text palette (rgb(49,49,49), #454545, #313131,
+    …) are pinned inline on thousands of posts — on dark surfaces text must
+    inherit --ink instead. Colorful accents (link blues) and whites survive.
+    Unresolvable values (var(), exotic syntax) count as NOT dark — never
+    strip something we can't evaluate. */
+export function isDarkTextColor(value: string): boolean {
+  const v = value.trim().toLowerCase().replace(/\s*!important\s*$/i, '').replace(/\s+/g, ' ')
+  if (v === 'transparent' || v === 'black' || v === 'currentcolor') return v !== 'currentcolor'
+  let m = v.match(/^#([0-9a-f]{3,8})$/)
+  if (m) {
+    const h = m[1]
+    const n =
+      h.length <= 4
+        ? h.split('').map((c) => parseInt(c + c, 16) / 255)
+        : [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+    return luminance(n[0], n[1], n[2]) < 0.2
+  }
+  m = v.match(/^rgba?\(([^)]+)\)$/)
+  if (m) {
+    const parts = m[1].split(/[,\/\s]+/).filter(Boolean).map(Number)
+    if (parts.length < 3 || parts.slice(0, 3).some((x) => Number.isNaN(x))) return false
+    return luminance(parts[0] / 255, parts[1] / 255, parts[2] / 255) < 0.2
+  }
+  return false
+}
+
+/** drop dark `color` declarations from inline styles (see isDarkTextColor).
+    Unconditional: in light mode the stripped text inherits --ink (near-black)
+    and looks the same; in dark mode it becomes readable instead of black-on-
+    black. Other declarations — including background-color — are kept. */
+function stripDarkInlineColors(root: ParentNode) {
+  for (const el of root.querySelectorAll('[style]')) {
+    const style = el.getAttribute('style')
+    if (!style || !/color/i.test(style)) continue
+    const kept = style
+      .split(';')
+      .filter((d) => {
+        const m = d.trim().toLowerCase().match(/^(?:-webkit-)?(?:text-fill-)?color\s*:\s*(.+)$/)
+        return !m || !isDarkTextColor(m[1])
+      })
+      .join('; ')
+    if (kept) el.setAttribute('style', kept)
+    else el.removeAttribute('style')
+  }
+}
+
 /** dead hotlink hosts: dcimg.awalker.jp served old moblog photos through a
     referer gate that has since gone offline — every such link is a dead
     image now. Drop the <img> and unwrap anchors pointing there (keeping any
@@ -133,6 +186,7 @@ export function normalizeBlogContent(html: string): string {
     !/<br[\s/>]/i.test(html) &&
     !/^<(!doctype|html)/i.test(html.trim()) &&
     !/margin/i.test(html) &&
+    !/color\s*:/i.test(html) &&
     !DEAD_HOST.test(html)
   )
     return html
@@ -142,5 +196,6 @@ export function normalizeBlogContent(html: string): string {
   const frag = doc.createElement('div')
   for (const el of blocks(doc, [...doc.body.childNodes])) frag.appendChild(el)
   stripImageMargins(frag)
+  stripDarkInlineColors(frag)
   return frag.innerHTML
 }

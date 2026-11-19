@@ -171,3 +171,67 @@ describe('normalizeBlogContent', () => {
     }
   })
 })
+
+describe('dark inline text colors', () => {
+  it('strips black inline colors (中村_麗乃 #102433: style="color:#000")', () => {
+    expect(normalizeBlogContent('<div><span style="color:#000">text</span></div>')).toBe(
+      '<div><span>text</span></div>'
+    )
+  })
+
+  it('strips the dark-gray palette, hex/rgb forms and !important variants', () => {
+    expect(normalizeBlogContent('<div><span style="color: rgb(49,49,49)">a</span></div>')).toBe(
+      '<div><span>a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:#000000">a</span></div>')).toBe(
+      '<div><span>a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:#454545!important">a</span></div>')).toBe(
+      '<div><span>a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:rgba(0,0,0,0.87)">a</span></div>')).toBe(
+      '<div><span>a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:#333">a</span></div>')).toBe(
+      '<div><span>a</span></div>'
+    )
+  })
+
+  it('keeps colorful accents, whites and unresolvable values', () => {
+    expect(normalizeBlogContent('<div><span style="color:#4285f4">a</span></div>')).toBe(
+      '<div><span style="color:#4285f4">a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:#fff">a</span></div>')).toBe(
+      '<div><span style="color:#fff">a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:var(--x)">a</span></div>')).toBe(
+      '<div><span style="color:var(--x)">a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="color:currentcolor">a</span></div>')).toBe(
+      '<div><span style="color:currentcolor">a</span></div>'
+    )
+  })
+
+  it('keeps background-color and other declarations; drops styles left empty', () => {
+    expect(normalizeBlogContent('<div><span style="background-color:#000;color:#000">a</span></div>')).toBe(
+      '<div><span style="background-color:#000">a</span></div>'
+    )
+    expect(normalizeBlogContent('<div><span style="margin:10px;color:#000">a</span></div>')).toBe(
+      '<div><span style="margin:10px">a</span></div>'
+    )
+  })
+
+  it('the fast path no longer skips posts whose only special case is a color', () => {
+    // no <br>, no margins, not legacy — the color must still be stripped
+    expect(normalizeBlogContent('<div>line</div><span style="color:#000">x</span>')).toBe(
+      '<div>line</div><div><span>x</span></div>'
+    )
+  })
+
+  it('is idempotent', () => {
+    const once = normalizeBlogContent(
+      '<span style="color:#000">a</span><span style="color:#4285f4">b</span>'
+    )
+    expect(normalizeBlogContent(once)).toBe(once)
+  })
+})
