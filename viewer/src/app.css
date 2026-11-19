@@ -66,8 +66,10 @@ html[data-site='nogizaka46'] {
 html[data-site='sakurazaka46'] {
   --accent: #de8fa9;
   --accent-2: #e9b7c9;
-  --head-fg: #e2879f;
-  --head-bg: linear-gradient(90deg, #f9d6e0 0%, #fdf3fa 45%, #efdef6 100%);
+  /* solid pink header like nogi's solid-style gradient — official-pale
+     gradient dropped (the pastel band read oddly on dark surfaces) */
+  --head-fg: #ffffff;
+  --head-bg: #de8fa9;
   --section: #de8fa9;
   --ava-bg: #4d648a;
   --badge: #e2879f;
@@ -217,7 +219,9 @@ img {
   right: 0;
   bottom: 0;
   height: 2px;
-  background: linear-gradient(90deg, #f0b9cd, #8f4fd0);
+  /* darker pink line — reads on the solid pink header the way nogi's
+     deep-purple line reads on its header */
+  background: linear-gradient(90deg, #c9748f, #b05575);
 }
 .count-badge {
   position: absolute;
@@ -1315,8 +1319,8 @@ body:has(.sheet.login) .sheet {
 
 /* ---------- blog tab (directory / member list / post) */
 .blog-title {
-  /* the app paints the tab title in the header's own fg (white on nogi, pink
-     on saka) — NOT the accent color */
+  /* the app paints the tab title in the header's own fg (white on both
+     sites now) — NOT the accent color */
   color: inherit;
   font-size: 21px;
   font-weight: 700;
