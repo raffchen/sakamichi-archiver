@@ -55,6 +55,5 @@ logs/api-capture-*.jsonl
 logs/chrome-blog-profile/
 *.jpg
 
-# local-only agent/ops notes — machine-specific, never useful from another box
-AGENTS.md
-docs/runbook.md
+# local-only notes — never useful from another box
+docs/search-db.md
