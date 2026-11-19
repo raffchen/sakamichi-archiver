@@ -129,7 +129,7 @@
      full-size one — no dumping at the top-left corner). While zoomed the
      cursor is grab and dragging pans freely; a release that moved <5px is
      a click and zooms back out to fit. Mouse only — touch keeps the 1:1
-     swipe, and prev/next keys are dead while zoomed. */
+     swipe; arrow keys still step slides (the new slide opens fitted). */
   let zoomed = $state(false)
   let panX = $state(0)
   let panY = $state(0)
@@ -313,11 +313,7 @@
 <div
   class="lb"
   transition:fade={{ duration: 130 }}
-  use:keynav={{
-    onLeft: () => !zoomed && step(-1),
-    onRight: () => !zoomed && step(1),
-    onEsc: closeLightbox,
-  }}
+  use:keynav={{ onLeft: () => step(-1), onRight: () => step(1), onEsc: closeLightbox }}
   onclick={onBackdrop}
   ontouchstart={onTouchStart}
   ontouchmove={onTouchMove}
