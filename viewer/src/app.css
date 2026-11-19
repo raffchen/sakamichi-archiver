@@ -994,6 +994,12 @@ img {
      user-scalable=no anyway) — touch-action is the only reliable switch */
   touch-action: none;
 }
+/* while zoomed, the current image overflows its slide into the neighbours'
+   area — same z-index paints in DOM order and the next slide is last, so it
+   would cover the zoomed image; lift the current slide instead */
+.lb-media.on-top {
+  z-index: 1;
+}
 /* placeholder on a voice slide sliding by — the real audio bar mounts only
    when the slide becomes current */
 .lb-voice-ph {
