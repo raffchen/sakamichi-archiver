@@ -7,8 +7,10 @@ volume vs local DB, CDP testing rules). `docs/deployment.md` covers the
 architecture; `README.md` is viewer-first.
 
 House rules:
-- Machine-specific knowledge stays out of git (runbook, session notes, paths
-  and endpoints that only exist on this computer).
+- Machine-specific *values* stay out of git: they live in `deploy.env` and
+  `ssh-creds.txt` (both gitignored; `deploy.env.example` is the tracked
+  template). The runbook and AGENTS.md are tracked — they describe how
+  things work and reference `deploy.env` for this machine's targets.
 - Commits follow `type(scope): subject — detail`:
   - `type` is `feat` or `fix` (others like `docs:`/`refactor:` when they fit);
   - `scope` is the area touched — `viewer` for the app, `tools` for the
