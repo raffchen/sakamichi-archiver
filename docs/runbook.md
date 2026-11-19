@@ -16,7 +16,7 @@ design decisions see the local `docs/search-db.md` (untracked, see §7).
 | Local test | `http://127.0.0.1:8080` (docker, container `sakamichi-archiver-viewer-1`) |
 | Server API tests | `http://172.17.0.1:$VIEWER_PORT` via ssh (docker bridge gateway; the viewer port is not exposed publicly) |
 | Remotes | `omv` = the appdata dir itself (see `deploy.env`); `github` = mirror (`raffchen/sakamichi-archiver`) |
-| Archive data | `media/` — bind-mounted into containers; **never in git, never in an image** |
+| Archive data | `media/` — bind-mounted into containers; **never in git, never in an image**. The full archive exists **only on the server** — the local `media/` is a partial mirror, so anything that must see every entry (surveys, grep sweeps, counts) runs on the server: see §6 |
 | Machine secrets | `ssh-creds.txt`, `deploy.env` — gitignored, this machine only |
 
 Server-host facts: **no node** on the OMV host — pipe JSON through local node
@@ -179,6 +179,23 @@ downloads once from HF on first boot).
 - **DB inspection in-container**:
   `docker exec <viewer> node --no-warnings -e "const {DatabaseSync}=require('node:sqlite'); …"`
   against `/data/db/index.sqlite` (readOnly).
+- **Full-archive queries** (the full `media/` exists only on the server —
+  the local copy is a partial mirror, so surveys/counts/greps must run
+  there): ssh in and `docker exec` against the viewer container, which sees
+  everything under `/data/media`. Only the server has every entry, so a
+  result from the local mirror is a *lower bound*, never the answer.
+  Gotchas learned the hard way:
+  - The blog trees are tens of GB, but almost all of it is photos — the
+    JSON is ~130 files / ~120 MB. A bare `grep -r /data/media/*/blogs`
+    reads every image byte and will look hung; always target the JSON:
+    `find /data/media -path "*blogs*" -name "*.json" | xargs grep …`.
+  - Quoting through `ssh` → `docker exec sh -c` is brittle. For anything
+    non-trivial, write the script locally and pipe it in:
+    `ssh <target> 'docker exec -i <viewer> sh -c "cat > /tmp/x.mjs"' < x.mjs`
+    then run it (avoid `node /dev/stdin` — it eats the stdin pipe).
+  - Long jobs: run detached (`docker exec -d … "… > /tmp/out.txt 2>&1;
+    echo done > /tmp/job-done"`) and poll — pipelines only write output at
+    the end, and an aborted ssh kills the job mid-flight.
 - **UI checks**: CDP screenshot scripts in /tmp (pattern in §5.3) — click
   through the real UI, capture PNG, then read the image. Verify state via
   `location.hash` and DOM queries, not screenshots alone.
