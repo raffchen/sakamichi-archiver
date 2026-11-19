@@ -504,7 +504,7 @@
     {#if m}
       <div class="lb-track" bind:this={trackEl} bind:clientWidth={bodyW} bind:clientHeight={bodyH} class:settle={settling} style:transform={`translateX(${dragPx}px)`}>
         {#each slides as s (s.it.id)}
-          <div class="lb-media" style:transform={`translateX(${(s.k - lightbox.i) * 100}%)`}>
+          <div class="lb-media" class:on-top={s.k === lightbox.i && scale > 1} style:transform={`translateX(${(s.k - lightbox.i) * 100}%)`}>
             {#if s.k === lightbox.i}
               {#if s.it.type === 'picture'}
                 <img
