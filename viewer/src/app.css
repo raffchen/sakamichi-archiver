@@ -1068,6 +1068,14 @@ img {
 /* zoom (mouse + touch): a shrunken image invites a click/double-tap; the
    zoomed view pans with the grab cursor and a click without a drag returns
    to fit. The zoom itself renders as a transform on the fitted img. */
+.lb-media img {
+  /* double-tap zooms in the app — a selection would paint over the image
+     (mobile Firefox does exactly that) */
+  -webkit-user-select: none;
+  user-select: none;
+  /* and long-press must not offer the save-image callout mid-gesture */
+  -webkit-touch-callout: none;
+}
 .lb-media img.zoomable {
   cursor: zoom-in;
 }
