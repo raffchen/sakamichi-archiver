@@ -178,7 +178,8 @@
        with --app-zoom like everything else) */
     opacity: 0;
     transition: opacity 0.25s;
-    /* touch devices: pure indicator, never swallows a scroll gesture */
+    /* touch: the track stays a pass-through indicator — only the thumb
+       (below) is grabbable, so flicks near the edge still scroll normally */
     pointer-events: none;
     touch-action: none;
   }
@@ -198,6 +199,24 @@
     border-radius: 4px;
     background: var(--sb-thumb);
     transition: width 0.15s, right 0.15s, background 0.15s;
+    /* touch: the thumb is the drag surface. touch-action:none keeps the
+       browser from turning the gesture into a scroll, so pointermove keeps
+       firing and the drag drives scrollTop (pointer capture already routes
+       moves outside the thumb back to it) */
+    pointer-events: auto;
+    touch-action: none;
+  }
+  /* an invisible thumb must not intercept flicks at its last position */
+  .sb:not(.on) .sb-thumb {
+    pointer-events: none;
+  }
+  /* invisible hit-area extension: fingers need ~40px targets and the thumb
+     is 5px wide. It only extends outward and slightly vertically, so a
+     flick on the content beside the rail still scrolls normally */
+  .sb-thumb::before {
+    content: '';
+    position: absolute;
+    inset: -8px -10px -8px -6px;
   }
   .sb-rail:hover .sb-thumb,
   .sb.drag .sb-thumb {
