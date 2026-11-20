@@ -54,19 +54,16 @@
   /* --- thumb / track interaction --- */
   let startY = 0
   let startScroll = 0
+  let activePointer = -1
+  let thumbEl: HTMLElement | null = null
+  let dragEl: HTMLElement | null = null
 
-  function thumbDown(e: PointerEvent) {
-    if (!screen) return
-    e.preventDefault() // no text selection while dragging
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragging = true
-    startY = e.clientY
-    startScroll = screen.scrollTop
-    flash()
-  }
-
-  function thumbMove(e: PointerEvent) {
-    if (!dragging || !screen) return
+  /* Move/end handling lives on window for the duration of the drag, not on
+     the thumb: pointer capture is best-effort, and browsers that don't
+     retarget touch pointers to the thumb would otherwise stop delivering
+     moves the moment the finger leaves the 5px thumb. */
+  function onDragMove(e: PointerEvent) {
+    if (!dragging || !screen || e.pointerId !== activePointer) return
     const ch = screen.clientHeight
     const maxScroll = screen.scrollHeight - ch
     const track = ch - thumbH
@@ -75,11 +72,55 @@
     screen.scrollTop = Math.min(Math.max(startScroll + d, 0), maxScroll)
   }
 
-  function thumbUp(e: PointerEvent) {
-    if (!dragging) return
+  function onDragEnd(e: PointerEvent) {
+    if (!dragging || e.pointerId !== activePointer) return
     dragging = false
-    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    activePointer = -1
+    window.removeEventListener('pointermove', onDragMove)
+    window.removeEventListener('pointerup', onDragEnd)
+    window.removeEventListener('pointercancel', onDragEnd)
+    try {
+      dragEl?.releasePointerCapture(e.pointerId)
+    } catch {}
+    dragEl = null
     flash()
+  }
+
+  /* shared by thumb grab and track click-drag; also fixes the track path
+     ending its drag properly (it used to leave `dragging` set forever) */
+  function beginDrag(e: PointerEvent, el: HTMLElement) {
+    if (!screen || dragging) return // a second pointer must not re-anchor the drag
+    e.preventDefault() // no text selection while dragging
+    dragging = true
+    activePointer = e.pointerId
+    dragEl = el
+    startY = e.clientY
+    startScroll = screen.scrollTop
+    try {
+      el.setPointerCapture(e.pointerId)
+    } catch {}
+    window.addEventListener('pointermove', onDragMove)
+    window.addEventListener('pointerup', onDragEnd)
+    window.addEventListener('pointercancel', onDragEnd)
+    flash()
+  }
+
+  function thumbDown(e: PointerEvent) {
+    beginDrag(e, e.currentTarget as HTMLElement)
+  }
+
+  /* Mobile Firefox: Gecko's APZ resolves touch-action from its own
+     compositor-side hit-testing and can claim a drag that starts on the
+     thumb (or its hit-area) as a pan — firing pointercancel and killing the
+     drag even though touch-action: none is set. Claiming the gesture at the
+     touch level too (non-passive preventDefault) guarantees no native pan
+     ever starts from the thumb. Pointer events fire before the touch
+     events, so the drag is already armed when these run. */
+  function onTouchStart(e: TouchEvent) {
+    e.preventDefault()
+  }
+  function onTouchMove(e: TouchEvent) {
+    e.preventDefault()
   }
 
   /* track click → jump so the thumb centers on the click, then keep
@@ -95,11 +136,7 @@
     const track = ch - thumbH
     if (track <= 0) return
     screen.scrollTop = Math.min(Math.max(((y - thumbH / 2) / track) * maxScroll, 0), maxScroll)
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragging = true
-    startY = e.clientY
-    startScroll = screen.scrollTop
-    flash()
+    beginDrag(e, e.currentTarget as HTMLElement)
   }
 
   onMount(() => {
@@ -116,9 +153,15 @@
     ro = new ResizeObserver(measure)
     ro.observe(screen)
     ro.observe(screen.firstElementChild as HTMLElement)
+    /* the thumb is the drag surface: claim touches at the touch level too
+       (see onTouchStart) — these must be non-passive to reach preventDefault */
+    thumbEl?.addEventListener('touchstart', onTouchStart, { passive: false })
+    thumbEl?.addEventListener('touchmove', onTouchMove, { passive: false })
     measure()
     flash() // show once on arrival so the custom rail is discoverable
     return () => {
+      thumbEl?.removeEventListener('touchstart', onTouchStart)
+      thumbEl?.removeEventListener('touchmove', onTouchMove)
       screen!.removeEventListener('scroll', onScroll)
       ro!.disconnect()
       if (hideTimer) clearTimeout(hideTimer)
@@ -151,10 +194,10 @@
         class="sb-thumb"
         style="height: {thumbH}px; transform: translateY({thumbTop}px)"
         onpointerdown={thumbDown}
-        onpointermove={thumbMove}
-        onpointerup={thumbUp}
-        onpointercancel={thumbUp}
-      ></div>
+        bind:this={thumbEl}
+      >
+        <div class="sb-hit"></div>
+      </div>
     </div>
   </div>
 
@@ -212,11 +255,13 @@
   }
   /* invisible hit-area extension: fingers need ~40px targets and the thumb
      is 5px wide. It only extends outward and slightly vertically, so a
-     flick on the content beside the rail still scrolls normally */
-  .sb-thumb::before {
-    content: '';
+     flick on the content beside the rail still scrolls normally. A real
+     element (not ::before) so every browser's hit-testing and touch-action
+     resolution treat it identically. */
+  .sb-hit {
     position: absolute;
     inset: -8px -10px -8px -6px;
+    touch-action: none;
   }
   .sb-rail:hover .sb-thumb,
   .sb.drag .sb-thumb {
