@@ -5,6 +5,7 @@
   import { icon } from '../lib/icons'
   import { daysAgo, fmtFull } from '../lib/format'
   import { disp } from '../lib/display'
+  import Scrollbar from './Scrollbar.svelte'
 
   let {
     archive,
@@ -101,6 +102,7 @@
 
 <div class="screen">
   <div class="col">
+    <Scrollbar />
   {#if !members.length}
     <p class="muted-note">
       このサイトはアーカイブされていません<br />

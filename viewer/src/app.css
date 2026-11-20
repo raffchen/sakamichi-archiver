@@ -42,6 +42,9 @@
   --track: #d9dce3;
   /* search-hit highlight */
   --mark-bg: #ffe9a8;
+  /* custom scrollbar thumb (Scrollbar.svelte) */
+  --sb-thumb: rgba(0, 0, 0, 0.24);
+  --sb-thumb-strong: rgba(0, 0, 0, 0.4);
   /* inactive tab-bar icons */
   --tab-ink: #b4b4b9;
   color-scheme: light;
@@ -98,6 +101,8 @@ html[data-theme='dark'] {
   --track: #3c3c44;
   --mark-bg: #64511a;
   --tab-ink: #787880;
+  --sb-thumb: rgba(255, 255, 255, 0.3);
+  --sb-thumb-strong: rgba(255, 255, 255, 0.45);
   color-scheme: dark;
 }
 
@@ -268,11 +273,14 @@ img {
   overflow-x: hidden; /* zoomed layouts can phantom-overflow horizontally */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  /* reserve the classic-scrollbar gutter on both edges so the column keeps
-     centering on the window axis (a classic scrollbar would otherwise eat
-     15px on the right and shift .col off the chrome bars by half of it;
-     overlay-scrollbar platforms reserve nothing, so mobile is unaffected) */
-  scrollbar-gutter: stable both-edges;
+  /* the custom scrollbar (Scrollbar.svelte, in each screen's .col) replaces
+     the native one — hide it and drop the gutter reservation so .col centers
+     on the true window axis, the way overlay-scrollbar platforms already
+     saw it. The native scroller still owns wheel/touch/keyboard scrolling */
+  scrollbar-width: none;
+}
+.screen::-webkit-scrollbar {
+  display: none;
 }
 /* the phone column: white page, centered, and positioned so popovers and
    pills anchor to it exactly like they did when the frame was the column.

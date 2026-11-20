@@ -5,6 +5,7 @@
   import { requireLogin } from '../lib/auth.svelte'
   import { fmtFull } from '../lib/format'
   import { disp } from '../lib/display'
+  import Scrollbar from './Scrollbar.svelte'
 
   let { archive }: { archive: Archive } = $props()
 
@@ -168,6 +169,7 @@
 
 <div class="screen">
   <div class="col">
+    <Scrollbar />
   {#if !q}
     <p class="muted-note">
       {#if blogCorpus}

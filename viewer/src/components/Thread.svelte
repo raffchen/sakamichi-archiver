@@ -8,6 +8,7 @@
   import { sentinel } from '../lib/actions'
   import { icon } from '../lib/icons'
   import Message from './Message.svelte'
+  import Scrollbar from './Scrollbar.svelte'
 
   let { archive, member }: { archive: Archive; member: Member } = $props()
 
@@ -137,6 +138,7 @@
 
 <div class="screen" bind:this={el} onscroll={onScroll}>
   <div class="col">
+    <Scrollbar />
     <div class="thread">
       <div class="top-load" use:sentinel={{ onLoad: loadOlder, enabled: !atStart }}>
         {atStart
