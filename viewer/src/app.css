@@ -49,6 +49,22 @@
   --tab-ink: #b4b4b9;
   color-scheme: light;
 }
+/* tablets: the centered phone column reads as waste at that scale (430px on
+   a ~1440px tablet = half the screen empty), so on hover-less touch devices
+   the column fills the screen like it does on a phone — a big-phone layout,
+   still capped like the desktop column. (hover: none) is the primary test:
+   Firefox on Android reports the primary pointer as FINE even on pure-touch
+   devices (probed in the emulator), so (pointer: coarse) alone never fired;
+   desktops and touchscreen laptops keep a hover-capable primary pointer and
+   stay on the centered phone-column aesthetic. Phones are unaffected: below
+   the min-width the clamp floor ≥ the viewport, so .col is already full-width. */
+@media (min-width: 600px) and (hover: none),
+(min-width: 600px) and (pointer: coarse) {
+  :root {
+    --phone-w: min(92vw, 1100px);
+  }
+}
+
 /* continuous UI scale replacing the 1:1 fallback above (see the comment in
    :root). tan(atan2()) is the CSS idiom for the ratio of two lengths (calc
    can't divide lengths); @supports keeps pre-trig browsers (pre-2023) at 1:1 */
