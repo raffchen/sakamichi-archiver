@@ -22,6 +22,10 @@
   let hideTimer: ReturnType<typeof setTimeout> | undefined
   let ro: ResizeObserver | undefined
   let hovering = false
+  /* touch devices keep the rail up permanently: a 1.1s fade hides it before
+     the user can aim at the thumb, and their grab then lands on the content
+     as a pan — the rail flashes on but the thumb never follows the finger */
+  const coarse = matchMedia('(hover: none), (pointer: coarse)').matches
 
   function measure() {
     if (!screen) return
@@ -37,6 +41,7 @@
 
   function flash() {
     visible = true
+    if (coarse) return // touch: no auto-hide, the rail stays grabbable
     if (hideTimer) clearTimeout(hideTimer)
     hideTimer = setTimeout(() => {
       if (!dragging && !hovering) visible = false
