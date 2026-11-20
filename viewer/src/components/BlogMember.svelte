@@ -8,6 +8,7 @@
      as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
   import { back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
+  import Scrollbar from './Scrollbar.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
 
@@ -99,6 +100,7 @@
 
 <div class="screen" bind:this={screen}>
   <div class="col blog-member" bind:clientWidth={colW}>
+    <Scrollbar />
   {#if error}
     <div class="muted-note">読み込み失敗 / {error}</div>
   {:else if !entries}

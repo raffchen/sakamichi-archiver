@@ -5,6 +5,7 @@
   import { disp } from '../lib/display'
   import { icon } from '../lib/icons'
   import VoicePlayer from './VoicePlayer.svelte'
+  import Scrollbar from './Scrollbar.svelte'
 
   let { member }: { member: Member } = $props()
 
@@ -96,6 +97,7 @@
 
 <div class="screen" bind:this={screenEl}>
   <div class="col">
+    <Scrollbar />
   {#if !sorted.length}
     <p class="muted-note">該当なし / no media{member.missing ? ` — ${member.missing} 件は未アーカイブ` : ''}</p>
   {:else if filter === 'voice'}

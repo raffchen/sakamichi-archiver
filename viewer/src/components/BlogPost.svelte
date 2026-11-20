@@ -7,6 +7,7 @@
   import { fmtFull } from '../lib/format'
   import { normalizeBlogContent } from '../lib/blog-html'
   import { icon } from '../lib/icons'
+  import Scrollbar from './Scrollbar.svelte'
 
   let { archive }: { archive: Archive } = $props()
 
@@ -74,6 +75,7 @@
 
 <div class="screen" bind:this={screen}>
   <div class="col blog-post">
+    <Scrollbar />
   {#if error}
     <div class="muted-note">読み込み失敗 / {error}</div>
   {:else if !entry}

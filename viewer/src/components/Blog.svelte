@@ -8,6 +8,7 @@
   import { openBlog, setHideGraduated, toggleTheme, ui, type BlogSort } from '../lib/store.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
+  import Scrollbar from './Scrollbar.svelte'
   import BlogMember from './BlogMember.svelte'
   import BlogPost from './BlogPost.svelte'
 
@@ -198,6 +199,7 @@
 
   <div class="screen">
     <div class="col blog-directory">
+    <Scrollbar />
     {#snippet card(b: BlogMemberInfo)}
       <button
         class="blog-card"
