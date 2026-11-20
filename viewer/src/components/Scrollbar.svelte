@@ -259,13 +259,16 @@
     pointer-events: none;
   }
   /* invisible hit-area extension: fingers need ~40px targets and the thumb
-     is 5px wide. It only extends outward and slightly vertically, so a
-     flick on the content beside the rail still scrolls normally. A real
-     element (not ::before) so every browser's hit-testing and touch-action
-     resolution treat it identically. */
+     is 5px wide. On touch phones the thumb hugs the screen edge, inside the
+     system back-gesture zone — touches that START there are eaten by the
+     OS (emulated: a 1px-from-edge drag navigated back instead of scrolling)
+     — so the grabbable band must reach ~30px INBOARD, letting users start
+     the drag beside the thumb instead of on it. A real element (not
+     ::before) so every browser's hit-testing and touch-action resolution
+     treat it identically. */
   .sb-hit {
     position: absolute;
-    inset: -8px -10px -8px -6px;
+    inset: -8px -10px -8px -32px;
     touch-action: none;
   }
   .sb-rail:hover .sb-thumb,
