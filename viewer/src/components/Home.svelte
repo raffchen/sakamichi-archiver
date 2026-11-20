@@ -3,7 +3,7 @@
   import type { Archive, Member } from '../lib/types'
   import { openMember, toggleTheme, ui, unreadCount } from '../lib/store.svelte'
   import { icon } from '../lib/icons'
-  import { daysAgo, fmtDateTime } from '../lib/format'
+  import { daysAgo, fmtFull } from '../lib/format'
   import { disp } from '../lib/display'
 
   let {
@@ -131,7 +131,7 @@
   <p class="muted-note">
     {site.name}：{siteTotals(ui.site).messages} messages · {siteTotals(ui.site).media} media<br />
     {archive.totals.messages} messages · {archive.totals.media} media total<br />
-    sync: {fmtDateTime(lastChecked ?? archive.generated_at)}<br />
+    sync: {fmtFull(lastChecked ?? archive.generated_at)}<br />
     tap a member to open the thread
   </p>
   </div>
