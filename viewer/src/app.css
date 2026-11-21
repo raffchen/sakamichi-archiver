@@ -93,6 +93,17 @@ html[data-site='sakurazaka46'] {
   --ava-bg: #4d648a;
   --badge: #e2879f;
 }
+html[data-site='hinatazaka46'] {
+  --accent: #5bb2e5;
+  --accent-2: #8ecfef;
+  /* solid header — the app's blue→purple band dropped (per the nogi/sakura
+     precedent), matching the section-text blue the directory uses */
+  --head-fg: #ffffff;
+  --head-bg: #5bb2e5;
+  --section: #5bb2e5;
+  --ava-bg: #a9bfd2;
+  --badge: #4aa3dc;
+}
 
 /* ---------- dark mode ----------
    Set on <html> as data-theme (index.html inline script pre-paint; App keeps
@@ -243,6 +254,17 @@ img {
   /* darker pink line — reads on the solid pink header the way nogi's
      deep-purple line reads on its header */
   background: linear-gradient(90deg, #c9748f, #b05575);
+}
+.hinata-line .head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  /* darker blue line — reads on the solid blue header the way sakura's
+     deeper pink line reads on its header */
+  background: linear-gradient(90deg, #4aa3dc, #3687bd);
 }
 .count-badge {
   position: absolute;

@@ -9,7 +9,7 @@
 
   let { member }: { member: Member } = $props()
 
-  const jp = $derived(ui.site === 'sakurazaka46')
+  const jp = $derived(ui.site === 'sakurazaka46' || ui.site === 'hinatazaka46')
   const who = $derived(jp ? member.name : disp(member))
   const tabs = [
     { id: 'all', label: 'All', ic: 'grid' },

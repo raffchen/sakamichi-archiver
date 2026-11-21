@@ -53,7 +53,7 @@
     if (!scopedMsgMember) return null
     const m = memberBySlug.get(scopedMsgMember)
     if (!m) return scopedMsgMember.replace(/_/g, ' ')
-    return ui.site === 'sakurazaka46' ? m.name : disp(m)
+    return ui.site === 'sakurazaka46' || ui.site === 'hinatazaka46' ? m.name : disp(m)
   })
 
   /* client-side fallback scan (messages only — blog bodies aren't in index.json).

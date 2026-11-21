@@ -2,7 +2,8 @@
   "display_name": "raff",
   "sites": {
     "nogizaka46": { "name": "乃木坂46", "roman": "Nogizaka46", "origin": "https://message.nogizaka46.com" },
-    "sakurazaka46": { "name": "櫻坂46", "roman": "Sakurazaka46", "origin": "https://message.sakurazaka46.com" }
+    "sakurazaka46": { "name": "櫻坂46", "roman": "Sakurazaka46", "origin": "https://message.sakurazaka46.com" },
+    "hinatazaka46": { "name": "日向坂46", "roman": "Hinatazaka46", "origin": "https://www.hinatazaka46.com" }
   },
   "members": {
     "池田_瑛紗": { "site": "nogizaka46", "roman": "Teresa Ikeda", "kana": "いけだ てれさ" },

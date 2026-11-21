@@ -221,7 +221,12 @@
       </button>
     {/snippet}
 
-    {#if ui.blogSort === 'latest' || ui.blogSort === 'oldest'}
+    {#if !siteMembers.length}
+      <p class="muted-note">
+        このサイトはアーカイブされていません<br />
+        nothing archived for this site yet
+      </p>
+    {:else if ui.blogSort === 'latest' || ui.blogSort === 'oldest'}
       {#if latestErr}
         <div class="muted-note">読み込み失敗 / {latestErr}</div>
       {:else if !latestShown}
