@@ -65,7 +65,8 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) sakamichi-archive
 API = "https://api.sakamichi.co"
 SLEEP = 0.25
 LINK = {"nogizaka46": "https://www.nogizaka46.com/s/n46/diary/detail/{uid}",
-        "sakurazaka46": "https://sakurazaka46.com/s/s46/diary/detail/{uid}"}
+        "sakurazaka46": "https://sakurazaka46.com/s/s46/diary/detail/{uid}",
+        "hinatazaka46": "https://www.hinatazaka46.com/s/official/diary/detail/{uid}"}
 
 args = sys.argv[1:]
 base = str(MEDIA_ROOT / "unlisted")
