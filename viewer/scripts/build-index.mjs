@@ -351,7 +351,11 @@ const genNum = (gen) => {
 }
 
 const blogMembers = []
-const archivedBlogs = new Map() // uuid -> archived state
+/* "${site}/${uuid}" -> archived state. member_uuid is SITE-LOCAL (every site's
+   blog API numbers its members 1..N independently), so a bare-uuid key let
+   later roots overwrite earlier sites' members (sakura uuid 11 = 菅井友香
+   erased hinatazaka uuid 11 = 東村芽依 from the directory). */
+const archivedBlogs = new Map()
 const blogRows = new Map() // member_key -> full-post mirror for the search DB
 /* search text: HTML out (tags → spaces), the common entities decoded, whitespace
    collapsed — the DB mirrors what a reader sees, not the markup. <style>/<script>
@@ -398,9 +402,10 @@ for (const { root: blogsRoot, siteHint } of legacyBlogRoots) {
       })
     }
     const lastWithThumb = [...entries].reverse().find((e) => e.thumbnail)
-    archivedBlogs.set(String(state.member_uuid), {
+    archivedBlogs.set(`${blogSite ?? ''}/${state.member_uuid}`, {
       key,
       site: blogSite,
+      uuid: String(state.member_uuid),
       name: state.member ?? key.replace(/_/g, ' '),
       count: entries.length,
       first: entries[0]?.at ?? null,
@@ -429,11 +434,14 @@ for (const site of Object.keys(sites)) {
   const cache = readJson(path.join(LOGS, `blog-members-${site}.json`)) ?? []
   const seen = new Set()
   for (const m of cache) {
-    const uuid = String(m.member_uuid)
+    /* the message-app sites' roster carries member_uuid; hinatazaka's roster
+       (official-site JSONP) only has the list id — grab-blog treats
+       member_uuid || id as the uuid, so match that here */
+    const uuid = String(m.member_uuid ?? m.id)
     if (seen.has(uuid)) continue
     seen.add(uuid)
     const g = gens[site]?.[uuid] ?? {}
-    const arch = archivedBlogs.get(uuid)
+    const arch = archivedBlogs.get(`${site}/${uuid}`)
     /* staff/relay/research accounts (運営スタッフ, 期生リレー, 研究生 …) have no
        generation in the wiki-sourced map and never get archived — emitting
        them just fills the その他 section with empty cards */
@@ -457,12 +465,12 @@ for (const site of Object.keys(sites)) {
     })
   }
   /* anything archived but absent from the cache still gets its card */
-  for (const [uuid2, arch] of archivedBlogs) {
-    if (arch.site !== site || seen.has(uuid2)) continue
-    seen.add(uuid2)
-    const g = gens[site]?.[uuid2] ?? {}
+  for (const arch of archivedBlogs.values()) {
+    if (arch.site !== site || seen.has(arch.uuid)) continue
+    seen.add(arch.uuid)
+    const g = gens[site]?.[arch.uuid] ?? {}
     blogMembers.push({
-      key: arch.key, site, uuid: uuid2, name: g.name ?? arch.name, kana: g.kana ?? null,
+      key: arch.key, site, uuid: arch.uuid, name: g.name ?? arch.name, kana: g.kana ?? null,
       roman: g.roman ?? null, gen: g.gen ?? null, gen_num: g.gen_num ?? genNum(g.gen),
       graduated: !!g.graduated, count: arch.count,
       first: arch.first, last: arch.last, thumb: arch.thumb,
