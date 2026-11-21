@@ -6,7 +6,12 @@
    bottom-right, document with round-cap lines, left-facing megaphone with
    grip, org logo as the Official icon (nogizaka: filled triangle with
    knocked-out "46"; sakurazaka: outlined layered triangle with "46";
-   hinatazaka: sakura's layered pair with nogi's filled triangle on top),
+   hinatazaka: sakura's layered pair with nogi's filled triangle on top).
+   The front triangle + "46" share the SAME coordinates in all three
+   (nogizaka's M19.3 3.9v16H6.1 / 46 at 14.4,18.3) so switching sites
+   doesn't shift the mark; only the back triangle and fill style differ.
+   Sakurazaka's back triangle is hinatazaka's (+2.1,+3.0 offset, right +
+   bottom edges only — no hypotenuse, so the "46" is never crossed).
    bell with separate clapper circle; sakurazaka's last tab is "Fanclub"
    (leaf-bud emblem) instead of Info. */
 
@@ -17,7 +22,7 @@ export const icons: Record<string, string> = {
   blog: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="4.9" y="3.9" width="14.2" height="16.2" rx="1.6" stroke-linejoin="round"/><path d="M8.4 8.4h7.2M8.4 12h7.2M8.4 15.6h7.2"/></svg>`,
   news: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M6.6 10.4 20 4.4v15.2L6.6 13.6z"/><path d="M4.1 9.2h2.5v5.6H4.1z"/><path d="M8.6 14.9v2.5c0 .7.6 1.3 1.3 1.3h.9c.7 0 1.3-.6 1.3-1.3v-2.5"/></svg>`,
   official: `<svg ${S}><path fill="currentColor" stroke="none" d="M19.3 3.9v16H6.1z"/><text x="14.4" y="18.3" font-size="5" font-weight="700" text-anchor="middle" fill="var(--bar, #fff)" stroke="none">46</text></svg>`,
-  'official-saka': `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M15.6 4.9v13.9H5.2z"/><path d="M17.7 8.2v12.7H7.4"/><text x="11" y="17.6" font-size="4.6" font-weight="600" text-anchor="middle" fill="currentColor" stroke="none">46</text></svg>`,
+  'official-saka': `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M21.4 6.9v16H8.2"/><path d="M19.3 3.9v16H6.1z"/><text x="14.4" y="18.3" font-size="5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">46</text></svg>`,
   /* hinatazaka: sakura's layered pair, but the TOP triangle is nogi's filled
      "46" one (the icon hinata had before). The back triangle copies the
      filled one's size, offset down-right like sakura's, and — like sakura's
