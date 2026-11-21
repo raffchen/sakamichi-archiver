@@ -6,6 +6,7 @@
   let { archive }: { archive: Archive } = $props()
 
   const isSaka = $derived(ui.site === 'sakurazaka46')
+  const isHinata = $derived(ui.site === 'hinatazaka46')
 
   const hasBlogs = $derived(!!archive.blogs?.members.some((b) => b.site === ui.site))
 
@@ -13,7 +14,7 @@
     { id: 'talk', label: 'Talk', ic: 'talk', locked: false },
     { id: 'blog', label: 'Blog', ic: 'blog', locked: !hasBlogs },
     { id: 'news', label: 'News', ic: 'news', locked: true },
-    { id: 'official', label: 'Official', ic: isSaka ? 'official-saka' : 'official', locked: true },
+    { id: 'official', label: 'Official', ic: isSaka ? 'official-saka' : isHinata ? 'official-hinata' : 'official', locked: true },
     { id: 'info', label: 'Info', ic: 'info', locked: false },
   ])
 

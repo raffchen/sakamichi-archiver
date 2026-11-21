@@ -5,7 +5,8 @@
    (screenshots 2026-11): bold ~2.1 strokes, speech bubble with tail at
    bottom-right, document with round-cap lines, left-facing megaphone with
    grip, org logo as the Official icon (nogizaka: filled triangle with
-   knocked-out "46"; sakurazaka: outlined layered triangle with "46"),
+   knocked-out "46"; sakurazaka: outlined layered triangle with "46";
+   hinatazaka: sakura's layered pair with nogi's filled triangle on top),
    bell with separate clapper circle; sakurazaka's last tab is "Fanclub"
    (leaf-bud emblem) instead of Info. */
 
@@ -17,6 +18,12 @@ export const icons: Record<string, string> = {
   news: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M6.6 10.4 20 4.4v15.2L6.6 13.6z"/><path d="M4.1 9.2h2.5v5.6H4.1z"/><path d="M8.6 14.9v2.5c0 .7.6 1.3 1.3 1.3h.9c.7 0 1.3-.6 1.3-1.3v-2.5"/></svg>`,
   official: `<svg ${S}><path fill="currentColor" stroke="none" d="M19.3 3.9v16H6.1z"/><text x="14.4" y="18.3" font-size="5" font-weight="700" text-anchor="middle" fill="var(--bar, #fff)" stroke="none">46</text></svg>`,
   'official-saka': `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M15.6 4.9v13.9H5.2z"/><path d="M17.7 8.2v12.7H7.4"/><text x="11" y="17.6" font-size="4.6" font-weight="600" text-anchor="middle" fill="currentColor" stroke="none">46</text></svg>`,
+  /* hinatazaka: sakura's layered pair, but the TOP triangle is nogi's filled
+     "46" one (the icon hinata had before). The back triangle copies the
+     filled one's size, offset down-right like sakura's, and — like sakura's
+     back triangle — draws only its right + bottom edges (no hypotenuse), so
+     the knockout "46" is never crossed by a back stroke. */
+  'official-hinata': `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M21.4 6.9v16H8.2"/><path fill="currentColor" stroke="none" d="M19.3 3.9v16H6.1z"/><text x="14.4" y="18.3" font-size="5" font-weight="700" text-anchor="middle" fill="var(--bar, #fff)" stroke="none">46</text></svg>`,
   info: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M12 4.3c-3.3 0-5.5 2.3-5.5 5.7v3.2c0 .9-.3 1.7-.8 2.4l-.8 1.1c-.5.7 0 1.7.9 1.7h12.4c.9 0 1.4-1 .9-1.7l-.8-1.1c-.5-.7-.8-1.5-.8-2.4V10c0-3.4-2.2-5.7-5.5-5.7z"/><path d="M10.7 4.3a1.5 1.5 0 0 1 2.6 0" stroke-linecap="round"/><circle cx="12" cy="20.6" r="1.5"/></svg>`,
   /* media-list tab icons (official app: picture / film / speaker) */
   grid: `<svg ${S} fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>`,
