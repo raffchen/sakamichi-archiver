@@ -63,7 +63,10 @@
        purple; identical in both themes since the headers don't change */
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', ui.site === 'sakurazaka46' ? '#de8fa9' : '#a03fbf')
+      ?.setAttribute(
+      'content',
+      ui.site === 'sakurazaka46' ? '#de8fa9' : ui.site === 'hinatazaka46' ? '#5bb2e5' : '#a03fbf',
+    )
     /* title follows the topmost screen: thread/gallery member, blog member
        (or the Blogs directory), "Messages" on the talk side — ui.slug
        intentionally lingers when a blog is open, so the blog view must be
@@ -263,7 +266,13 @@
   }
 </script>
 
-<div class="phone {ui.site === 'sakurazaka46' ? 'sakura-line' : 'nogizaka-line'}">
+<div
+  class="phone {ui.site === 'sakurazaka46'
+    ? 'sakura-line'
+    : ui.site === 'hinatazaka46'
+    ? 'hinata-line'
+    : 'nogizaka-line'}"
+>
   {#if ui.view === 'home'}
     <Home {archive} {members} {siteKeys} />
   {:else if ui.view === 'search'}

@@ -13,7 +13,7 @@
   let { archive, member }: { archive: Archive; member: Member } = $props()
 
   const PAGE = 40
-  const jp = $derived(ui.site === 'sakurazaka46')
+  const jp = $derived(ui.site === 'sakurazaka46' || ui.site === 'hinatazaka46')
   const who = $derived(jp ? member.name : disp(member))
 
   let shown = $state(PAGE)
