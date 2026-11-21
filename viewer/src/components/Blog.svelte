@@ -5,7 +5,15 @@
      the directory sort: generation (either direction), flat by name, or the
      official "newest posts" cross-member feed. */
   import type { Archive, BlogMemberInfo } from '../lib/types'
-  import { openBlog, setHideGraduated, toggleTheme, ui, type BlogSort } from '../lib/store.svelte'
+  import {
+    genSettingKey,
+    openBlog,
+    setHideGraduated,
+    toggleGenHidden,
+    toggleTheme,
+    ui,
+    type BlogSort,
+  } from '../lib/store.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
   import Scrollbar from './Scrollbar.svelte'
@@ -15,10 +23,33 @@
   let { archive }: { archive: Archive } = $props()
 
   const siteKeys = $derived(Object.keys(archive.sites))
+  /* generation visibility (the ⚙ menu): every gen starts shown; unchecking one
+     removes its members from the directory (all sorts) and its posts from the
+     newest-posts feed. genByKey maps a directory/feed key -> gen_num so the
+     feed — which carries no gen of its own — can filter too. */
+  const genHidden = $derived(new Set(ui.blogHiddenGens))
+  const genByKey = $derived(
+    new Map((archive.blogs?.members ?? []).map((b) => [b.key, b.gen_num])),
+  )
+  /* the gen rows for the current site's settings menu, oldest first, plus
+     その他 when any member has no generation (ポカ) */
+  const siteGenRows = $derived.by(() => {
+    const nums = new Set<number>()
+    let other = false
+    for (const b of archive.blogs?.members ?? [])
+      if (b.site === ui.site) {
+        if (b.gen_num == null) other = true
+        else nums.add(b.gen_num)
+      }
+    const rows = [...nums].sort((a, b) => a - b).map((n) => ({ gen: n as number | null, label: `${n}期生` }))
+    if (other) rows.push({ gen: null, label: 'その他' })
+    return rows
+  })
   const siteMembers = $derived(
     (archive.blogs?.members ?? [])
       .filter((b) => b.site === ui.site)
-      .filter((b) => !(ui.blogHideGraduated && b.graduated)),
+      .filter((b) => !(ui.blogHideGraduated && b.graduated))
+      .filter((b) => !genHidden.has(genSettingKey(ui.site, b.gen_num))),
   )
   /* every member key that's graduated — the newest-posts feed has no flag of
      its own, only the directory key, so it filters against this set */
@@ -97,10 +128,13 @@
   })
 
   /* the feed is filtered reactively (not at fetch time) so toggling the
-     setting doesn't refetch — it just reshapes what's already here */
+     settings doesn't refetch — it just reshapes what's already here */
   const latestShown = $derived(
-    latest && ui.blogHideGraduated && graduatedKeys.size
-      ? latest.filter((p) => !graduatedKeys.has(p.key))
+    latest
+      ? latest.filter((p) => {
+          if (ui.blogHideGraduated && graduatedKeys.has(p.key)) return false
+          return !genHidden.has(genSettingKey(ui.site, genByKey.get(p.key) ?? null))
+        })
       : latest,
   )
 
@@ -171,6 +205,21 @@
           <span>Hide graduated members</span>
           {@html icon('check')}
         </button>
+        {#each siteGenRows as r (r.label)}
+          {@const key = genSettingKey(ui.site, r.gen)}
+          {@const shown = !genHidden.has(key)}
+          <button
+            class="setting-row"
+            role="menuitemcheckbox"
+            aria-checked={shown}
+            class:on={shown}
+            class:off={!shown}
+            onclick={() => toggleGenHidden(key)}
+          >
+            <span>Show {r.label}</span>
+            {@html icon('check')}
+          </button>
+        {/each}
       </div>
     {/if}
   </header>
@@ -221,10 +270,15 @@
       </button>
     {/snippet}
 
-    {#if !siteMembers.length}
+    {#if !(archive.blogs?.members ?? []).some((b) => b.site === ui.site)}
       <p class="muted-note">
         このサイトはアーカイブされていません<br />
         nothing archived for this site yet
+      </p>
+    {:else if !siteMembers.length}
+      <p class="muted-note">
+        表示する期生がありません<br />
+        every generation is hidden
       </p>
     {:else if ui.blogSort === 'latest' || ui.blogSort === 'oldest'}
       {#if latestErr}

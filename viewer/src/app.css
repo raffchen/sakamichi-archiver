@@ -1421,9 +1421,13 @@ body:has(.sheet.login) .sheet {
   opacity: 0.25;
 }
 /* settings toggles lead with the check (a checkbox look), not the trailing
-   accent tick the sort rows use */
+   accent tick the sort rows use. The label grows to fill the row so short
+   labels (Show 4期生) sit next to the check like long ones do. */
 .blog-sort-menu button.setting-row {
   flex-direction: row-reverse;
+}
+.blog-sort-menu button.setting-row span {
+  flex: 1;
 }
 .blog-sort-menu button svg {
   width: 15px;

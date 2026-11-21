@@ -19,6 +19,20 @@ function loadHideGraduated(): boolean {
   }
 }
 
+/* blog directory: generations hidden via the ⚙ menu, persisted as a list of
+   "site:gen" entries ("site:other" for gen-less members). Absent = shown,
+   so every generation starts checked. */
+const HIDDEN_GENS_KEY = 'sakamichi-viewer:blog-hidden-gens'
+
+function loadHiddenGens(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(HIDDEN_GENS_KEY) ?? '[]')
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 /* dark mode: a binary device preference, persisted like volume and the blog
    settings. The index.html inline script reads the same key before first
    paint so a reload in dark doesn't flash light. */
@@ -62,6 +76,9 @@ export const ui = $state({
   /* directory setting: hide graduated members' cards (the ⚙ menu). A device
      preference, so it persists like volume does. */
   blogHideGraduated: loadHideGraduated(),
+  /* directory setting: hidden generations (the ⚙ menu, per site) — see
+     loadHiddenGens above. A device preference too. */
+  blogHiddenGens: loadHiddenGens(),
   /* light/dark surfaces (index.html applies it pre-paint; App keeps it in
      sync). The per-site header colors are theme-independent for now. */
   theme: loadTheme(),
@@ -73,6 +90,23 @@ export function setHideGraduated(v: boolean) {
     localStorage.setItem(HIDE_GRAD_KEY, v ? '1' : '0')
   } catch {
     /* private mode — the toggle just won't survive reloads */
+  }
+}
+
+/* the persisted key for one generation of one site; "other" covers members
+   with no generation (the その他 section) */
+export function genSettingKey(site: string, gen: number | null): string {
+  return `${site}:${gen ?? 'other'}`
+}
+
+export function toggleGenHidden(key: string) {
+  const i = ui.blogHiddenGens.indexOf(key)
+  if (i >= 0) ui.blogHiddenGens.splice(i, 1)
+  else ui.blogHiddenGens.push(key)
+  try {
+    localStorage.setItem(HIDDEN_GENS_KEY, JSON.stringify(ui.blogHiddenGens))
+  } catch {
+    /* private mode — the toggles just won't survive reloads */
   }
 }
 

@@ -462,3 +462,41 @@ describe('theme (dark mode preference)', () => {
     expect(store.ui.theme).toBe('light')
   })
 })
+
+describe('blog generation visibility', () => {
+  it('starts with every generation shown (no hidden-gens key)', () => {
+    expect(store.ui.blogHiddenGens).toEqual([])
+  })
+
+  it('toggleGenHidden hides then re-shows a generation, persisting each step', () => {
+    const key = store.genSettingKey('hinatazaka46', 4)
+    store.toggleGenHidden(key)
+    expect(store.ui.blogHiddenGens).toEqual([key])
+    expect(localStorage.getItem('sakamichi-viewer:blog-hidden-gens')).toBe(JSON.stringify([key]))
+    store.toggleGenHidden(key) // back to shown
+    expect(store.ui.blogHiddenGens).toEqual([])
+    expect(localStorage.getItem('sakamichi-viewer:blog-hidden-gens')).toBe('[]')
+  })
+
+  it('genSettingKey maps null gen to "other" (the その他 row)', () => {
+    expect(store.genSettingKey('nogizaka46', null)).toBe('nogizaka46:other')
+    expect(store.genSettingKey('nogizaka46', 1)).toBe('nogizaka46:1')
+  })
+
+  it('restores hidden generations on load', async () => {
+    localStorage.setItem(
+      'sakamichi-viewer:blog-hidden-gens',
+      JSON.stringify(['hinatazaka46:1', 'sakurazaka46:other']),
+    )
+    vi.resetModules()
+    store = await import('./store.svelte')
+    expect(store.ui.blogHiddenGens).toEqual(['hinatazaka46:1', 'sakurazaka46:other'])
+  })
+
+  it('corrupt persisted state falls back to none hidden', async () => {
+    localStorage.setItem('sakamichi-viewer:blog-hidden-gens', '{oops')
+    vi.resetModules()
+    store = await import('./store.svelte')
+    expect(store.ui.blogHiddenGens).toEqual([])
+  })
+})
