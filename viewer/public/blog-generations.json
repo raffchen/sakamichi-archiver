@@ -1062,6 +1062,94 @@
    "gen_num": 2,
    "kana": "ますもと きら",
    "roman": "Kira Masumoto"
+  },
+  "03": {
+   "name": "上村莉菜",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "うえむら りな",
+   "roman": "Rina Uemura"
+  },
+  "04": {
+   "name": "尾関梨香",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "おぜき りか",
+   "roman": "Rika Ozeki"
+  },
+  "06": {
+   "name": "小池美波",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "こいけ みなみ",
+   "roman": "Minami Koike"
+  },
+  "07": {
+   "name": "小林由依",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "こばやし ゆい",
+   "roman": "Yui Kobayashi"
+  },
+  "08": {
+   "name": "齋藤冬優花",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "さいとう ふゆか",
+   "roman": "Fuyuka Saito"
+  },
+  "11": {
+   "name": "菅井友香",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "すがい ゆうか",
+   "roman": "Yuuka Sugai"
+  },
+  "14": {
+   "name": "土生瑞穂",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "はぶ みずほ",
+   "roman": "Mizuho Habu"
+  },
+  "15": {
+   "name": "原田葵",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "はらだ あおい",
+   "roman": "Aoi Harada"
+  },
+  "18": {
+   "name": "守屋茜",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "もりや あかね",
+   "roman": "Akane Moriya"
+  },
+  "20": {
+   "name": "渡辺梨加",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "わたなべ りか",
+   "roman": "Rika Watanabe"
+  },
+  "21": {
+   "name": "渡邉理佐",
+   "gen": "一期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "わたなべ りさ",
+   "roman": "Risa Watanabe"
   }
  },
  "hinatazaka46": {
@@ -1279,6 +1367,166 @@
    "graduated": false,
    "kana": "ぽか",
    "roman": "Poka"
+  },
+  "1": {
+   "name": "井口眞緒",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "いぐち まお",
+   "roman": "Mao Iguchi"
+  },
+  "2": {
+   "name": "潮紗理菜",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "うしお さりな",
+   "roman": "Sarina Ushio"
+  },
+  "3": {
+   "name": "柿崎芽実",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "かきざき めみ",
+   "roman": "Memi Kakizaki"
+  },
+  "4": {
+   "name": "影山優佳",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "かげやま ゆうか",
+   "roman": "Yuka Kageyama"
+  },
+  "5": {
+   "name": "加藤史帆",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "かとう しほ",
+   "roman": "Shiho Kato"
+  },
+  "6": {
+   "name": "齊藤京子",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "さいとう きょうこ",
+   "roman": "Kyoko Saito"
+  },
+  "7": {
+   "name": "佐々木久美",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "ささき くみ",
+   "roman": "Kumi Sasaki"
+  },
+  "8": {
+   "name": "佐々木美玲",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "ささき みれい",
+   "roman": "Mirei Sasaki"
+  },
+  "9": {
+   "name": "高瀬愛奈",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "たかせ まな",
+   "roman": "Mana Takase"
+  },
+  "10": {
+   "name": "高本彩花",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "たかもと あやか",
+   "roman": "Ayaka Takamoto"
+  },
+  "11": {
+   "name": "東村芽依",
+   "gen": "1期生",
+   "graduated": true,
+   "gen_num": 1,
+   "kana": "ひがしむら めい",
+   "roman": "Mei Higashimura"
+  },
+  "13": {
+   "name": "河田陽菜",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "かわだ ひな",
+   "roman": "Hina Kawata"
+  },
+  "15": {
+   "name": "富田鈴花",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "とみた すずか",
+   "roman": "Suzuka Tomita"
+  },
+  "16": {
+   "name": "丹生明里",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "にぶ あかり",
+   "roman": "Akari Nibu"
+  },
+  "17": {
+   "name": "濱岸ひより",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "はまぎし ひより",
+   "roman": "Hiyori Hamagishi"
+  },
+  "18": {
+   "name": "松田好花",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "まつだ このか",
+   "roman": "Konoka Matsuda"
+  },
+  "19": {
+   "name": "宮田愛萌",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "みやた まなも",
+   "roman": "Manamo Miyata"
+  },
+  "20": {
+   "name": "渡邉美穂",
+   "gen": "2期生",
+   "graduated": true,
+   "gen_num": 2,
+   "kana": "わたなべ みほ",
+   "roman": "Miho Watanabe"
+  },
+  "24": {
+   "name": "山口陽世",
+   "gen": "3期生",
+   "graduated": true,
+   "gen_num": 3,
+   "kana": "やまぐち はるよ",
+   "roman": "Haruyo Yamaguchi"
+  },
+  "26": {
+   "name": "岸帆夏",
+   "gen": "4期生",
+   "graduated": true,
+   "gen_num": 4,
+   "kana": "きし ほのか",
+   "roman": "Honoka Kishi"
   }
  }
 }
