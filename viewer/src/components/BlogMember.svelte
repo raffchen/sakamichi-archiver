@@ -2,10 +2,12 @@
   /* one member's blog post list — thumbnail cards like the app: square thumb
      left, pink title, two-line lead, stamp bottom-right. Paginated: 25 posts
      per page, first/prev/numbered/next/last pager at the bottom (server
-     slices via ?limit/?offset). The numbered window is 7 pages, dropping to
-     5 when the column sits at its 430px floor — 7 needs ~444px of row, the
-     floor only leaves ~402px after padding. The page is baked into the URL
-     as #/blog/<key>/p/<n> so links to a specific page are shareable. */
+     slices via ?limit/?offset). The numbered window adapts to the column
+     the way the card grids pick their column count: 3 numbers at the
+     430px floor, 5 up to tablet-wide, 7 beyond — and below ~560px the row
+     also compacts (smaller circles, tighter gaps) so it fits without
+     spilling under the scrollbar's grab band. The page is baked into the
+     URL as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
   import { BLOG_PER_PAGE, back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
   import Scrollbar from './Scrollbar.svelte'
@@ -26,7 +28,11 @@
   let colW = $state(0) // .col width — picks the numbered-window size
 
   const pages = $derived(Math.max(1, Math.ceil(total / PER_PAGE)))
-  const win = $derived(colW > 0 && colW < 480 ? 5 : 7)
+  /* numbered window tracks the column like the card grids' column count;
+     all three steps are odd so (win - 1) / 2 keeps the window centered */
+  const win = $derived(colW < 460 ? 3 : colW < 660 ? 5 : 7)
+  /* narrow columns also shrink the circles / gaps (see .blog-pager.compact) */
+  const compact = $derived(colW > 0 && colW < 560)
   /* "Showing 1-25 of N blogs" strip under the search bar */
   const countStart = $derived((ui.blogPage - 1) * PER_PAGE + 1)
   const countEnd = $derived(Math.min(ui.blogPage * PER_PAGE, total))
@@ -139,7 +145,7 @@
       </button>
     {/each}
     {#if pages > 1}
-      <nav class="blog-pager" aria-label="pagination">
+      <nav class="blog-pager" class:compact aria-label="pagination">
         <button class="pg-btn" disabled={ui.blogPage <= 1} onclick={() => (ui.blogPage = 1)} aria-label="first page">
           <i class="fa-solid fa-angles-left"></i>
         </button>
