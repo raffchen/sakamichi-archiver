@@ -73,6 +73,7 @@
     title: string | null
     at: string
     thumbnail: string | null
+    thumb: string | null // square /thumbs/blog crop — falls back to `thumbnail`
     lead: string | null
   }
   let latest = $state<LatestPost[] | null>(null)
@@ -230,7 +231,7 @@
           {#each latestShown as p (p.key + '/' + p.id)}
             <button class="blog-post-row" onclick={() => openBlog(p.key, Number(p.id))}>
               {#if p.thumbnail}
-                <img src={p.thumbnail} loading="lazy" alt="" />
+                <img src={p.thumb ?? p.thumbnail} loading="lazy" alt="" />
               {:else}
                 <div class="ph"></div>
               {/if}

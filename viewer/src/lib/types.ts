@@ -72,6 +72,7 @@ export interface BlogEntry {
   at: string // "YYYY/MM/DD HH:mm:ss" site-local
   link: string | null
   thumbnail: string | null // "files/..." relative to the member's blog dir
+  thumb?: string | null // /thumbs/blog/<key>/<name>.jpg square crop for list rows
   content: string | null // post HTML (detail view only; list has `lead`)
   lead?: string | null
 }

@@ -35,6 +35,7 @@ const MEDIA = path.resolve(process.env.MEDIA_DIR || path.join(ROOT, 'media'))
 const PUB = path.resolve(process.env.PUBLIC_DIR || path.join(VIEWER, 'public'))
 const CONFIG = path.resolve(process.env.ARCHIVE_CONFIG || path.join(VIEWER, 'archive.config.json'))
 const THUMBS = path.join(PUB, 'thumbs')
+const BLOG_THUMBS = path.join(THUMBS, 'blog') // square card crops for blog lists
 
 const argv = process.argv.slice(2)
 const makeThumbs = !argv.includes('--no-thumbs')
@@ -136,13 +137,33 @@ async function pool(items, workers, fn) {
   await Promise.all(Array.from({ length: workers }, run))
 }
 
-function ffmpegTo(out, input, video) {
+function ffmpegTo(out, input, video, square) {
   const args = ['-hide_banner', '-loglevel', 'error', '-y']
   if (video) args.push('-i', input, '-frames:v', '1')
   else args.push('-i', input)
-  args.push('-vf', `scale=${THUMB_W}:-2`, '-q:v', '3', out)
+  // square: cover-crop to a THUMB_W square — what the browser's
+  // object-fit: cover would do, but paid once here instead of shipping the
+  // multi-MB original to every list view
+  args.push(
+    '-vf',
+    square
+      ? `scale=${THUMB_W}:${THUMB_W}:force_original_aspect_ratio=increase,crop=${THUMB_W}:${THUMB_W}`
+      : `scale=${THUMB_W}:-2`,
+    '-q:v',
+    '3',
+    out,
+  )
   const r = spawnSync('ffmpeg', args, { stdio: 'ignore' })
   return r.status === 0
+}
+
+/** blog thumb file name: files/<n>.<ext> -> <n>.jpg (square JPEG crop).
+    server.mjs's blogThumbName() must stay in sync — it rebuilds these URLs
+    for the /api/blog routes and recovers originals by stem in its fallback. */
+function thumbName(thumbnail) {
+  const base = thumbnail.split('?')[0].split('/').pop() ?? ''
+  const i = base.lastIndexOf('.')
+  return (i > 0 ? base.slice(0, i) : base) + '.jpg'
 }
 
 // ---------------------------------------------------------------- main
@@ -302,21 +323,6 @@ const collator = new Intl.Collator('ja')
 const sortKey = (m) => m.kana ?? m.name
 members.sort((a, b) => collator.compare(sortKey(a), sortKey(b)))
 
-// thumbnails (video poster frames + grid thumbs), incremental like the archiver
-let thumbNote = 'skipped'
-if (makeThumbs && thumbJobs.length) {
-  if (!ffmpegAvailable()) {
-    thumbNote = 'no ffmpeg — skipped'
-    console.warn('ffmpeg not found: video posters / grid thumbs disabled (viewer falls back to full files)')
-  } else {
-    const todo = forceThumbs ? thumbJobs : thumbJobs.filter((j) => !fs.existsSync(j.out))
-    fs.mkdirSync(THUMBS, { recursive: true })
-    const t0 = Date.now()
-    await pool(todo, 4, async (j) => ffmpegTo(j.out, j.input, j.video))
-    thumbNote = `${todo.length} new / ${thumbJobs.length} total (${((Date.now() - t0) / 1000).toFixed(1)}s)`
-  }
-}
-
 const totals = members.reduce(
   (t, m) => {
     t.messages += m.message_count
@@ -373,6 +379,24 @@ for (const { root: blogsRoot, siteHint } of legacyBlogRoots) {
     if (!state?.entries?.length) continue
     const blogSite = siteHint ?? state.site ?? null
     const entries = state.entries // oldest-first (grab-blog sorts on write)
+    /* blog thumbs: square JPEG crops of each post's thumbnail under
+       thumbs/blog/<key>/ — the list/card views fetch these instead of the
+       multi-MB originals (which stay at /media for the post/lightbox view).
+       Jobs are incremental like the chat grid thumbs; a missing source file
+       just skips the job (the server's /thumbs/blog fallback covers gaps). */
+    const blogDir = path.join(blogsRoot, key, 'blog')
+    for (const e of entries) {
+      if (!e.thumbnail) continue
+      const input = path.join(blogDir, e.thumbnail)
+      if (!fs.existsSync(input)) continue
+      fs.mkdirSync(path.join(BLOG_THUMBS, key), { recursive: true })
+      thumbJobs.push({
+        out: path.join(BLOG_THUMBS, key, thumbName(e.thumbnail)),
+        input,
+        video: false,
+        square: true,
+      })
+    }
     const lastWithThumb = [...entries].reverse().find((e) => e.thumbnail)
     archivedBlogs.set(String(state.member_uuid), {
       key,
@@ -382,7 +406,7 @@ for (const { root: blogsRoot, siteHint } of legacyBlogRoots) {
       first: entries[0]?.at ?? null,
       last: entries.at(-1)?.at ?? null,
       thumb: lastWithThumb
-        ? `/media/${enc(`${blogSite ? `${blogSite}/blogs/` : 'blogs/'}${key}/blog/${lastWithThumb.thumbnail}`)}`
+        ? `/thumbs/blog/${enc(key)}/${enc(thumbName(lastWithThumb.thumbnail))}`
         : null,
     })
     /* mirror for the search DB (stage 1): full bodies, keyed per member */
@@ -455,6 +479,23 @@ blogMembers.sort(
     (b.gen_num ?? 0) - (a.gen_num ?? 0) ||
     collator.compare(blogSortKey(a), blogSortKey(b)),
 )
+
+// thumbnails (video poster frames + grid thumbs + blog card crops),
+// incremental like the archiver — must run AFTER both the chat and blog
+// loops so one pool covers all queued jobs
+let thumbNote = 'skipped'
+if (makeThumbs && thumbJobs.length) {
+  if (!ffmpegAvailable()) {
+    thumbNote = 'no ffmpeg — skipped'
+    console.warn('ffmpeg not found: video posters / grid thumbs disabled (viewer falls back to full files)')
+  } else {
+    const todo = forceThumbs ? thumbJobs : thumbJobs.filter((j) => !fs.existsSync(j.out))
+    fs.mkdirSync(THUMBS, { recursive: true })
+    const t0 = Date.now()
+    await pool(todo, 4, async (j) => ffmpegTo(j.out, j.input, j.video, j.square))
+    thumbNote = `${todo.length} new / ${thumbJobs.length} total (${((Date.now() - t0) / 1000).toFixed(1)}s)`
+  }
+}
 
 const index = {
   display_name: displayName,
