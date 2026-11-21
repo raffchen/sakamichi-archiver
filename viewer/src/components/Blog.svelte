@@ -32,8 +32,17 @@
     new Map((archive.blogs?.members ?? []).map((b) => [b.key, b.gen_num])),
   )
   /* the gen rows for the current site's settings menu, oldest first, plus
-     その他 when any member has no generation (ポカ) */
+     その他 when any member has no generation (ポカ). A row with nothing to
+     show under the current settings (all its members graduated and the
+     graduated filter is on) is disabled — there'd be an empty section. */
   const siteGenRows = $derived.by(() => {
+    const hasVisible = new Map<number | null, boolean>()
+    for (const b of archive.blogs?.members ?? []) {
+      if (b.site !== ui.site) continue
+      const gen = b.gen_num == null ? null : b.gen_num
+      if (ui.blogHideGraduated && b.graduated) continue
+      hasVisible.set(gen, true)
+    }
     const nums = new Set<number>()
     let other = false
     for (const b of archive.blogs?.members ?? [])
@@ -41,8 +50,10 @@
         if (b.gen_num == null) other = true
         else nums.add(b.gen_num)
       }
-    const rows = [...nums].sort((a, b) => a - b).map((n) => ({ gen: n as number | null, label: `${n}期生` }))
-    if (other) rows.push({ gen: null, label: 'その他' })
+    const rows = [...nums]
+      .sort((a, b) => a - b)
+      .map((n) => ({ gen: n as number | null, label: `${n}期生`, enabled: hasVisible.has(n) }))
+    if (other) rows.push({ gen: null, label: 'その他', enabled: hasVisible.has(null) })
     return rows
   })
   const siteMembers = $derived(
@@ -214,6 +225,8 @@
             aria-checked={shown}
             class:on={shown}
             class:off={!shown}
+            disabled={!r.enabled}
+            title={r.enabled ? '' : 'no members from this generation'}
             onclick={() => toggleGenHidden(key)}
           >
             <span>Show {r.label}</span>

@@ -1420,6 +1420,17 @@ body:has(.sheet.login) .sheet {
   color: var(--ink);
   opacity: 0.25;
 }
+/* a gen row with nothing to show (all its members graduated + filter on)
+   is disabled — dim the whole row, keep the checkbox look */
+.blog-sort-menu button:disabled {
+  color: var(--ink);
+  opacity: 0.35;
+  cursor: default;
+}
+.blog-sort-menu button:disabled svg {
+  color: var(--ink);
+  opacity: 0.35;
+}
 /* settings toggles lead with the check (a checkbox look), not the trailing
    accent tick the sort rows use. The label grows to fill the row so short
    labels (Show 4期生) sit next to the check like long ones do. */
