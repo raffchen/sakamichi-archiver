@@ -30,6 +30,7 @@ Usage:
     python3 tools/grab-blog.py --member 山川_宇衣
     python3 tools/grab-blog.py --full          # refetch everything (no skip)
 """
+import hashlib
 import html
 import json
 import os
@@ -105,11 +106,14 @@ SITES = {
     # directly (no auth): members from /api/list/member, diaries from
     # /api/json/diary?cd=member (cd=blog / cd=all 404; member_id is the list
     # id, and st is the offset from newest). Names are kanji natively.
+    # The group account (日向坂46, list id "00") is the mascot's blog,
+    # ポカ 公式ブログ — its diary API id is "000", not "00".
     "hinatazaka46": {
         "members_url": "https://www.hinatazaka46.com/s/official/api/list/member?callback=res",
         "members_cache": LOGS / "blog-members-hinatazaka46.json",
         "member_url": ("https://www.hinatazaka46.com/s/official/api/json/diary"
                        "?cd=member&get=B&member_id=${member_id}&getnum=${count}&st=${start}"),
+        "diary_id_map": {"00": "000"},
     },
 }
 
@@ -187,9 +191,11 @@ def load_members(site_key: str, site: dict) -> dict[str, dict]:
         if (m.get("name") or "").endswith("リレー"):
             continue  # relay accounts, not real members
         uuid = str(m.get("member_uuid") or m["id"])
-        if site_key == "hinatazaka46" and uuid == "00":
-            continue  # group account (日向坂46), not a member
         display = jp_names.get(uuid) or m.get("name") or uuid
+        if site_key == "hinatazaka46" and uuid == "00":
+            # group account (日向坂46) = the mascot's blog, ポカ 公式ブログ —
+            # archived like a member; its diary API id is "000", not "00"
+            m["name"] = display = "ポカ"
         out[norm_name(m.get("name") or "")] = {
             "uuid": uuid, "blog_id": m.get("id"), "group_id": m.get("group_id"),
             "name": m.get("name"), "display": display,
@@ -205,8 +211,22 @@ def member_url(site: dict, uuid: str, count: int, start: int) -> str:
                 site["member_url"] = src[0].get("member_url") or site["member_url"]
         except Exception:
             pass  # fall back to the known template
+    uuid = site.get("diary_id_map", {}).get(uuid, uuid)
     return (site["member_url"].replace("${member_id}", uuid)
             .replace("${count}", str(count)).replace("${start}", str(start)))
+
+
+def local_image_name(eid: str, base: str) -> str:
+    """<eid>_<base>, but hashed when the name would blow past the 255-byte
+    filename limit (hinatazaka posts embed percent-encoded Japanese banner
+    names that decode to ~300 chars — stat/write fails on the Windows drive
+    and WSL /mnt/c alike). Same URL -> same name, so dedup still works."""
+    name = f"{eid}_{base}"
+    if len(name.encode()) > 240:
+        stem, dot, ext = base.rpartition(".")
+        digest = hashlib.sha1(base.encode()).hexdigest()[:16]
+        name = f"{eid}_{digest}{dot}{ext}"
+    return name
 
 
 def download_images(member_dir: Path, eid: str, content: str,
@@ -227,7 +247,7 @@ def download_images(member_dir: Path, eid: str, content: str,
         base = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
         if not base or "." not in base:
             return None
-        name = f"{eid}_{base}"
+        name = local_image_name(eid, base)
         dest = files_dir / name
         for attempt in (1, 2, 3):  # WSL/office networks flake; retry a bit
             if dest.exists():
