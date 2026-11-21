@@ -78,7 +78,9 @@ Deploy behavior you can rely on:
 
 Volumes on the server (survive image rebuilds): `media` (bind),
 `viewer-db` (SQLite index), `viewer-model` (embedding model; granite ~279 MB,
-downloads once from HF on first boot).
+downloads once from HF on first boot), `viewer-thumbs` (ffmpeg thumbs — chat
+grid + blog card crops; write-once per source file, so a deploy only encodes
+new posts instead of the whole archive, which was ~10 min of ffmpeg per boot).
 
 ## 4. Architecture quick facts
 
