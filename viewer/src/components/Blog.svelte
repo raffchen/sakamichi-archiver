@@ -7,8 +7,10 @@
   import type { Archive, BlogMemberInfo } from '../lib/types'
   import {
     genSettingKey,
+    gradHiddenFor,
+    migrateHideGraduated,
     openBlog,
-    setHideGraduated,
+    setGradHiddenFor,
     toggleGenHidden,
     toggleTheme,
     ui,
@@ -21,6 +23,16 @@
   import BlogPost from './BlogPost.svelte'
 
   let { archive }: { archive: Archive } = $props()
+
+  /* one-time migration of the old all-sites "hide graduated" boolean into the
+     per-site list (needs the archive's site keys, so it waits for them) */
+  let migratedGrad = false
+  $effect(() => {
+    const sites = Object.keys(archive.sites)
+    if (migratedGrad || !sites.length) return
+    migratedGrad = true
+    migrateHideGraduated(sites)
+  })
 
   const siteKeys = $derived(Object.keys(archive.sites))
   /* generation visibility (the ⚙ menu): every gen starts shown; unchecking one
@@ -40,7 +52,7 @@
     for (const b of archive.blogs?.members ?? []) {
       if (b.site !== ui.site) continue
       const gen = b.gen_num == null ? null : b.gen_num
-      if (ui.blogHideGraduated && b.graduated) continue
+      if (gradHiddenFor(ui.site) && b.graduated) continue
       hasVisible.set(gen, true)
     }
     const nums = new Set<number>()
@@ -59,7 +71,7 @@
   const siteMembers = $derived(
     (archive.blogs?.members ?? [])
       .filter((b) => b.site === ui.site)
-      .filter((b) => !(ui.blogHideGraduated && b.graduated))
+      .filter((b) => !(gradHiddenFor(ui.site) && b.graduated))
       .filter((b) => !genHidden.has(genSettingKey(ui.site, b.gen_num))),
   )
   /* every member key that's graduated — the newest-posts feed has no flag of
@@ -143,7 +155,7 @@
   const latestShown = $derived(
     latest
       ? latest.filter((p) => {
-          if (ui.blogHideGraduated && graduatedKeys.has(p.key)) return false
+          if (gradHiddenFor(ui.site) && graduatedKeys.has(p.key)) return false
           return !genHidden.has(genSettingKey(ui.site, genByKey.get(p.key) ?? null))
         })
       : latest,
@@ -156,7 +168,7 @@
     menuOpen = false
   }
   function toggleGrad() {
-    setHideGraduated(!ui.blogHideGraduated)
+    setGradHiddenFor(ui.site, !gradHiddenFor(ui.site))
   }
 </script>
 
@@ -208,9 +220,9 @@
         <button
           class="setting-row"
           role="menuitemcheckbox"
-          aria-checked={ui.blogHideGraduated}
-          class:on={ui.blogHideGraduated}
-          class:off={!ui.blogHideGraduated}
+          aria-checked={gradHiddenFor(ui.site)}
+          class:on={gradHiddenFor(ui.site)}
+          class:off={!gradHiddenFor(ui.site)}
           onclick={toggleGrad}
         >
           <span>Hide graduated members</span>

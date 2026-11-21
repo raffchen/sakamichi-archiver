@@ -9,13 +9,19 @@ export type View = 'home' | 'thread' | 'gallery' | 'search' | 'blog'
    cross-member newest-posts feed */
 export type BlogSort = 'gen-asc' | 'gen-desc' | 'name-asc' | 'name-desc' | 'latest' | 'oldest'
 
+/* legacy all-sites form of the graduated filter (boolean per device); kept
+   only to migrate the old value into the per-site list below */
 const HIDE_GRAD_KEY = 'sakamichi-viewer:blog-hide-graduated'
+/* blog directory: sites whose graduated members are hidden, persisted as a
+   list of site keys — absent = shown, so every site starts unfiltered */
+const HIDE_GRAD_SITES_KEY = 'sakamichi-viewer:blog-hide-graduated-sites'
 
-function loadHideGraduated(): boolean {
+function loadGradSites(): string[] {
   try {
-    return localStorage.getItem(HIDE_GRAD_KEY) === '1'
+    const v: unknown = JSON.parse(localStorage.getItem(HIDE_GRAD_SITES_KEY) ?? '[]')
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
   } catch {
-    return false
+    return []
   }
 }
 
@@ -73,9 +79,9 @@ export const ui = $state({
   blogPostRank: null as number | null,
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
-  /* directory setting: hide graduated members' cards (the ⚙ menu). A device
-     preference, so it persists like volume does. */
-  blogHideGraduated: loadHideGraduated(),
+  /* directory setting: sites hiding graduated members' cards (the ⚙ menu,
+     per site). A device preference, so it persists like volume does. */
+  blogGradHiddenSites: loadGradSites(),
   /* directory setting: hidden generations (the ⚙ menu, per site) — see
      loadHiddenGens above. A device preference too. */
   blogHiddenGens: loadHiddenGens(),
@@ -84,12 +90,42 @@ export const ui = $state({
   theme: loadTheme(),
 })
 
-export function setHideGraduated(v: boolean) {
-  ui.blogHideGraduated = v
+export function gradHiddenFor(site: string): boolean {
+  return ui.blogGradHiddenSites.includes(site)
+}
+
+export function setGradHiddenFor(site: string, v: boolean) {
+  const i = ui.blogGradHiddenSites.indexOf(site)
+  if (v && i < 0) ui.blogGradHiddenSites.push(site)
+  else if (!v && i >= 0) ui.blogGradHiddenSites.splice(i, 1)
   try {
-    localStorage.setItem(HIDE_GRAD_KEY, v ? '1' : '0')
+    localStorage.setItem(HIDE_GRAD_SITES_KEY, JSON.stringify(ui.blogGradHiddenSites))
   } catch {
     /* private mode — the toggle just won't survive reloads */
+  }
+}
+
+/* one-time migration: the old all-sites boolean becomes a per-site entry for
+   every site the archive knows. Runs once the archive is loaded (the Blog
+   tab calls it with its site keys); the new key's presence marks it done. */
+export function migrateHideGraduated(sites: string[]) {
+  let legacy: string | null = null
+  try {
+    legacy = localStorage.getItem(HIDE_GRAD_KEY)
+  } catch {
+    return
+  }
+  if (legacy == null || localStorage.getItem(HIDE_GRAD_SITES_KEY) != null) return
+  try {
+    localStorage.removeItem(HIDE_GRAD_KEY)
+  } catch {}
+  if (legacy === '1') {
+    ui.blogGradHiddenSites = [...sites]
+    try {
+      localStorage.setItem(HIDE_GRAD_SITES_KEY, JSON.stringify(ui.blogGradHiddenSites))
+    } catch {
+      /* private mode — in-memory value still applies for this session */
+    }
   }
 }
 

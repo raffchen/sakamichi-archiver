@@ -463,6 +463,72 @@ describe('theme (dark mode preference)', () => {
   })
 })
 
+describe('per-site graduated filter', () => {
+  it('starts with every site showing graduated members', () => {
+    expect(store.ui.blogGradHiddenSites).toEqual([])
+    expect(store.gradHiddenFor('nogizaka46')).toBe(false)
+  })
+
+  it('hides/re-shows per site without touching other sites', () => {
+    store.setGradHiddenFor('hinatazaka46', true)
+    expect(store.gradHiddenFor('hinatazaka46')).toBe(true)
+    expect(store.gradHiddenFor('nogizaka46')).toBe(false) // other site unaffected
+    expect(localStorage.getItem('sakamichi-viewer:blog-hide-graduated-sites')).toBe(
+      JSON.stringify(['hinatazaka46']),
+    )
+    store.setGradHiddenFor('nogizaka46', true)
+    expect(localStorage.getItem('sakamichi-viewer:blog-hide-graduated-sites')).toBe(
+      JSON.stringify(['hinatazaka46', 'nogizaka46']),
+    )
+    store.setGradHiddenFor('hinatazaka46', false)
+    expect(store.gradHiddenFor('hinatazaka46')).toBe(false)
+    expect(store.gradHiddenFor('nogizaka46')).toBe(true) // nogi keeps its own value
+  })
+
+  it('migrates the legacy all-sites boolean to every site', async () => {
+    localStorage.setItem('sakamichi-viewer:blog-hide-graduated', '1')
+    vi.resetModules()
+    store = await import('./store.svelte')
+    store.migrateHideGraduated(['nogizaka46', 'sakurazaka46', 'hinatazaka46'])
+    expect(store.ui.blogGradHiddenSites).toEqual(['nogizaka46', 'sakurazaka46', 'hinatazaka46'])
+    expect(localStorage.getItem('sakamichi-viewer:blog-hide-graduated')).toBeNull() // consumed
+    expect(localStorage.getItem('sakamichi-viewer:blog-hide-graduated-sites')).toBe(
+      JSON.stringify(['nogizaka46', 'sakurazaka46', 'hinatazaka46']),
+    )
+  })
+
+  it('migrating with the legacy toggle off clears it and hides nothing', async () => {
+    localStorage.setItem('sakamichi-viewer:blog-hide-graduated', '0')
+    vi.resetModules()
+    store = await import('./store.svelte')
+    store.migrateHideGraduated(['nogizaka46'])
+    expect(store.ui.blogGradHiddenSites).toEqual([])
+    expect(localStorage.getItem('sakamichi-viewer:blog-hide-graduated')).toBeNull()
+  })
+
+  it('migration runs once — the new key marks it done', async () => {
+    localStorage.setItem(
+      'sakamichi-viewer:blog-hide-graduated-sites',
+      JSON.stringify(['sakurazaka46']),
+    )
+    localStorage.setItem('sakamichi-viewer:blog-hide-graduated', '1') // stale legacy key
+    vi.resetModules()
+    store = await import('./store.svelte')
+    store.migrateHideGraduated(['nogizaka46', 'sakurazaka46'])
+    expect(store.ui.blogGradHiddenSites).toEqual(['sakurazaka46']) // untouched
+  })
+
+  it('restores hidden sites on load', async () => {
+    localStorage.setItem(
+      'sakamichi-viewer:blog-hide-graduated-sites',
+      JSON.stringify(['hinatazaka46']),
+    )
+    vi.resetModules()
+    store = await import('./store.svelte')
+    expect(store.gradHiddenFor('hinatazaka46')).toBe(true)
+  })
+})
+
 describe('blog generation visibility', () => {
   it('starts with every generation shown (no hidden-gens key)', () => {
     expect(store.ui.blogHiddenGens).toEqual([])
