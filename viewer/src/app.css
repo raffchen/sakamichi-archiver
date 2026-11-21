@@ -1571,20 +1571,16 @@ body:has(.sheet.login) .sheet {
 }
 /* member list pagination: first/prev + numbered pages + next/last between
    the post cards; every control is a true circle, the current page a solid
-   accent chip. On coarse pointers the row reserves the scrollbar thumb's
-   grab band (~26px into the content box) so the trailing ›/⏭ stay tappable
-   when the thumb parks at the bottom — right where this pager lives. */
+   accent chip. No right reserve for the scrollbar thumb's grab band is
+   needed: the adaptive window + centered row keep the trailing ›/⏭ well
+   inside the band's ~40px reach from the column edge at every tier (checked
+   down to a 360px viewport with the thumb parked on the pager). */
 .blog-pager {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 4px 0 8px;
-}
-@media (hover: none), (pointer: coarse) {
-  .blog-pager {
-    padding-right: 30px;
-  }
 }
 .blog-pager .pg-btn {
   display: inline-flex;
