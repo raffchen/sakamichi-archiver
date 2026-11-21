@@ -1067,17 +1067,17 @@
  "hinatazaka46": {
   "12": {
    "name": "金村美玖",
-   "gen": "3期生",
-   "gen_num": 3,
+   "gen": "2期生",
+   "gen_num": 2,
    "graduated": false,
    "kana": "かなむら みく",
    "roman": "Miku Kanemura"
   },
   "14": {
    "name": "小坂菜緒",
-   "gen": "3期生",
+   "gen": "2期生",
    "graduated": false,
-   "gen_num": 3,
+   "gen_num": 2,
    "kana": "こさか なお",
    "roman": "Nao Kosaka"
   },
@@ -1102,8 +1102,8 @@
    "gen": "3期生",
    "graduated": false,
    "gen_num": 3,
-   "kana": "もりもと まつり",
-   "roman": "Matsuri Morimoto"
+   "kana": "もりもと まりい",
+   "roman": "Marie Morimoto"
   },
   "25": {
    "name": "石塚瑶季",
@@ -1118,8 +1118,8 @@
    "gen": "4期生",
    "graduated": false,
    "gen_num": 4,
-   "kana": "こにし かなな",
-   "roman": "Kanana Konishi"
+   "kana": "こにし ななみ",
+   "roman": "Nanami Konishi"
   },
   "28": {
    "name": "清水理央",
@@ -1174,8 +1174,8 @@
    "gen": "4期生",
    "graduated": false,
    "gen_num": 4,
-   "kana": "みやじ すみれ",
-   "roman": "Sumire Miyaji"
+   "kana": "みやち すみれ",
+   "roman": "Sumire Miyachi"
   },
   "35": {
    "name": "山下葉留花",
@@ -1198,16 +1198,16 @@
    "gen": "5期生",
    "graduated": false,
    "gen_num": 5,
-   "kana": "おおた みつき",
-   "roman": "Mitsuki Ota"
+   "kana": "おおた みづき",
+   "roman": "Mizuki Ota"
   },
   "38": {
    "name": "大野愛実",
    "gen": "5期生",
    "graduated": false,
    "gen_num": 5,
-   "kana": "おおの えみ",
-   "roman": "Emi Ohno"
+   "kana": "おおの まなみ",
+   "roman": "Manami Ono"
   },
   "39": {
    "name": "片山紗希",
@@ -1230,8 +1230,8 @@
    "gen": "5期生",
    "graduated": false,
    "gen_num": 5,
-   "kana": "さかい なな",
-   "roman": "Nana Sakai"
+   "kana": "さかい にいな",
+   "roman": "Nina Sakai"
   },
   "42": {
    "name": "佐藤優羽",
@@ -1246,8 +1246,8 @@
    "gen": "5期生",
    "graduated": false,
    "gen_num": 5,
-   "kana": "しもだ いぶき",
-   "roman": "Ibuki Shimoda"
+   "kana": "しもだ いずき",
+   "roman": "Izuki Shimoda"
   },
   "44": {
    "name": "高井俐香",
