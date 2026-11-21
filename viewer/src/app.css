@@ -1570,13 +1570,21 @@ body:has(.sheet.login) .sheet {
   margin-top: auto;
 }
 /* member list pagination: first/prev + numbered pages + next/last between
-   the post cards; the current page is a solid accent chip */
+   the post cards; every control is a true circle, the current page a solid
+   accent chip. On coarse pointers the row reserves the scrollbar thumb's
+   grab band (~26px into the content box) so the trailing ›/⏭ stay tappable
+   when the thumb parks at the bottom — right where this pager lives. */
 .blog-pager {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 12px;
   padding: 4px 0 8px;
+}
+@media (hover: none), (pointer: coarse) {
+  .blog-pager {
+    padding-right: 30px;
+  }
 }
 .blog-pager .pg-btn {
   display: inline-flex;
@@ -1596,11 +1604,13 @@ body:has(.sheet.login) .sheet {
   cursor: default;
 }
 .blog-pager .pg-num {
-  min-width: 30px;
+  /* fixed square + 50% radius: a genuine circle like the arrows, not the
+     oval pill the old min-width+padding produced */
+  width: 36px;
   height: 36px;
-  padding: 0 4px;
+  padding: 0;
   border: 0;
-  border-radius: 18px;
+  border-radius: 50%;
   background: none;
   color: var(--accent);
   font-size: 13px;
@@ -1618,6 +1628,21 @@ body:has(.sheet.login) .sheet {
   font-size: 13px;
   text-align: center;
   user-select: none;
+}
+/* narrow columns (BlogMember picks the tier from its measured .col width):
+   smaller circles and tighter gaps so the full first/prev/…/next/last set
+   still fits inside the 430px floor — at base sizes a 5-number window is
+   ~484px of row, nearly 100px more than the floor leaves */
+.blog-pager.compact {
+  gap: 6px;
+}
+.blog-pager.compact .pg-btn,
+.blog-pager.compact .pg-num {
+  width: 30px;
+  height: 30px;
+}
+.blog-pager.compact .pg-dots {
+  width: 14px;
 }
 
 /* latest feed: member name rides next to the stamp, both right-aligned */
