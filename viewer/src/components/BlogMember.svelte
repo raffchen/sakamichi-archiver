@@ -109,10 +109,13 @@
     {#each entries as e (e.id)}
       <button class="blog-post-row" onclick={() => open(e.id)}>
         {#if e.thumbnail}
+          <!-- thumb = server-generated square crop; the full file is the
+               fallback (e.g. --no-thumbs builds) and stays the lightbox src -->
           <img
-            src={info?.site
-              ? `/media/${info.site}/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`
-              : `/media/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`}
+            src={e.thumb ??
+              (info?.site
+                ? `/media/${info.site}/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`
+                : `/media/blogs/${encodeURIComponent(key)}/blog/${e.thumbnail}`)}
             loading="lazy"
             alt=""
           />

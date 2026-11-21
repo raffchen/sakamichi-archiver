@@ -996,6 +996,49 @@ const app = http.createServer(async (req, res) => {
     site
       ? `/media/${site}/blogs/${encodeURIComponent(key)}/blog/${rest}`
       : `/media/blogs/${encodeURIComponent(key)}/blog/${rest}`
+  /* square card crops live under public/thumbs/blog/<key>/ (build-index
+     generates them alongside the chat grid thumbs). build-index's thumbName()
+     must stay in sync — files/<n>.<ext> -> <n>.jpg. */
+  const blogThumbName = (t) => {
+    const base = t.split('?')[0].split('/').pop() ?? ''
+    const i = base.lastIndexOf('.')
+    return (i > 0 ? base.slice(0, i) : base) + '.jpg'
+  }
+  const blogThumb = (key, t) =>
+    `/thumbs/blog/${encodeURIComponent(key)}/${encodeURIComponent(blogThumbName(t))}`
+
+  /* /thumbs/blog/<key>/<name>.jpg can 404 while the thumb pipeline hasn't
+     caught up (--no-thumbs, no ffmpeg, brand-new post before a re-index) —
+     fall back to the archived original so cards keep rendering. thumbName
+     maps files/<n>.<ext> -> <n>.jpg, so the original is recovered by
+     stem-matching the member's blog/files dir (a redirect, so it costs one
+     extra hop only until the next index build fills thumbs/ in). */
+  const blogThumbFallback = (q, s, next2) => {
+    try {
+      const parts = q.url.split('?')[0].split('/').map(decodeURIComponent)
+      if (parts[1] !== 'thumbs' || parts[2] !== 'blog' || !parts[3] || !parts[4]) return next2()
+      const stem = parts[4].replace(/\.jpg$/i, '')
+      if (!stem || stem.includes('..')) return next2()
+      const fold = (w) => w.normalize('NFKC').replace(/\uFA11/g, '\u5D0E')
+      for (const { root, site } of blogRoots()) {
+        const dir = fs.existsSync(path.join(root, parts[3]))
+          ? parts[3]
+          : fs.readdirSync(root).find((d) => fold(d) === fold(parts[3]))
+        if (!dir) continue
+        let hit = null
+        try {
+          hit = fs
+            .readdirSync(path.join(root, dir, 'blog', 'files'))
+            .find((f) => f.slice(0, f.lastIndexOf('.')) === stem)
+        } catch {}
+        if (hit) {
+          s.writeHead(302, { Location: blogMedia(site, dir, `files/${hit}`) })
+          return s.end()
+        }
+      }
+    } catch {}
+    return next2()
+  }
 
   if (p === '/api/blog' || p === '/api/blog/') {
     const q = new URL(req.url, 'http://x').searchParams
@@ -1022,6 +1065,7 @@ const app = http.createServer(async (req, res) => {
             title: r.title,
             at: r.at,
             thumbnail: r.thumb ? blogMedia(r.site, r.key, r.thumb) : null,
+            thumb: r.thumb ? blogThumb(r.key, r.thumb) : null,
             lead: (r.body ?? '').slice(0, 140) || null, // body is stored HTML-stripped
           }))
       }
@@ -1047,6 +1091,7 @@ const app = http.createServer(async (req, res) => {
             title: e.title,
             at: e.at,
             thumbnail: e.thumbnail ? blogMedia(rootSite, key, e.thumbnail) : null,
+            thumb: e.thumbnail ? blogThumb(key, e.thumbnail) : null,
             lead: blogLead(e.content),
           })
       }
@@ -1112,8 +1157,16 @@ const app = http.createServer(async (req, res) => {
     const q = new URL(req.url, 'http://x').searchParams
     const limit = Math.min(Math.max(Number(q.get('limit')) || 25, 1), 200)
     const offset = Math.max(Number(q.get('offset')) || 0, 0)
+    /* thumb = the square /thumbs/blog/ crop for the list row; `thumbnail`
+       stays the bare files/ name (the client derives the full-size URL from
+       it for the lightbox). dir, not key — thumbs/ is laid out by physical
+       folder name, which the fold matching may not return verbatim. */
     const newestFirst = (state.entries ?? [])
-      .map(({ content, ...e }) => ({ ...e, lead: blogLead(content) }))
+      .map(({ content, ...e }) => ({
+        ...e,
+        lead: blogLead(content),
+        thumb: e.thumbnail ? blogThumb(dir, e.thumbnail) : null,
+      }))
       .reverse()
     return sendJson(res, 200, {
       key,
@@ -1139,10 +1192,15 @@ const app = http.createServer(async (req, res) => {
   }
 
   // static: built bundle first, then runtime-built files (index.json, thumbs/)
-  return distFiles(req, res, () => pubFiles(req, res, () => {
-    res.writeHead(404, { 'Content-Type': 'text/plain' })
-    res.end('not found')
-  }))
+  // (sirv's next() passes no args — the fallback closes over req/res)
+  return distFiles(req, res, () =>
+    pubFiles(req, res, () =>
+      blogThumbFallback(req, res, () => {
+        res.writeHead(404, { 'Content-Type': 'text/plain' })
+        res.end('not found')
+      }),
+    ),
+  )
 })
 
 // ---------------------------------------------------------------- boot

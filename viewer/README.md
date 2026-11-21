@@ -24,7 +24,7 @@ tabs live-reload. Nothing to do by hand.
 
 | script | what it does |
 |---|---|
-| `npm run index` | scan `../media/`, write `public/index.json`, generate video/photo posters into `public/thumbs/` (needs `ffmpeg`) |
+| `npm run index` | scan `../media/`, write `public/index.json`, generate video/photo posters + blog card crops into `public/thumbs/` (needs `ffmpeg`) |
 | `npm run dev` | dev server on :5173, `host: true` so a phone on the same Wi-Fi can open it |
 | `npm run build` + `npm run preview` | production build, served on :4173 |
 | `npm run check` | `svelte-check` (types + a11y) |
@@ -112,8 +112,9 @@ src/lib/mediaPersist.ts     playback volume → localStorage (persists), per-cli
                             position → in-memory Map (session-scoped)
 src/lib/format.ts           UTC archive stamps → local display
 src/components/Login.svelte the login screen (production gate only)
-scripts/build-index.mjs     media/ → public/index.json + public/thumbs/ + the SQLite
-                            search index (FTS5 + readings + embeddings)
+scripts/build-index.mjs     media/ → public/index.json + public/thumbs/ (chat grid +
+                            blog card crops) + the SQLite search index (FTS5 + readings
+                            + embeddings)
 scripts/db.mjs              schema + incremental sync for the search index
 scripts/tokenize.mjs        kuromoji readings (hiragana) for kana↔kanji search
 scripts/embed.mjs           local ONNX embedder (semantic related section)
@@ -304,11 +305,15 @@ index from disk):
 | `GET /api/index` | the built `index.json`, **slimmed**: message texts for all but the 5 most recent messages per member are dropped (`textsTruncated` flags mark it) — keeps the payload flat as the archive grows |
 | `GET /api/member/<slug>` | one member, full texts — thread/gallery fetch this when the slim index says `textsTruncated` |
 | `GET /api/search` | two-section search (`?q=&limit=&type=message\|blog`, optional `member=<blog member key>` to filter posts to one author) — FTS5 exact + semantic `related` (stage 5/6); `SEMANTIC_LOG=1` logs score distributions |
-| `GET /api/blog` | newest-posts feed — served from the search DB when present (O(1); thumbs + lead included), file-scan fallback otherwise |
-| `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead`; paginated — `?limit=` (default 25, max 200) + `?offset=`, response includes `total` |
+| `GET /api/blog` | newest-posts feed — served from the search DB when present (O(1); thumbs + lead included), file-scan fallback otherwise. Entries carry `thumbnail` (the archived original at `/media/...`) plus `thumb` (the square `/thumbs/blog/...` crop list views should fetch) |
+| `GET /api/blog/<key>` | one member's posts, newest first, `content` stripped to a `lead`; paginated — `?limit=` (default 25, max 200) + `?offset=`, response includes `total`; entries carry `thumbnail` + `thumb` as above |
 | `GET /api/blog/<key>/<id>` | one full post (HTML content, images prefixed with `/media/<site>/blogs/...`) + `prev`/`next` neighbor stubs (id + title) — the post footer chains from these since the list route is paginated |
 | `POST /api/secrets/session` | syncer uploads rotated session cookies here (guarded by `UPLOAD_TOKEN`) |
 | `GET /api/secrets/status` | token/cookie freshness for monitoring |
+
+A `/thumbs/blog/<key>/<name>.jpg` URL whose crop hasn't been generated yet
+(`--no-thumbs` build, no ffmpeg, brand-new post before a re-index)
+302-redirects to the archived original, so cards keep rendering either way.
 
 Member keys are matched leniently: 川﨑 (U+FA11) and 崎 (U+5D0E) are treated as
 the same character, so keyboards that normalize the name still resolve.
