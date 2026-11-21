@@ -47,6 +47,7 @@ export interface Site {
   name: string
   roman: string
   origin?: string
+  official?: string // the group's own website (the Official tab's link)
 }
 
 export interface BlogMemberInfo {

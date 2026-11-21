@@ -9,12 +9,15 @@
   const isHinata = $derived(ui.site === 'hinatazaka46')
 
   const hasBlogs = $derived(!!archive.blogs?.members.some((b) => b.site === ui.site))
+  /* the Official tab opens the group's own website (archive.config.json);
+     sites without an official URL keep the tab locked */
+  const officialUrl = $derived(archive.sites[ui.site]?.official ?? null)
 
   const tabs = $derived([
     { id: 'talk', label: 'Talk', ic: 'talk', locked: false },
     { id: 'blog', label: 'Blog', ic: 'blog', locked: !hasBlogs },
     { id: 'news', label: 'News', ic: 'news', locked: true },
-    { id: 'official', label: 'Official', ic: isSaka ? 'official-saka' : isHinata ? 'official-hinata' : 'official', locked: true },
+    { id: 'official', label: 'Official', ic: isSaka ? 'official-saka' : isHinata ? 'official-hinata' : 'official', locked: !officialUrl, url: officialUrl ?? undefined },
     { id: 'info', label: 'Info', ic: 'info', locked: false },
   ])
 
@@ -40,10 +43,11 @@
       class:on={(t.id === 'talk' && onTalk()) || (t.id === 'blog' && onBlog())}
       class:locked={t.locked}
       disabled={t.locked}
-      title={t.locked ? 'not part of the archive' : ''}
+      title={t.url ?? (t.locked ? 'not part of the archive' : '')}
       onclick={() => {
         if (t.id === 'talk') goHome()
         else if (t.id === 'blog') openBlog()
+        else if (t.url) window.open(t.url, '_blank', 'noopener') // external site, archive stays put
         else if (!t.locked) info.open = true
       }}
     >
