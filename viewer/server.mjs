@@ -383,6 +383,12 @@ const mediaFiles = sirv(MEDIA, {
     // .jfif is JPEG; some CDNs serve it without a usable type
     if (/\.jfif$/i.test(file)) res.setHeader('Content-Type', 'image/jpeg')
     res.setHeader('Access-Control-Allow-Origin', '*')
+    /* dev-mode sirv stamps no-store on everything, which made every screen
+       switch re-download media. Archive files are write-once per name (the
+       grabber skips existing files); 24h bounds the staleness window if a
+       repair ever rewrites one — overrides sirv's own header (send() keeps
+       headers we set first). */
+    res.setHeader('Cache-Control', 'public, max-age=86400')
   },
 })
 
@@ -411,6 +417,12 @@ const pubFiles = sirv(PUB, {
   setHeaders(res, file) {
     if (/\.jfif$/i.test(file)) res.setHeader('Content-Type', 'image/jpeg')
     res.setHeader('Access-Control-Allow-Origin', '*')
+    /* thumbs are the whole point of the crop pipeline — a week here keeps
+       tab/list switches from re-fetching them. They're write-once per source
+       name (build-index skips existing outputs), so long caching adds no
+       staleness the build itself doesn't already have. index.json (and
+       everything else under public/) keeps sirv's no-store. */
+    if (/^\/thumbs\//.test(file)) res.setHeader('Cache-Control', 'public, max-age=604800')
   },
 })
 
