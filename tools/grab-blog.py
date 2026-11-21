@@ -101,6 +101,16 @@ SITES = {
         "member_url": ("https://sakurazaka46.com/s/s46app/api/json/diary"
                        "?cd=blog&get=B&member_id=${member_id}&getnum=${count}&st=${start}"),
     },
+    # hinatazaka has NO message app — the official site exposes the diary JSON
+    # directly (no auth): members from /api/list/member, diaries from
+    # /api/json/diary?cd=member (cd=blog / cd=all 404; member_id is the list
+    # id, and st is the offset from newest). Names are kanji natively.
+    "hinatazaka46": {
+        "members_url": "https://www.hinatazaka46.com/s/official/api/list/member?callback=res",
+        "members_cache": LOGS / "blog-members-hinatazaka46.json",
+        "member_url": ("https://www.hinatazaka46.com/s/official/api/json/diary"
+                       "?cd=member&get=B&member_id=${member_id}&getnum=${count}&st=${start}"),
+    },
 }
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) sakamichi-archiver"}
@@ -158,7 +168,12 @@ def load_members(site_key: str, site: dict) -> dict[str, dict]:
     cached so later runs work without a token"""
     cache = site["members_cache"]
     try:
-        members = api_get(site, "/blog-members")
+        if "members_url" in site:
+            # official-site JSONP: plain JSON despite the callback param —
+            # {"member": [{"id", "name" (kanji, space-separated), "image_src"}]}
+            members = fetch_json(site["members_url"]).get("member") or []
+        else:
+            members = api_get(site, "/blog-members")
         atomic_write(cache, json.dumps(members, ensure_ascii=False))
         print(f"  [members] {len(members)} from API (cached to {cache.name})")
     except Exception as e:
@@ -171,22 +186,25 @@ def load_members(site_key: str, site: dict) -> dict[str, dict]:
     for m in members:
         if (m.get("name") or "").endswith("リレー"):
             continue  # relay accounts, not real members
-        uuid = str(m["member_uuid"])
+        uuid = str(m.get("member_uuid") or m["id"])
+        if site_key == "hinatazaka46" and uuid == "00":
+            continue  # group account (日向坂46), not a member
         display = jp_names.get(uuid) or m.get("name") or uuid
         out[norm_name(m.get("name") or "")] = {
-            "uuid": uuid, "blog_id": m["id"], "group_id": m.get("group_id"),
+            "uuid": uuid, "blog_id": m.get("id"), "group_id": m.get("group_id"),
             "name": m.get("name"), "display": display,
         }
     return out
 
 
 def member_url(site: dict, uuid: str, count: int, start: int) -> str:
-    try:
-        src = api_get(site, "/blog-sources?organization_id=1")
-        if isinstance(src, list) and src:
-            site["member_url"] = src[0].get("member_url") or site["member_url"]
-    except Exception:
-        pass  # fall back to the known template
+    if site.get("api"):  # message-app sites: refresh the template from the API
+        try:
+            src = api_get(site, "/blog-sources?organization_id=1")
+            if isinstance(src, list) and src:
+                site["member_url"] = src[0].get("member_url") or site["member_url"]
+        except Exception:
+            pass  # fall back to the known template
     return (site["member_url"].replace("${member_id}", uuid)
             .replace("${count}", str(count)).replace("${start}", str(start)))
 
