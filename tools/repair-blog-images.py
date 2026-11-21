@@ -106,7 +106,7 @@ def repair_entry(member_dir: Path, eid: str, item: dict) -> tuple[bool, int, str
         base = basename(url)
         if not base or "." not in base:
             return None
-        name = f"{eid}_{base}"
+        name = gb.local_image_name(eid, base)  # same convention as grab-blog
         dest = files_dir / name
         if dest.exists() and dest.stat().st_size > 0:
             return name

@@ -1272,6 +1272,14 @@
    "gen_num": 5,
    "kana": "まつお さくら",
    "roman": "Sakura Matsuo"
+  },
+  "00": {
+   "name": "ポカ",
+   "gen": "ポカ",
+   "graduated": false,
+   "gen_num": 0,
+   "kana": "ぽか",
+   "roman": "Poka"
   }
  }
 }
