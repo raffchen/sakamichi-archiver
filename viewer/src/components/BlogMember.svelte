@@ -7,14 +7,14 @@
      floor only leaves ~402px after padding. The page is baked into the URL
      as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
+  import { BLOG_PER_PAGE, back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
   import Scrollbar from './Scrollbar.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
 
   let { archive }: { archive: Archive } = $props()
 
-  const PER_PAGE = 25
+  const PER_PAGE = BLOG_PER_PAGE // shared so back-from-post computes the same page size
 
   const key = $derived(ui.blogMember!)
   const info = $derived(archive.blogs?.members.find((b) => b.key === key) ?? null)

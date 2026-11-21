@@ -142,6 +142,26 @@ describe('back()', () => {
     expect(store.ui.blogMember).toBeNull()
   })
 
+  it('back from a post lands on the list page holding that post', () => {
+    store.ui.blogMember = 'm1'
+    store.ui.blogPage = 1 // deep-link state: hash carries no page
+    store.openBlog('m1', 77)
+    store.ui.blogPostRank = 30 // 0-based, newest-first — post 31 of the list
+    store.back(null)
+    expect(store.ui.view).toBe('blog')
+    expect(store.ui.blogPost).toBeNull()
+    expect(store.ui.blogMember).toBe('m1')
+    expect(store.ui.blogPage).toBe(2)
+  })
+
+  it('back from a post before the rank lands keeps the current page', () => {
+    store.ui.blogMember = 'm1'
+    store.ui.blogPage = 1
+    store.openBlog('m1', 77)
+    store.back(null)
+    expect(store.ui.blogPage).toBe(1)
+  })
+
   it('goes blog-scoped search back to the blog directory', () => {
     store.ui.view = 'search'
     store.ui.searchScope = 'blog'

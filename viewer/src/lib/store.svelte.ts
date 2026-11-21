@@ -33,6 +33,11 @@ function loadTheme(): Theme {
   }
 }
 
+/* posts per member-list page. Read by the pager and the back-from-post page
+   restore; a candidate for a user setting, so it lives here rather than in
+   the BlogMember component. */
+export const BLOG_PER_PAGE = 25
+
 export const ui = $state({
   view: 'home' as View,
   slug: null as string | null,
@@ -47,6 +52,11 @@ export const ui = $state({
   blogMember: null as string | null, // directory key under media/blogs/
   blogPost: null as number | null,
   blogPage: 1 as number, // member-list page (1-based); baked into the URL as #/blog/<key>/p/<n>
+  /* 0-based newest-first rank of the post on screen, from the detail fetch.
+     A navigation hint (never in the hash): back() turns it into the list
+     page holding that post, so back works after refresh/deep links and
+     under any page size. Null until the detail fetch lands. */
+  blogPostRank: null as number | null,
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
   /* directory setting: hide graduated members' cards (the ⚙ menu). A device
@@ -142,7 +152,16 @@ export function openBlog(member: string | null = null, post: number | null = nul
 }
 export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
-  else if (ui.view === 'blog' && ui.blogPost != null) openBlog(ui.blogMember)
+  else if (ui.view === 'blog' && ui.blogPost != null) {
+    /* the list page comes from the post's rank, not from ui.blogPage — that
+       way back lands on the right page even after a refresh or a shared
+       post link (whose hash carries no page), and it tracks the page size
+       setting. Falls back to the current blogPage while the detail fetch is
+       still in flight. prev/next chaining updates the rank per post, so
+       back follows the post you're ON. openBlog keeps it (same member). */
+    if (ui.blogPostRank != null) ui.blogPage = Math.floor(ui.blogPostRank / BLOG_PER_PAGE) + 1
+    openBlog(ui.blogMember)
+  }
   else if (ui.view === 'blog' && ui.blogMember) openBlog()
   else if (ui.view === 'search' && ui.searchScope === 'message-member') ui.view = 'thread'
   else if (ui.view === 'search' && ui.searchScope === 'blog-member') openBlog(ui.blogMember)
