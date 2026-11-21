@@ -27,6 +27,11 @@ services:
       - secrets:/data/logs    # the upload endpoint (§3.7) writes the fresh cookie here
       - viewer-db:/data/db    # derived search index (SQLite) — rebuildable, never source of truth
       - viewer-model:/data/model # local embedding model (stage 5) — downloads once, survives rebuilds
+      # ffmpeg-generated thumbs (chat grid + blog card crops) survive deploys —
+      # they're write-once per source file, so a rebuilt container re-encodes
+      # only new posts instead of the whole archive (~10 min of ffmpeg per
+      # deploy otherwise); index.json itself stays ephemeral (built at boot)
+      - viewer-thumbs:/app/public/thumbs
     environment:
       PORT: 8080
       MEDIA_DIR: /data/media
@@ -67,3 +72,4 @@ volumes:
   secrets: {}
   viewer-db: {}
   viewer-model: {}
+  viewer-thumbs: {}
