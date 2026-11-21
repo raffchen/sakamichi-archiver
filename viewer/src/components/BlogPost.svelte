@@ -28,13 +28,18 @@
   $effect(() => {
     entry = null
     nav = null
+    ui.blogPostRank = null // stale until this post's detail lands
     error = ''
     screen?.scrollTo(0, 0) // a chained post opens at the top, like a fresh tap
     fetch(`/api/blog/${encodeURIComponent(key)}/${postId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: { entry: BlogEntry; prev: { id: string; title: string | null } | null; next: { id: string; title: string | null } | null }) => {
+      .then((d: { entry: BlogEntry; rank: number; prev: { id: string; title: string | null } | null; next: { id: string; title: string | null } | null }) => {
         entry = d.entry
         nav = d
+        /* newest-first position in the member's list — back() derives the
+           list page holding this post from it, so back works after a
+           refresh or a shared post link (no page in the post URL) */
+        ui.blogPostRank = d.rank
       })
       .catch((e) => (error = String(e)))
   })

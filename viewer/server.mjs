@@ -1158,6 +1158,10 @@ const app = http.createServer(async (req, res) => {
         key,
         member: state.member,
         site: state.site ?? found.site,
+        /* 0-based, newest-first position in the full list — the viewer
+           derives the back-to-list page from it (page size is a client
+           setting, and the post URL never carries a page number) */
+        rank: list.length - 1 - idx,
         entry: { ...list[idx], content: prefixLocal(list[idx].content, dir), lead: blogLead(list[idx].content) },
         prev: stub(list[idx - 1]), // older post (file is oldest-first)
         next: stub(list[idx + 1]), // newer post
