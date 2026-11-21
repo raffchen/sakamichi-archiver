@@ -27,6 +27,9 @@
 
   const pages = $derived(Math.max(1, Math.ceil(total / PER_PAGE)))
   const win = $derived(colW > 0 && colW < 480 ? 5 : 7)
+  /* "Showing 1-25 of N blogs" strip under the search bar */
+  const countStart = $derived((ui.blogPage - 1) * PER_PAGE + 1)
+  const countEnd = $derived(Math.min(ui.blogPage * PER_PAGE, total))
 
   /* the clickable page numbers: win numbers centered on the current page,
      '…' where the window is detached from an end (edges are the ⏮/⏭ job) */
@@ -97,6 +100,12 @@
     oninput={(e) => (ui.query = e.currentTarget.value)}
   />
 </div>
+
+{#if entries && total > 0}
+  <div class="blog-count">
+    Showing {countStart}-{countEnd} of {total} blogs
+  </div>
+{/if}
 
 <div class="screen" bind:this={screen}>
   <div class="col blog-member" bind:clientWidth={colW}>
