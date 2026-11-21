@@ -1,7 +1,8 @@
 {
  "_provenance": {
   "nogizaka46": "official site JSONP https://www.nogizaka46.com/s/n46/api/list/member?callback=res (code == message/blog member_uuid; cate == generation)",
-  "sakurazaka46": "ja.wikipedia 櫻坂46 §現メンバー (artist id == blog member_uuid verified 29/30) + 増本綺良 二期生 added manually (omitted from the wiki table; original 2期 batch)"
+  "sakurazaka46": "ja.wikipedia 櫻坂46 §現メンバー (artist id == blog member_uuid verified 29/30) + 増本綺良 二期生 added manually (omitted from the wiki table; original 2期 batch)",
+  "hinatazaka46": "ja.wikipedia 日向坂46 §現メンバー (id == official JSONP api/list/member id; the official profile tables carry no generation — 4期生 batch cross-checked against artist/25 meta description, 5期生 against blog self-introductions)"
  },
  "nogizaka46": {
   "63111": {
@@ -1061,6 +1062,216 @@
    "gen_num": 2,
    "kana": "ますもと きら",
    "roman": "Kira Masumoto"
+  }
+ },
+ "hinatazaka46": {
+  "12": {
+   "name": "金村美玖",
+   "gen": "3期生",
+   "gen_num": 3,
+   "graduated": false,
+   "kana": "かなむら みく",
+   "roman": "Miku Kanemura"
+  },
+  "14": {
+   "name": "小坂菜緒",
+   "gen": "3期生",
+   "graduated": false,
+   "gen_num": 3,
+   "kana": "こさか なお",
+   "roman": "Nao Kosaka"
+  },
+  "21": {
+   "name": "上村ひなの",
+   "gen": "3期生",
+   "graduated": false,
+   "gen_num": 3,
+   "kana": "かみむら ひなの",
+   "roman": "Hinano Kamimura"
+  },
+  "22": {
+   "name": "髙橋未来虹",
+   "gen": "3期生",
+   "graduated": false,
+   "gen_num": 3,
+   "kana": "たかはし みくに",
+   "roman": "Mikuni Takahashi"
+  },
+  "23": {
+   "name": "森本茉莉",
+   "gen": "3期生",
+   "graduated": false,
+   "gen_num": 3,
+   "kana": "もりもと まつり",
+   "roman": "Matsuri Morimoto"
+  },
+  "25": {
+   "name": "石塚瑶季",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "いしづか たまき",
+   "roman": "Tamaki Ishizuka"
+  },
+  "27": {
+   "name": "小西夏菜実",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "こにし かなな",
+   "roman": "Kanana Konishi"
+  },
+  "28": {
+   "name": "清水理央",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "しみず りお",
+   "roman": "Rio Shimizu"
+  },
+  "29": {
+   "name": "正源司陽子",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "しょうげんじ ようこ",
+   "roman": "Yoko Shogenji"
+  },
+  "30": {
+   "name": "竹内希来里",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "たけうち きらり",
+   "roman": "Kirari Takeuchi"
+  },
+  "31": {
+   "name": "平尾帆夏",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "ひらお ほのか",
+   "roman": "Honoka Hirao"
+  },
+  "32": {
+   "name": "平岡海月",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "ひらおか みつき",
+   "roman": "Mitsuki Hiraoka"
+  },
+  "33": {
+   "name": "藤嶌果歩",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "ふじしま かほ",
+   "roman": "Kaho Fujishima"
+  },
+  "34": {
+   "name": "宮地すみれ",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "みやじ すみれ",
+   "roman": "Sumire Miyaji"
+  },
+  "35": {
+   "name": "山下葉留花",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "やました はるか",
+   "roman": "Haruka Yamashita"
+  },
+  "36": {
+   "name": "渡辺莉奈",
+   "gen": "4期生",
+   "graduated": false,
+   "gen_num": 4,
+   "kana": "わたなべ りな",
+   "roman": "Rina Watanabe"
+  },
+  "37": {
+   "name": "大田美月",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "おおた みつき",
+   "roman": "Mitsuki Ota"
+  },
+  "38": {
+   "name": "大野愛実",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "おおの えみ",
+   "roman": "Emi Ohno"
+  },
+  "39": {
+   "name": "片山紗希",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "かたやま さき",
+   "roman": "Saki Katayama"
+  },
+  "40": {
+   "name": "蔵盛妃那乃",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "くらもり ひなの",
+   "roman": "Hinano Kuramori"
+  },
+  "41": {
+   "name": "坂井新奈",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "さかい なな",
+   "roman": "Nana Sakai"
+  },
+  "42": {
+   "name": "佐藤優羽",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "さとう ゆう",
+   "roman": "Yu Sato"
+  },
+  "43": {
+   "name": "下田衣珠季",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "しもだ いぶき",
+   "roman": "Ibuki Shimoda"
+  },
+  "44": {
+   "name": "高井俐香",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "たかい りか",
+   "roman": "Rika Takai"
+  },
+  "45": {
+   "name": "鶴崎仁香",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "つるさき にこ",
+   "roman": "Niko Tsurusaki"
+  },
+  "46": {
+   "name": "松尾桜",
+   "gen": "5期生",
+   "graduated": false,
+   "gen_num": 5,
+   "kana": "まつお さくら",
+   "roman": "Sakura Matsuo"
   }
  }
 }
