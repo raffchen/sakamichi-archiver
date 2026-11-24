@@ -233,7 +233,8 @@ def get_token(site: dict) -> str:
 
 
 def api_get(path: str, token: str, site: dict, accept_language: str | None = None):
-    req = urllib.request.Request(BASE_(site) + path, headers=api_headers(token, site))
+    req = urllib.request.Request(BASE_(site) + path,
+                                 headers=api_headers(token, site, accept_language))
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())
 
@@ -546,7 +547,11 @@ def main():
     roman_names: dict[int, str] = {}
     try:
         groups_en = api_get("/groups?organization_id=1", token, site, accept_language="en-US,en;q=0.9")
-        roman_names = {m["id"]: m["name"] for m in groups_en if m.get("name")}
+        # roman app names are ASCII — a CJK name here means the localization
+        # header was ignored (e.g. a dropped param on an API change); keep it
+        # out of the map rather than writing kanji into _member.json.roman
+        roman_names = {m["id"]: m["name"] for m in groups_en
+                       if m.get("name") and m["name"].isascii()}
     except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError) as e:
         print(f"  roman-name listing failed ({e}) — continuing without roman")
 
