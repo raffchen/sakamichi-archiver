@@ -31,6 +31,7 @@ export interface BlogSiteRow {
   posts: number
   first: string | null // site-local raw stamps (display via blogMonth/blogStamp)
   last: string | null
+  years: [string, number][] // this site's posts-per-year, sorted oldest → newest
 }
 
 export interface BlogPanel {
@@ -66,6 +67,8 @@ export function blogPanel(archive: Archive): BlogPanel | null {
   let first: string | null = null
   let last: string | null = null
   let top: BlogMemberInfo | null = null
+  const siteYears = (site: string): [string, number][] =>
+    Object.entries(stats?.siteYears?.[site] ?? {}).sort((a, b) => (a[0] < b[0] ? -1 : 1))
   const rows: BlogSiteRow[] = []
   for (const site of Object.keys(archive.sites)) {
     const list = bySite.get(site) ?? []
@@ -95,6 +98,7 @@ export function blogPanel(archive: Archive): BlogPanel | null {
       posts: sitePosts,
       first: siteFirst,
       last: siteLast,
+      years: siteYears(site),
     })
   }
 

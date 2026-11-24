@@ -379,7 +379,7 @@ const stripHtml = (html) =>
    and the image totals come from walking every member's files/ dir. Post
    dates are site-local JST strings — slicing them keeps the panel consistent
    with the stamps the UI displays (Japan time verbatim). */
-const blogStats = { years: {}, busiestDay: null, images: { files: 0, bytes: 0 } }
+const blogStats = { years: {}, siteYears: {}, busiestDay: null, images: { files: 0, bytes: 0 } }
 const blogBusiest = new Map()
 
 /* blogs: one pass per root found above (site-scoped trees, then the legacy
@@ -414,6 +414,11 @@ for (const { root: blogsRoot, siteHint } of legacyBlogRoots) {
       if (/^\d{4}\/\d{2}\/\d{2}$/.test(day)) {
         const y = day.slice(0, 4)
         blogStats.years[y] = (blogStats.years[y] ?? 0) + 1
+        /* per-site histogram too — the Info panel's chart filters to a site
+           when its table row is clicked (legacy flat-tree members land under
+           '' and are only ever counted globally) */
+        const sy = (blogStats.siteYears[blogSite ?? ''] ??= {})
+        sy[y] = (sy[y] ?? 0) + 1
         blogBusiest.set(day, (blogBusiest.get(day) ?? 0) + 1)
       }
     }

@@ -12,7 +12,17 @@
   /* the panel mirrors whichever archive you opened it from: the blog tab gets
      the blog corpus, every talk view the message one */
   const panel = $derived(blog ? blogPanel(archive) : null)
-  const maxYear = $derived(panel ? Math.max(...panel.years.map((y) => y[1]), 1) : 1)
+  /* the chart shows one site (its table row was clicked) or all sites; the
+     selection is panel-local — it doesn't move the app's site switcher */
+  let chartSite = $state<string | null>(null)
+  const chartYears = $derived(
+    chartSite ? (panel?.rows.find((r) => r.site === chartSite)?.years ?? []) : (panel?.years ?? []),
+  )
+  const chartMax = $derived(Math.max(...chartYears.map((y) => y[1]), 1))
+  const chartLabel = $derived(
+    chartSite ? (archive.sites[chartSite]?.name ?? chartSite) : 'all sites',
+  )
+  const toggleChart = (site: string) => (chartSite = chartSite === site ? null : site)
 </script>
 
 <!-- the backdrop closes on click; Esc and ✕ cover the keyboard paths -->
@@ -50,12 +60,17 @@
         were written by members who have since graduated — erased upstream, kept only here
       </p>
 
-      {#if panel.years.length}
+      {#if chartYears.length}
+        <p class="chartcap">
+          posts per year — {chartLabel}{#if chartSite}
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+            <button class="clear" onclick={() => (chartSite = null)}>· show all sites</button>{/if}
+        </p>
         <div class="years" aria-label="posts per year">
-          {#each panel.years as [year, n] (year)}
+          {#each chartYears as [year, n] (year)}
             <div
               class="ycol"
-              style="--h: {Math.max((n / maxYear) * 100, 2)}%"
+              style="--h: {Math.max((n / chartMax) * 100, 2)}%"
               title={`${year}: ${n.toLocaleString()} posts`}
             >
               <span class="ycount">{n.toLocaleString()}</span>
@@ -77,7 +92,15 @@
         </thead>
         <tbody>
           {#each panel.rows as r (r.site)}
-            <tr class:cur={r.site === ui.site}>
+            <!-- clicking a row filters the chart above to that site; the
+                 app's site switcher is untouched -->
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+            <tr
+              class:cur={r.site === ui.site}
+              class:sel={r.site === chartSite}
+              onclick={() => toggleChart(r.site)}
+              title="show this site's posts per year"
+            >
               <td>
                 {r.label}<br />
                 <span style="color:var(--muted);font-size:12px">{r.graduated} graduated</span>
@@ -161,13 +184,14 @@
   .big {
     font-size: 15px;
   }
-  /* posts-per-year bars: one flex row, height relative to the max year */
+  /* posts-per-year bars: one flex row, height relative to the max year.
+     The top margin leaves room for the count pill of the tallest bar. */
   .years {
     display: flex;
     align-items: stretch;
     gap: 6px;
     height: 64px;
-    margin: 12px 0;
+    margin: 22px 0 12px;
   }
   .ycol {
     flex: 1;
@@ -222,6 +246,22 @@
   }
   tr.cur td {
     font-weight: 600;
+  }
+  tr.sel td {
+    background: var(--press);
+  }
+  tbody tr {
+    cursor: pointer;
+  }
+  .chartcap {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .clear {
+    color: var(--accent, var(--ink));
+    font-size: 13px;
+    margin-left: 6px;
   }
   .pulse {
     color: var(--muted);

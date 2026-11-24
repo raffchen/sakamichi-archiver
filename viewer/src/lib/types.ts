@@ -79,7 +79,8 @@ export interface BlogEntry {
 }
 
 export interface BlogStats {
-  years: Record<string, number> // posts per year ('2016': 1149)
+  years: Record<string, number> // posts per year ('2016': 1149), all sites
+  siteYears: Record<string, Record<string, number>> // the same, per site key
   busiestDay: { date: string; count: number } | null // site-local day, e.g. '2025/12/31'
   images: { files: number; bytes: number } // blog/files originals across all members
 }

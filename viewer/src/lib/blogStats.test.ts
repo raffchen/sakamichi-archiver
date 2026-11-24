@@ -54,7 +54,7 @@ describe('blogPanel', () => {
           bm({ key: 'b', site: 'nogizaka46', count: 5, graduated: true, first: '2017/07/01 00:00:00', last: '2021/12/31 23:00:00' }),
           bm({ key: 'c', site: 'hinatazaka46', count: 200, graduated: true, first: '2016/08/02 00:00:00', last: '2024/04/05 10:00:00' }),
         ],
-        { years: { '2020': 10, '2016': 20 }, busiestDay: { date: '2025/12/31', count: 74 }, images: { files: 11, bytes: 2_000_000_000 } },
+        { years: { '2020': 10, '2016': 20 }, siteYears: { nogizaka46: { '2020': 10 } }, busiestDay: { date: '2025/12/31', count: 74 }, images: { files: 11, bytes: 2_000_000_000 } },
       ),
     )!
     expect(p.posts).toBe(305)
@@ -66,6 +66,9 @@ describe('blogPanel', () => {
     expect(p.top?.key).toBe('c')
     /* years sort oldest → newest */
     expect(p.years).toEqual([['2016', 20], ['2020', 10]])
+    /* rows carry their own per-site histogram (missing site → empty) */
+    expect(p.rows.find((r) => r.site === 'nogizaka46')!.years).toEqual([['2020', 10]])
+    expect(p.rows.find((r) => r.site === 'hinatazaka46')!.years).toEqual([])
     expect(p.busiestDay).toEqual({ date: '2025/12/31', count: 74 })
     expect(p.images).toEqual({ files: 11, bytes: 2_000_000_000 })
   })
