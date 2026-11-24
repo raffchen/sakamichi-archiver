@@ -126,6 +126,18 @@ byte-identical pages. It does not advance or paginate.
 
 Member(s) attached to the group: display name, thumbnails, birthday, groups.
 
+**`name` is localized server-side by the request's `Accept-Language` header**
+(verified 2026-11 with side-by-side probes): absent or `ja` returns the kanji
+name (`池田 瑛紗`), `en-US,en;q=0.9` returns the romanized app display name
+(`Teresa Ikeda`). Same behavior on `GET /groups`, `GET /members/{id}` and
+`GET /v2/blog-members`. The `translation_lang` query parameter (seen on
+`/announcements?platform=web&translation_lang=en`) does **not** affect member
+names. No kana (ふりがな) field exists on any member endpoint. The official
+app is just a browser here — it sends its `Accept-Language: en` and gets roman
+names back. `grab-media.py` therefore harvests roman names with a second
+listing (`Accept-Language: en-US,en;q=0.9`) and stores them in
+`_member.json` → `roman`; kana still comes from `viewer/archive.config.json`.
+
 The group ID and member ID are **not always equal** (e.g. group `61` → member
 `58` on nogizaka, group `82` → member `137` on sakurazaka); messages carry
 `member_id`, the Talk/home listing uses group IDs.
