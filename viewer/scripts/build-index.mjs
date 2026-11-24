@@ -374,6 +374,14 @@ const stripHtml = (html) =>
     .replace(/&[a-z#0-9]+;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+/* blog-archive stats for the Info panel (blog tab): the year histogram and
+   busiest day need per-post dates (the directory rows only carry first/last),
+   and the image totals come from walking every member's files/ dir. Post
+   dates are site-local JST strings — slicing them keeps the panel consistent
+   with the stamps the UI displays (Japan time verbatim). */
+const blogStats = { years: {}, busiestDay: null, images: { files: 0, bytes: 0 } }
+const blogBusiest = new Map()
+
 /* blogs: one pass per root found above (site-scoped trees, then the legacy
    flat tree if it still exists); site comes from the layout hint with
    _blogs.json as tiebreak/authority */
@@ -401,6 +409,26 @@ for (const { root: blogsRoot, siteHint } of legacyBlogRoots) {
         square: true,
       })
     }
+    for (const e of entries) {
+      const day = (e.at ?? '').slice(0, 10)
+      if (/^\d{4}\/\d{2}\/\d{2}$/.test(day)) {
+        const y = day.slice(0, 4)
+        blogStats.years[y] = (blogStats.years[y] ?? 0) + 1
+        blogBusiest.set(day, (blogBusiest.get(day) ?? 0) + 1)
+      }
+    }
+    /* full-size originals stay at /media; count them + their weight here so
+       the Info panel can show the archive's bulk without a media walk */
+    const filesDir = path.join(blogDir, 'files')
+    try {
+      for (const f of fs.readdirSync(filesDir)) {
+        const st = fs.statSync(path.join(filesDir, f))
+        if (st.isFile()) {
+          blogStats.images.files++
+          blogStats.images.bytes += st.size
+        }
+      }
+    } catch {}
     const lastWithThumb = [...entries].reverse().find((e) => e.thumbnail)
     archivedBlogs.set(`${blogSite ?? ''}/${state.member_uuid}`, {
       key,
@@ -477,6 +505,11 @@ for (const site of Object.keys(sites)) {
     })
   }
 }
+let busiest = null
+for (const [date, count] of blogBusiest)
+  if (!busiest || count > busiest.count) busiest = { date, count }
+blogStats.busiestDay = busiest
+
 const siteOrder = Object.keys(sites)
 /* members sort by kana reading when we have it — Intl.Collator('ja') can't
    reliably order bare-kanji names */
@@ -510,7 +543,7 @@ const index = {
   sites,
   totals,
   members,
-  blogs: { members: blogMembers },
+  blogs: { members: blogMembers, stats: blogStats },
 }
 
 // ---- semantic no-op detection --------------------------------------------

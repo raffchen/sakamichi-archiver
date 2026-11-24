@@ -78,13 +78,19 @@ export interface BlogEntry {
   lead?: string | null
 }
 
+export interface BlogStats {
+  years: Record<string, number> // posts per year ('2016': 1149)
+  busiestDay: { date: string; count: number } | null // site-local day, e.g. '2025/12/31'
+  images: { files: number; bytes: number } // blog/files originals across all members
+}
+
 export interface Archive {
   generated_at: string
   display_name: string
   sites: Record<string, Site>
   totals: { messages: number; media: number }
   members: Member[]
-  blogs?: { members: BlogMemberInfo[] }
+  blogs?: { members: BlogMemberInfo[]; stats?: BlogStats }
   /* stage 4: true when the served index dropped old message texts */
   textsTruncated?: boolean
 }

@@ -68,6 +68,7 @@ export function daysAgo(iso: string, refIso: string): number {
 }
 
 export function sizeOf(n: number): string {
+  if (n > 1_000_000_000) return `${(n / 1024 ** 3).toFixed(1)} GB`
   if (n > 1_000_000) return `${(n / 1_000_000).toFixed(1)} MB`
   if (n > 1_000) return `${(n / 1_000).toFixed(0)} kB`
   return `${n} B`
