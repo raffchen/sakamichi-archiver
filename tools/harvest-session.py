@@ -65,7 +65,9 @@ if __name__ == "__main__":
         hit = SITES.get(x.get("domain", ""))
         if hit:
             label, rel = hit
-            (ROOT / rel).write_text(x["value"])
+            dest = ROOT / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(x["value"])
             saved.append(label)
             print(f"{label}: session cookie saved to {rel} ({x['value'][:10]}...)")
     missing = sorted(set(l for l, _ in SITES.values()) - set(saved))
