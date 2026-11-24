@@ -89,7 +89,7 @@
     <button class:on={k === ui.site} onclick={() => (ui.site = k)}>
       {archive.sites[k]?.name ?? k}
       {#if siteUnread(k) > 0}
-        <span class="count-badge site-badge">{siteUnread(k)}</span>
+        <span class="count-badge site-badge badge-{k}">{siteUnread(k)}</span>
       {/if}
     </button>
   {/each}

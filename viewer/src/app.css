@@ -73,6 +73,13 @@
     --app-zoom: max(1, tan(atan2(100vw, 3072px)));
   }
 }
+/* per-site badge colors on :root so a badge can keep its own site's color
+   regardless of which site is active (--badge always follows data-site) */
+:root {
+  --badge-nogizaka46: #8d21ae;
+  --badge-sakurazaka46: #e2879f;
+  --badge-hinatazaka46: #4aa3dc;
+}
 html[data-site='nogizaka46'] {
   --accent: #9c2fb5;
   --accent-2: #b25fd0;
@@ -80,7 +87,7 @@ html[data-site='nogizaka46'] {
   --head-bg: linear-gradient(90deg, #b968d5 0%, #8d21ae 100%);
   --section: #9c2fb5;
   --ava-bg: #c8c2d4;
-  --badge: #8d21ae;
+  --badge: var(--badge-nogizaka46);
 }
 html[data-site='sakurazaka46'] {
   --accent: #de8fa9;
@@ -91,7 +98,7 @@ html[data-site='sakurazaka46'] {
   --head-bg: #de8fa9;
   --section: #de8fa9;
   --ava-bg: #4d648a;
-  --badge: #e2879f;
+  --badge: var(--badge-sakurazaka46);
 }
 html[data-site='hinatazaka46'] {
   --accent: #5bb2e5;
@@ -102,7 +109,7 @@ html[data-site='hinatazaka46'] {
   --head-bg: #5bb2e5;
   --section: #5bb2e5;
   --ava-bg: #a9bfd2;
-  --badge: #4aa3dc;
+  --badge: var(--badge-hinatazaka46);
 }
 
 /* ---------- dark mode ----------
@@ -303,13 +310,23 @@ img {
   color: #fff;
 }
 /* unread badge on the site pills: same look as the tab badge, scaled to the
-   smaller pill so it clears the rounded edge without clipping */
+   smaller pill so it clears the rounded edge without clipping. Each pill's
+   badge keeps its own site's color instead of the active site's (--badge). */
 .sites .site-badge {
   top: -7px;
   right: -2px;
   min-width: 16px;
   height: 16px;
   font-size: 10.5px;
+}
+.site-badge.badge-nogizaka46 {
+  background: var(--badge-nogizaka46);
+}
+.site-badge.badge-sakurazaka46 {
+  background: var(--badge-sakurazaka46);
+}
+.site-badge.badge-hinatazaka46 {
+  background: var(--badge-hinatazaka46);
 }
 
 /* ---------- scroll area ----------
