@@ -124,8 +124,12 @@ def record_session_status(site: dict, ok: bool, error: str | None = None) -> Non
         _notify(key, "session recovered — sync resuming")
 
 
-def api_headers(token: str, site: dict) -> dict:
-    return {
+def api_headers(token: str, site: dict, accept_language: str | None = None) -> dict:
+    """The API localizes the member `name` server-side by Accept-Language
+    (verified 2026-11: ja/absent -> 漢字, en -> roman e.g. "Teresa Ikeda";
+    no kana field exists anywhere). Default header-less requests keep the
+    kanji names the archive stores; pass accept_language="en" to get roman."""
+    h = {
         "Authorization": token if token.startswith("Bearer ") else "Bearer " + token,
         "Accept": "application/json",
         "Content-Type": "application/json",
@@ -134,6 +138,9 @@ def api_headers(token: str, site: dict) -> dict:
         "User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/113",
         "Referer": site["web"] + "/",
     }
+    if accept_language:
+        h["Accept-Language"] = accept_language
+    return h
 
 
 def refresh_token_via_cdp(site: dict) -> str:
@@ -225,7 +232,7 @@ def get_token(site: dict) -> str:
     return tok.removeprefix("Bearer ")
 
 
-def api_get(path: str, token: str, site: dict):
+def api_get(path: str, token: str, site: dict, accept_language: str | None = None):
     req = urllib.request.Request(BASE_(site) + path, headers=api_headers(token, site))
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())
@@ -385,12 +392,13 @@ def probe_member(member: dict, token: str, site: dict) -> bool:
 
 
 def process_member(member: dict, token: str, site: dict, full_history: bool,
-                   from_date: str) -> tuple[int, int]:
+                   from_date: str, roman_names: dict | None = None) -> tuple[int, int]:
     """Full sync of one member: messages, media, profile, artwork, metadata."""
     mid, name = member["id"], member["name"]
     slug = slugify(name)
     mroot = msg_dir(site, slug)
-    print(f"[{mid}] {name}")
+    roman = (roman_names or {}).get(mid)
+    print(f"[{mid}] {name}" + (f" / {roman}" if roman else ""))
     got = skipped = 0
     try:
         all_msgs, media = fetch_member_media(mid, token, site, full_history, from_date, slug)
@@ -482,6 +490,7 @@ def process_member(member: dict, token: str, site: dict, full_history: bool,
             {
                 "site": site.get("key", "?"),
                 "name": name,
+                "roman": roman,
                 "group_id": gid,
                 "member_id": mid,
                 "web": site["web"],
@@ -531,6 +540,16 @@ def main():
             sys.exit("token refresh failed")
         groups = api_get("/groups?organization_id=1", token, site)
 
+    # roman names for the viewer (Accept-Language: en; best effort — an
+    # en-listing failure just leaves roman out of _member.json, where the
+    # archive.config.json fallback in build-index.mjs takes over)
+    roman_names: dict[int, str] = {}
+    try:
+        groups_en = api_get("/groups?organization_id=1", token, site, accept_language="en-US,en;q=0.9")
+        roman_names = {m["id"]: m["name"] for m in groups_en if m.get("name")}
+    except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError) as e:
+        print(f"  roman-name listing failed ({e}) — continuing without roman")
+
     members = groups
     if args.subscribed:
         members = [m for m in members
@@ -553,7 +572,7 @@ def main():
                 clean += 1
                 continue
             hot += 1
-        got, skip = process_member(m, token, site, args.full_history, args.from_date)
+        got, skip = process_member(m, token, site, args.full_history, args.from_date, roman_names)
         total_got += got
         total_skip += skip
     if args.probe:
