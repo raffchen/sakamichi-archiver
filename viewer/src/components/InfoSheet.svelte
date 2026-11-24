@@ -53,8 +53,13 @@
       {#if panel.years.length}
         <div class="years" aria-label="posts per year">
           {#each panel.years as [year, n] (year)}
-            <div class="ycol">
-              <div class="ybar" style="height: {Math.max((n / maxYear) * 100, 2)}%"></div>
+            <div
+              class="ycol"
+              style="--h: {Math.max((n / maxYear) * 100, 2)}%"
+              title={`${year}: ${n.toLocaleString()} posts`}
+            >
+              <span class="ycount">{n.toLocaleString()}</span>
+              <div class="ybar"></div>
               <span class="ylab">{year}</span>
             </div>
           {/each}
@@ -171,6 +176,7 @@
     justify-content: flex-end;
     align-items: center;
     min-width: 0;
+    position: relative;
   }
   .ybar {
     width: 100%;
@@ -178,6 +184,36 @@
     border-radius: 3px 3px 0 0;
     background: var(--accent, var(--ink));
     opacity: 0.75;
+    height: var(--h);
+  }
+  /* exact count on hover — a pill floating just above the bar top; the year
+     span keeps its layout slot so the row never shifts. Touch devices have no
+     hover, so the counts stay visible there instead. */
+  .ycount {
+    position: absolute;
+    bottom: calc(var(--h) + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 8px;
+    background: var(--raise, #fff);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 100ms;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .ycol:hover .ycount {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .ycount {
+      opacity: 1;
+    }
   }
   .ylab {
     font-size: 10px;
