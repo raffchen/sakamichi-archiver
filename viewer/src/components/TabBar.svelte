@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Archive } from '../lib/types'
-  import { goHome, openBlog, info, ui, unreadCount } from '../lib/store.svelte'
+  import { goHome, openBlog, info, ui } from '../lib/store.svelte'
   import { icon } from '../lib/icons'
 
   let { archive }: { archive: Archive } = $props()
@@ -20,12 +20,6 @@
     { id: 'official', label: 'Official', ic: isSaka ? 'official-saka' : isHinata ? 'official-hinata' : 'official', locked: !officialUrl, url: officialUrl ?? undefined },
     { id: 'info', label: 'Info', ic: 'info', locked: false },
   ])
-
-  const unread = $derived(
-    archive.members
-      .filter((m) => (m.site ?? 'nogizaka46') === ui.site)
-      .reduce((n, m) => n + unreadCount(m.slug, m.messages), 0),
-  )
 
   const onTalk = () =>
     ui.view === 'home' ||
@@ -53,9 +47,6 @@
     >
       {@html icon(t.ic)}
       <span>{t.label}</span>
-      {#if t.id === 'talk' && unread > 0}
-        <span class="count-badge">{unread}</span>
-      {/if}
     </button>
   {/each}
 </nav>

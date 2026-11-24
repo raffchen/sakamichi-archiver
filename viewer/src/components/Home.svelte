@@ -61,6 +61,13 @@
       media: ms.reduce((a, m) => a + m.media_count, 0),
     }
   }
+
+  /* unread total per site for the badges on the site pills — one per site,
+     not just the selected one, so other groups' new messages stay visible */
+  const siteUnread = (k: string) =>
+    archive.members
+      .filter((m) => (m.site ?? 'nogizaka46') === k)
+      .reduce((n, m) => n + unreadCount(m.slug, m.messages), 0)
 </script>
 
 <header class="head">
@@ -81,6 +88,9 @@
   {#each siteKeys as k (k)}
     <button class:on={k === ui.site} onclick={() => (ui.site = k)}>
       {archive.sites[k]?.name ?? k}
+      {#if siteUnread(k) > 0}
+        <span class="count-badge site-badge">{siteUnread(k)}</span>
+      {/if}
     </button>
   {/each}
 </div>

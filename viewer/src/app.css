@@ -296,10 +296,20 @@ img {
   font-weight: 700;
   background: var(--pill-bg);
   color: var(--pill-ink);
+  position: relative; /* anchors the unread badge */
 }
 .sites button.on {
   background: var(--accent);
   color: #fff;
+}
+/* unread badge on the site pills: same look as the tab badge, scaled to the
+   smaller pill so it clears the rounded edge without clipping */
+.sites .site-badge {
+  top: -7px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10.5px;
 }
 
 /* ---------- scroll area ----------
