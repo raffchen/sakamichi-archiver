@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blogPanel, blogMonth } from './blogStats'
+import { blogPanel, blogMonth, stackedChart, type BlogSiteRow } from './blogStats'
 import type { Archive, BlogMemberInfo, BlogStats } from './types'
 
 /* BlogMemberInfo factory — most fields don't matter for the aggregation */
@@ -38,6 +38,46 @@ describe('blogMonth', () => {
     expect(blogMonth('2017/07/01 23:24:00')).toBe('Jul 2017')
     expect(blogMonth('garbage')).toBeNull()
     expect(blogMonth(null)).toBeNull()
+  })
+})
+
+describe('stackedChart', () => {
+  const row = (site: string, years: [string, number][]): BlogSiteRow => ({
+    site,
+    label: site,
+    members: 1,
+    graduated: 0,
+    posts: years.reduce((a, [, n]) => a + n, 0),
+    first: null,
+    last: null,
+    years,
+  })
+
+  it('stacks the per-site histograms into one bar per year, in row order', () => {
+    const chart = stackedChart(
+      [row('nogizaka46', [['2020', 10]]), row('sakurazaka46', [['2019', 4], ['2020', 6]]), row('hinatazaka46', [['2020', 30]])],
+      null,
+    )
+    expect(chart).toEqual([
+      { year: '2019', total: 4, segs: [{ site: 'sakurazaka46', n: 4 }] },
+      { year: '2020', total: 46, segs: [{ site: 'nogizaka46', n: 10 }, { site: 'sakurazaka46', n: 6 }, { site: 'hinatazaka46', n: 30 }] },
+    ])
+  })
+
+  it('a selected site yields single-segment bars in its own color scope', () => {
+    const chart = stackedChart(
+      [row('nogizaka46', [['2020', 10]]), row('hinatazaka46', [['2020', 30]])],
+      'hinatazaka46',
+    )
+    expect(chart).toEqual([{ year: '2020', total: 30, segs: [{ site: 'hinatazaka46', n: 30 }] }])
+  })
+
+  it('a site with no posts that year contributes no segment', () => {
+    const chart = stackedChart(
+      [row('nogizaka46', [['2020', 0]]), row('hinatazaka46', [['2020', 5]])],
+      null,
+    )
+    expect(chart[0].segs).toEqual([{ site: 'hinatazaka46', n: 5 }])
   })
 })
 

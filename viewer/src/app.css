@@ -79,9 +79,15 @@
   --badge-nogizaka46: #8d21ae;
   --badge-sakurazaka46: #e2879f;
   --badge-hinatazaka46: #4aa3dc;
+  /* fixed site accents, usable regardless of the active theme (stacked
+     charts need all three at once; the per-site blocks below derive their
+     --accent from these so the values stay single-sourced) */
+  --site-nogizaka46: #9c2fb5;
+  --site-sakurazaka46: #de8fa9;
+  --site-hinatazaka46: #5bb2e5;
 }
 html[data-site='nogizaka46'] {
-  --accent: #9c2fb5;
+  --accent: var(--site-nogizaka46);
   --accent-2: #b25fd0;
   --head-fg: #ffffff;
   --head-bg: linear-gradient(90deg, #b968d5 0%, #8d21ae 100%);
@@ -90,7 +96,7 @@ html[data-site='nogizaka46'] {
   --badge: var(--badge-nogizaka46);
 }
 html[data-site='sakurazaka46'] {
-  --accent: #de8fa9;
+  --accent: var(--site-sakurazaka46);
   --accent-2: #e9b7c9;
   /* solid pink header like nogi's solid-style gradient — official-pale
      gradient dropped (the pastel band read oddly on dark surfaces) */
@@ -101,7 +107,7 @@ html[data-site='sakurazaka46'] {
   --badge: var(--badge-sakurazaka46);
 }
 html[data-site='hinatazaka46'] {
-  --accent: #5bb2e5;
+  --accent: var(--site-hinatazaka46);
   --accent-2: #8ecfef;
   /* solid header — the app's blue→purple band dropped (per the nogi/sakura
      precedent), matching the section-text blue the directory uses */

@@ -127,3 +127,36 @@ export function blogPanel(archive: Archive): BlogPanel | null {
     images: stats?.images ?? null,
   }
 }
+
+export interface ChartSeg {
+  site: string
+  n: number
+}
+export interface ChartYear {
+  year: string
+  total: number
+  segs: ChartSeg[] // stacked bottom-up in table-row order; a site with no posts
+  // that year contributes no segment
+}
+
+/* One bar per year: all-sites mode stacks the rows' per-site histograms into
+   segments; selected-site mode is that site alone (the Info panel colors the
+   segments with each site's fixed accent). Years missing from every site's
+   histogram don't appear — same as before stacking. */
+export function stackedChart(rows: BlogSiteRow[], site: string | null): ChartYear[] {
+  if (site) {
+    const row = rows.find((r) => r.site === site)
+    return (row?.years ?? []).map(([year, n]) => ({ year, total: n, segs: [{ site, n }] }))
+  }
+  const byYear = new Map<string, ChartSeg[]>()
+  for (const r of rows)
+    for (const [year, n] of r.years) {
+      if (n <= 0) continue // histograms only carry years with posts, but be safe
+      const segs = byYear.get(year) ?? []
+      segs.push({ site: r.site, n })
+      byYear.set(year, segs)
+    }
+  return [...byYear.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([year, segs]) => ({ year, total: segs.reduce((a, s) => a + s.n, 0), segs }))
+}

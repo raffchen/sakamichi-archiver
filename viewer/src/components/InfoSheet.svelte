@@ -3,7 +3,7 @@
   import { keynav } from '../lib/actions'
   import { fmtDateTime, fmtBlogStamp, sizeOf } from '../lib/format'
   import { disp } from '../lib/display'
-  import { blogPanel, blogMonth } from '../lib/blogStats'
+  import { blogPanel, blogMonth, stackedChart } from '../lib/blogStats'
   import { ui } from '../lib/store.svelte'
   import { fade, slide } from 'svelte/transition'
 
@@ -15,14 +15,20 @@
   /* the chart shows one site (its table row was clicked) or all sites; the
      selection is panel-local — it doesn't move the app's site switcher */
   let chartSite = $state<string | null>(null)
-  const chartYears = $derived(
-    chartSite ? (panel?.rows.find((r) => r.site === chartSite)?.years ?? []) : (panel?.years ?? []),
-  )
-  const chartMax = $derived(Math.max(...chartYears.map((y) => y[1]), 1))
   const chartLabel = $derived(
     chartSite ? (archive.sites[chartSite]?.name ?? chartSite) : 'all sites',
   )
   const toggleChart = (site: string) => (chartSite = chartSite === site ? null : site)
+  /* one bar per year, segmented by site in all-sites mode; a selected site is
+     that site alone, in its own color */
+  const chart = $derived(panel ? stackedChart(panel.rows, chartSite) : [])
+  const chartMax = $derived(Math.max(...chart.map((y) => y.total), 1))
+  /* the pill shows the total; the tooltip breaks the bar into its sites */
+  const chartTitle = (y: (typeof chart)[number]) =>
+    [
+      `${y.year}: ${y.total.toLocaleString()} posts`,
+      ...y.segs.map((s) => `${archive.sites[s.site]?.name ?? s.site} ${s.n.toLocaleString()}`),
+    ].join('\n')
 </script>
 
 <!-- the backdrop closes on click; Esc and ✕ cover the keyboard paths -->
@@ -60,22 +66,26 @@
         were written by members who have since graduated — erased upstream, kept only here
       </p>
 
-      {#if chartYears.length}
+      {#if chart.length}
         <p class="chartcap">
           posts per year — {chartLabel}{#if chartSite}
             <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
             <button class="clear" onclick={() => (chartSite = null)}>· show all sites</button>{/if}
         </p>
         <div class="years" aria-label="posts per year">
-          {#each chartYears as [year, n] (year)}
+          {#each chart as y (y.year)}
             <div
               class="ycol"
-              style="--h: {Math.max((n / chartMax) * 100, 2)}%"
-              title={`${year}: ${n.toLocaleString()} posts`}
+              style="--h: {Math.max((y.total / chartMax) * 100, 2)}%"
+              title={chartTitle(y)}
             >
-              <span class="ycount">{n.toLocaleString()}</span>
-              <div class="ybar"></div>
-              <span class="ylab">{year}</span>
+              <span class="ycount">{y.total.toLocaleString()}</span>
+              <div class="ybar">
+                {#each y.segs as s (s.site)}
+                  <i class="seg" style="height: {(s.n / y.total) * 100}%; background: var(--site-{s.site})"></i>
+                {/each}
+              </div>
+              <span class="ylab">{y.year}</span>
             </div>
           {/each}
         </div>
@@ -102,7 +112,7 @@
               title="show this site's posts per year"
             >
               <td>
-                {r.label}<br />
+                <i class="dot" style="background: var(--site-{r.site})"></i>{r.label}<br />
                 <span style="color:var(--muted);font-size:12px">{r.graduated} graduated</span>
               </td>
               <td class="r">{r.members}</td>
@@ -209,6 +219,24 @@
     background: var(--accent, var(--ink));
     opacity: 0.75;
     height: var(--h);
+    /* segments stack bottom-up in the table's site order */
+    display: flex;
+    flex-direction: column-reverse;
+    overflow: hidden;
+  }
+  .seg {
+    display: block;
+    width: 100%;
+    flex: none;
+  }
+  /* legend: each table row carries its site's chart color */
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: 1px;
   }
   /* exact count on hover — a pill floating just above the bar top; the year
      span keeps its layout slot so the row never shifts. Touch devices have no
