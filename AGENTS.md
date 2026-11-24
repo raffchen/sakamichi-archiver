@@ -20,6 +20,9 @@ House rules:
   - after the em dash, one clause of why or the behavior it fixes
     (e.g. `feat(viewer): blog directory settings gear — hide graduated
     members, persisted per device`).
+- When an agent commits finished work, deploy it right away with `./deploy.sh` —
+  don't leave commits pending a deploy decision or batch them up. Only skip the
+  push (`--no-push`) when the deploy is explicitly a rebuild-only request.
 - `docs/search-db.md` is intentionally untracked — leave it that way.
 - `media/`, `logs/`, `chrome-profile/` never go into git or images.
 - When running headless Chrome, only kill the PIDs you spawned.
