@@ -256,8 +256,11 @@
     width: 34px;
     text-align: right;
     font-size: 9px;
+    line-height: 1;
     color: var(--muted);
-    transform: translateY(50%);
+    /* the label's box top starts at the anchor (a 0-height element), so
+       centering on the line means shifting UP half the box, not down */
+    transform: translateY(-50%);
   }
   .tline {
     position: absolute;
