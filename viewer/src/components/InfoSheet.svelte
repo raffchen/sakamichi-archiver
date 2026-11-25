@@ -23,6 +23,21 @@
      that site alone, in its own color */
   const chart = $derived(panel ? stackedChart(panel.rows, chartSite) : [])
   const chartMax = $derived(Math.max(...chart.map((y) => y.total), 1))
+  /* y-axis gridlines: a nice round step (1/2/5 × 10^k) near a third of the
+     peak, thinned so at most five lines — recomputed when the site filter
+     changes the scale */
+  const ticks = $derived.by(() => {
+    if (!chart.length) return []
+    const raw = chartMax / 3
+    const mag = 10 ** Math.floor(Math.log10(Math.max(raw, 1)))
+    let step = mag
+    for (const m of [2, 5, 10]) if (m * mag <= raw) step = m * mag
+    while (chartMax / step > 5) step *= 2
+    step = Math.max(step, 1)
+    const out: number[] = []
+    for (let t = step; t <= chartMax; t += step) out.push(Math.round(t))
+    return out
+  })
   /* the pill shows the total; the tooltip breaks the bar into its sites */
   const chartTitle = (y: (typeof chart)[number]) =>
     [
@@ -72,21 +87,38 @@
             <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
             <button class="clear" onclick={() => (chartSite = null)}>· show all sites</button>{/if}
         </p>
-        <div class="years" aria-label="posts per year">
-          {#each chart as y (y.year)}
-            <div
-              class="ycol"
-              style="--h: {Math.max((y.total / chartMax) * 100, 2)}%"
-              title={chartTitle(y)}
-            >
-              <span class="ycount">{y.total.toLocaleString()}</span>
-              <div class="ybar">
-                {#each y.segs as s (s.site)}
-                  <i class="seg" style="height: {(s.n / y.total) * 100}%; background: var(--site-{s.site})"></i>
-                {/each}
+        <div class="chart" aria-label="posts per year">
+          <div class="grid" aria-hidden="true">
+            {#each ticks as t (t)}
+              <div class="tick" style="bottom: {(t / chartMax) * 100}%">
+                <span class="tlabel">{t.toLocaleString()}</span>
+                <i class="tline"></i>
               </div>
-              <span class="ylab">{y.year}</span>
-            </div>
+            {/each}
+          </div>
+          <div class="years">
+            {#each chart as y (y.year)}
+              <div
+                class="ycol"
+                style="--h: {Math.max((y.total / chartMax) * 100, 2)}%"
+                title={chartTitle(y)}
+              >
+                <span class="ycount">{y.total.toLocaleString()}</span>
+                <div class="ybar">
+                  {#each y.segs as s (s.site)}
+                    <i
+                      class="seg"
+                      style="height: {(s.n / y.total) * 100}%; background: var(--site-{s.site})"
+                    ></i>
+                  {/each}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="xlabels">
+          {#each chart as y (y.year)}
+            <span>{y.year}</span>
           {/each}
         </div>
       {/if}
@@ -194,14 +226,51 @@
   .big {
     font-size: 15px;
   }
-  /* posts-per-year bars: one flex row, height relative to the max year.
-     The top margin leaves room for the count pill of the tallest bar. */
+  /* posts-per-year chart: a fixed-height plot area so the bars, gridlines
+     and the year-label row below all share one scale. The left gutter holds
+     the tick labels; the top margin leaves room for the count pill of the
+     tallest bar. */
+  .chart {
+    position: relative;
+    margin: 22px 0 0 38px;
+  }
+  .grid {
+    position: absolute;
+    left: -38px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+  /* a zero-height anchor at the tick's exact height; line and label both
+     center on it (label via translateY) so gridlines match the bar scale */
+  .tick {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+  }
+  .tlabel {
+    position: absolute;
+    left: 0;
+    width: 34px;
+    text-align: right;
+    font-size: 9px;
+    color: var(--muted);
+    transform: translateY(50%);
+  }
+  .tline {
+    position: absolute;
+    left: 38px;
+    right: 0;
+    top: 0;
+    border-top: 1px solid var(--line);
+  }
   .years {
     display: flex;
     align-items: stretch;
     gap: 6px;
-    height: 64px;
-    margin: 22px 0 12px;
+    height: 72px;
   }
   .ycol {
     flex: 1;
@@ -211,6 +280,7 @@
     align-items: center;
     min-width: 0;
     position: relative;
+    height: 100%;
   }
   .ybar {
     width: 100%;
@@ -267,10 +337,19 @@
       opacity: 1;
     }
   }
-  .ylab {
+  /* year labels live in their own row under the plot so the gridlines line
+     up with the bar tops exactly */
+  .xlabels {
+    display: flex;
+    gap: 6px;
+    margin: 3px 0 12px 38px;
+  }
+  .xlabels span {
+    flex: 1;
+    text-align: center;
     font-size: 10px;
     color: var(--muted);
-    margin-top: 3px;
+    min-width: 0;
   }
   tr.cur td {
     font-weight: 600;
