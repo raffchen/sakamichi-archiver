@@ -557,7 +557,18 @@
     align-items: flex-start;
   }
   .chip.open {
-    background: var(--raise);
+    background: var(--accent);
+    border-radius: 12px;
+  }
+  /* accent container: white on top like the site headers do (the pale pink
+     saka accent included) */
+  .chip.open .cn,
+  .chip.open .cc {
+    color: #fff;
+  }
+  .chip.open .cd {
+    color: rgba(255, 255, 255, 0.85);
+    border-top-color: rgba(255, 255, 255, 0.35);
   }
   .ch {
     display: inline-flex;
