@@ -325,6 +325,17 @@
     />
   </div>
 
+  <!-- feed count strip: same DOM position as the member list's (below the
+     searchbar, outside the scrolling .screen) so it behaves as chrome in
+     both views instead of scrolling away with the feed. Gated on `latest`
+     like BlogMember gates on `entries` — stale totals don't outlive the
+     loading state of the page they describe. -->
+  {#if (ui.blogSort === 'latest' || ui.blogSort === 'oldest') && latest && latestTotal > 0}
+    <div class="blog-count">
+      Showing {feedStart}-{feedEnd} of {latestTotal} blogs
+    </div>
+  {/if}
+
   <div class="screen" bind:this={dirScreen}>
     <div class="col blog-directory" bind:clientWidth={colW}>
     <Scrollbar />
@@ -364,11 +375,6 @@
       {:else if !latestShown}
         <div class="muted-note">読み込み中…</div>
       {:else}
-        {#if latestTotal > 0}
-          <div class="blog-count">
-            Showing {feedStart}-{feedEnd} of {latestTotal} blogs
-          </div>
-        {/if}
         <div class="blog-latest">
           {#each latestShown as p (p.key + '/' + p.id)}
             <button class="blog-post-row" onclick={() => openBlog(p.key, Number(p.id))}>

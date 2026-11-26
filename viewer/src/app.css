@@ -1561,10 +1561,10 @@ body:has(.sheet.login) .sheet {
 
 /* "Showing 1-25 of N blogs" count — right-aligned under the search bar,
    same width/padding rules as the other chrome bars so it lines up with
-   the column edge. Vertical padding keeps it off the chrome above and
-   gives the list below its gap in BOTH uses: the member column is a flex
-   list (the padding joins its own top padding), and the feed column is
-   plain block flow where this is the only count→first-row spacing. */
+   the column edge. Both blog views render it in the same DOM spot (below
+   the searchbar, outside the scrolling .screen — chrome, not content);
+   the vertical padding is the air between it and both neighbors, with the
+   column's own top padding joining below. */
 .blog-count {
   width: min(100%, var(--phone-w));
   margin-inline: auto;
