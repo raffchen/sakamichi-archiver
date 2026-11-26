@@ -173,11 +173,23 @@
         ui.blogMember = null
         ui.blogPost = null
         ui.blogPage = 1
+        const segs = parts.slice(2)
         /* #/blog/<site>/<sort> carries the ⇅ menu choice (default gen-asc is
-           bare — see blogHash). An unrecognized segment (junk/old link) is
-           ignored; the hash effect rewrites the URL to the real sort. */
-        if (parts[2] && (BLOG_SORT_IDS as readonly string[]).includes(parts[2]))
-          ui.blogSort = parts[2] as BlogSort
+           bare — see blogHash). The sort is set EXPLICITLY either way: bare
+           means the default, so a bare #/blog/<site> arriving via hashchange
+           (edited URL / same-document link) resets a non-default sort — and
+           the state change is what makes the hash effect normalize the URL.
+           An unrecognized segment (junk/old link) lands on the default too. */
+        ui.blogSort =
+          segs[0] && (BLOG_SORT_IDS as readonly string[]).includes(segs[0])
+            ? (segs[0] as BlogSort)
+            : 'gen-asc'
+        /* feed page as p/<n> — like the member list's #/blog/<key>/p/<n>.
+           Position depends on whether the sort segment is present:
+           #/blog/<site>/p/<n> (gen-asc) or #/blog/<site>/<sort>/p/<n>. Set
+           explicitly (page 1 when absent) so Back restores the page. */
+        const pi = segs[0] === 'p' ? 0 : segs[1] === 'p' ? 1 : -1
+        ui.blogFeedPage = pi >= 0 ? Math.max(1, Number(segs[pi + 1]) || 1) : 1
       } else {
         ui.blogMember = slug
         if (parts[2] === 'p') {
@@ -301,11 +313,13 @@
        still parses (page 1) so older links keep working; post IDs are bare
        numbers and outrank the page suffix. The directory also carries the
        sort when it isn't the default (e.g. #/blog/<site>/latest) so feed
-       views are shareable and survive a reload. */
-    if (!ui.blogMember)
-      return ui.blogSort === 'gen-asc'
-        ? `#/blog/${encodeURIComponent(ui.site)}`
-        : `#/blog/${encodeURIComponent(ui.site)}/${ui.blogSort}`
+       views are shareable and survive a reload, and the feed's page beyond
+       the first as /p/<n> — page 1 stays bare, like the member list. */
+    if (!ui.blogMember) {
+      const sort = ui.blogSort === 'gen-asc' ? '' : `/${ui.blogSort}`
+      const page = ui.blogFeedPage > 1 ? `/p/${ui.blogFeedPage}` : ''
+      return `#/blog/${encodeURIComponent(ui.site)}${sort}${page}`
+    }
     const m = encodeURIComponent(ui.blogMember)
     if (ui.blogPost != null) return `#/blog/${m}/${ui.blogPost}`
     return `#/blog/${m}/p/${ui.blogPage}`

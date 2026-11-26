@@ -89,6 +89,7 @@ export const ui = $state({
   blogPostRank: null as number | null,
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
+  blogFeedPage: 1 as number, // cross-member feed page (1-based); #/blog/<site>/<sort>/p/<n>
   /* directory setting: sites hiding graduated members' cards (the ⚙ menu,
      per site). A device preference, so it persists like volume does. */
   blogGradHiddenSites: loadGradSites(),

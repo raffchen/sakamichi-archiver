@@ -11,6 +11,7 @@
   import type { Archive, BlogEntry } from '../lib/types'
   import { BLOG_PER_PAGE, back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
   import Scrollbar from './Scrollbar.svelte'
+  import BlogPager from './BlogPager.svelte'
   import { fmtBlogStamp } from '../lib/format'
   import { icon } from '../lib/icons'
 
@@ -28,29 +29,9 @@
   let colW = $state(0) // .col width — picks the numbered-window size
 
   const pages = $derived(Math.max(1, Math.ceil(total / PER_PAGE)))
-  /* numbered window tracks the column like the card grids' column count;
-     all three steps are odd so (win - 1) / 2 keeps the window centered */
-  const win = $derived(colW < 460 ? 3 : colW < 660 ? 5 : 7)
-  /* narrow columns also shrink the circles / gaps (see .blog-pager.compact) */
-  const compact = $derived(colW > 0 && colW < 560)
   /* "Showing 1-25 of N blogs" strip under the search bar */
   const countStart = $derived((ui.blogPage - 1) * PER_PAGE + 1)
   const countEnd = $derived(Math.min(ui.blogPage * PER_PAGE, total))
-
-  /* the clickable page numbers: win numbers centered on the current page,
-     '…' where the window is detached from an end (edges are the ⏮/⏭ job) */
-  const nums = $derived.by<(number | '…')[]>(() => {
-    if (pages <= win) return Array.from({ length: pages }, (_, i) => i + 1)
-    const half = (win - 1) / 2
-    let lo = Math.max(1, ui.blogPage - half)
-    const hi = Math.min(pages, lo + win - 1)
-    lo = Math.max(1, hi - win + 1) // pin the window to the last page
-    const out: (number | '…')[] = []
-    if (lo > 1) out.push('…')
-    for (let n = lo; n <= hi; n++) out.push(n)
-    if (hi < pages) out.push('…')
-    return out
-  })
 
   let screen = $state<HTMLElement | null>(null)
   $effect(() => {
@@ -144,41 +125,7 @@
         </span>
       </button>
     {/each}
-    {#if pages > 1}
-      <nav class="blog-pager" class:compact aria-label="pagination">
-        <button class="pg-btn" disabled={ui.blogPage <= 1} onclick={() => (ui.blogPage = 1)} aria-label="first page">
-          <i class="fa-solid fa-angles-left"></i>
-        </button>
-        <button class="pg-btn" disabled={ui.blogPage <= 1} onclick={() => ui.blogPage--} aria-label="previous page">
-          <i class="fa-solid fa-chevron-left"></i>
-        </button>
-        <!-- index-keyed: nums can hold TWO '…' markers (window strictly
-             interior), and duplicate string keys break the keyed diff —
-             with 9 pages, page 5 was the only page that hit it -->
-        {#each nums as n, i (i)}
-          {#if n === '…'}
-            <span class="pg-dots">…</span>
-          {:else}
-            <button
-              class="pg-num"
-              class:cur={n === ui.blogPage}
-              aria-current={n === ui.blogPage ? 'page' : undefined}
-              onclick={() => {
-                if (n !== ui.blogPage) ui.blogPage = n
-              }}
-            >
-              {n}
-            </button>
-          {/if}
-        {/each}
-        <button class="pg-btn" disabled={ui.blogPage >= pages} onclick={() => ui.blogPage++} aria-label="next page">
-          <i class="fa-solid fa-chevron-right"></i>
-        </button>
-        <button class="pg-btn" disabled={ui.blogPage >= pages} onclick={() => (ui.blogPage = pages)} aria-label="last page">
-          <i class="fa-solid fa-angles-right"></i>
-        </button>
-      </nav>
-    {/if}
+    <BlogPager bind:page={ui.blogPage} {pages} {colW} />
   {/if}
   </div>
 </div>

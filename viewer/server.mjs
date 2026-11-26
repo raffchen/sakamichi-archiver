@@ -1060,6 +1060,7 @@ const app = http.createServer(async (req, res) => {
     const q = new URL(req.url, 'http://x').searchParams
     const site = q.get('site')
     const limit = Math.min(Number(q.get('limit')) || 60, 200)
+    const offset = Math.max(Number(q.get('offset')) || 0, 0)
     const exclude = new Set(
       (q.get('exclude') ?? '')
         .split(',')
@@ -1070,22 +1071,27 @@ const app = http.createServer(async (req, res) => {
        of re-reading every member's _blogs.json per request. Falls back to the
        file scan whenever the DB is absent/corrupt (graceful, as always). */
     let feed = null
+    let feedTotal = 0
     try {
       const sdb = getFeedDb()
       if (sdb) {
-        /* ?order=asc = oldest-first, ?exclude drops members — both matching
-           the file-scan fallback below */
+        /* ?order=asc = oldest-first, ?exclude drops members, ?offset+
+           ?limit+`total` paginate — all matching the file-scan fallback below */
         const order = q.get('order') === 'asc' ? 'ASC' : 'DESC'
         const exKeys = [...exclude]
         const where = [site ? 'site = ?' : null, exKeys.length ? `member_key NOT IN (${exKeys.map(() => '?').join(',')})` : null]
           .filter(Boolean)
           .join(' AND ')
+        const args = [...(site ? [site] : []), ...exKeys]
+        /* total counts the WHOLE visible set (exclusions included) — the
+           client's pager needs it, not just this page's 25 rows */
+        feedTotal = sdb.prepare(`SELECT COUNT(*) AS c FROM posts ${where ? `WHERE ${where}` : ''}`).get(...args).c
         feed = sdb
           .prepare(
             `SELECT member_key AS "key", post_id AS id, title, at, member_name AS member, site, thumb, body
-             FROM posts ${where ? `WHERE ${where}` : ''} ORDER BY at ${order} LIMIT ?`,
+             FROM posts ${where ? `WHERE ${where}` : ''} ORDER BY at ${order} LIMIT ? OFFSET ?`,
           )
-          .all(...(site ? [site] : []), ...exKeys, limit)
+          .all(...args, limit, offset)
           .map((r) => ({
             key: r.key,
             member: r.member,
@@ -1101,7 +1107,7 @@ const app = http.createServer(async (req, res) => {
     } catch (e) {
       feed = null // corrupt DB / missing member dir — fall back below
     }
-    if (feed) return sendJson(res, 200, { posts: feed })
+    if (feed) return sendJson(res, 200, { posts: feed, total: feedTotal })
     const posts = []
     for (const { root, site: rootSite } of blogRoots()) {
       for (const key of fs.readdirSync(root)) {
@@ -1129,7 +1135,7 @@ const app = http.createServer(async (req, res) => {
     // "YYYY/MM/DD HH:mm:ss" sorts lexicographically
     const desc = q.get('order') !== 'asc'
     posts.sort((a, b) => (a.at < b.at ? (desc ? 1 : -1) : a.at > b.at ? (desc ? -1 : 1) : 0))
-    return sendJson(res, 200, { posts: posts.slice(0, limit) })
+    return sendJson(res, 200, { posts: posts.slice(offset, offset + limit), total: posts.length })
   }
 
   if (p.startsWith('/api/blog/')) {

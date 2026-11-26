@@ -6,6 +6,7 @@
      official "newest posts" cross-member feed. */
   import type { Archive, BlogMemberInfo } from '../lib/types'
   import {
+    BLOG_PER_PAGE,
     genSettingKey,
     gradHiddenFor,
     migrateHideGraduated,
@@ -20,6 +21,7 @@
   import { icon } from '../lib/icons'
   import Scrollbar from './Scrollbar.svelte'
   import BlogMember from './BlogMember.svelte'
+  import BlogPager from './BlogPager.svelte'
   import BlogPost from './BlogPost.svelte'
 
   let { archive }: { archive: Archive } = $props()
@@ -149,23 +151,49 @@
   }
   let latest = $state<LatestPost[] | null>(null)
   let latestErr = $state('')
+  let latestTotal = $state(0) // visible posts across ALL pages (drives the pager)
+  /* the directory column's width — picks the pager's numbered-window size,
+     same clientWidth binding the member list uses */
+  let colW = $state(0)
+  let dirScreen = $state<HTMLElement | null>(null)
+
+  /* "Showing x-y of N blogs", pager math shared with the member list */
+  const feedPages = $derived(Math.max(1, Math.ceil(latestTotal / BLOG_PER_PAGE)))
+  const feedStart = $derived((ui.blogFeedPage - 1) * BLOG_PER_PAGE + 1)
+  const feedEnd = $derived(Math.min(ui.blogFeedPage * BLOG_PER_PAGE, latestTotal))
 
   $effect(() => {
     if (!ui.blogMember && (ui.blogSort === 'latest' || ui.blogSort === 'oldest')) {
       const site = ui.site
+      const sort = ui.blogSort
+      const page = ui.blogFeedPage
       const exclude = [...hiddenFeedKeys]
       latest = null
       latestErr = ''
+      dirScreen?.scrollTo(0, 0) // a page/sort/site change lands at the top
       fetch(
-        `/api/blog?site=${encodeURIComponent(site)}&limit=60` +
-          (ui.blogSort === 'oldest' ? '&order=asc' : '') +
+        `/api/blog?site=${encodeURIComponent(site)}&limit=${BLOG_PER_PAGE}` +
+          `&offset=${(page - 1) * BLOG_PER_PAGE}` +
+          (sort === 'oldest' ? '&order=asc' : '') +
           (exclude.length ? `&exclude=${encodeURIComponent(exclude.join(','))}` : ''),
       )
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-        .then((d: { posts: LatestPost[] }) => {
-          if (site === ui.site && !ui.blogMember) latest = d.posts
+        .then((d: { posts: LatestPost[]; total: number }) => {
+          if (site !== ui.site || ui.blogMember || sort !== ui.blogSort || page !== ui.blogFeedPage)
+            return // raced: context switched mid-flight
+          if (!d.posts.length && page > 1) {
+            /* the visible set shrank past this page (settings toggle) — fall
+               back to page 1 instead of a dead empty page */
+            ui.blogFeedPage = 1
+            return
+          }
+          latest = d.posts
+          latestTotal = d.total
         })
-        .catch((e) => (latestErr = String(e)))
+        .catch((e) => {
+          if (site === ui.site && !ui.blogMember && sort === ui.blogSort && page === ui.blogFeedPage)
+            latestErr = String(e)
+        })
     }
   })
 
@@ -186,6 +214,7 @@
   let settingsOpen = $state(false)
   function pickSort(id: SortId) {
     ui.blogSort = id
+    ui.blogFeedPage = 1 // the page numbers name a different list now
     menuOpen = false
   }
   function toggleGrad() {
@@ -272,7 +301,10 @@
 
   <div class="sites">
     {#each siteKeys as k (k)}
-      <button class:on={k === ui.site} onclick={() => (ui.site = k)}>
+      <button
+        class:on={k === ui.site}
+        onclick={() => ((ui.site = k), (ui.blogFeedPage = 1))}
+      >
         {archive.sites[k]?.name ?? k}
       </button>
     {/each}
@@ -293,8 +325,8 @@
     />
   </div>
 
-  <div class="screen">
-    <div class="col blog-directory">
+  <div class="screen" bind:this={dirScreen}>
+    <div class="col blog-directory" bind:clientWidth={colW}>
     <Scrollbar />
     {#snippet card(b: BlogMemberInfo)}
       <button
@@ -332,6 +364,11 @@
       {:else if !latestShown}
         <div class="muted-note">読み込み中…</div>
       {:else}
+        {#if latestTotal > 0}
+          <div class="blog-count">
+            Showing {feedStart}-{feedEnd} of {latestTotal} blogs
+          </div>
+        {/if}
         <div class="blog-latest">
           {#each latestShown as p (p.key + '/' + p.id)}
             <button class="blog-post-row" onclick={() => openBlog(p.key, Number(p.id))}>
@@ -351,6 +388,7 @@
             </button>
           {/each}
         </div>
+        <BlogPager bind:page={ui.blogFeedPage} pages={feedPages} {colW} label="feed pagination" />
       {/if}
     {:else if ui.blogSort === 'name-asc' || ui.blogSort === 'name-desc'}
       <div class="blog-grid name-grid">
