@@ -89,7 +89,11 @@ export interface Archive {
   generated_at: string
   display_name: string
   sites: Record<string, Site>
-  totals: { messages: number; media: number }
+  totals: {
+    messages: number
+    media: number
+    disk?: { files: number; bytes: number } // archived message media on disk
+  }
   members: Member[]
   blogs?: { members: BlogMemberInfo[]; stats?: BlogStats }
   /* stage 4: true when the served index dropped old message texts */

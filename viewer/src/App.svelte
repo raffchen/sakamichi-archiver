@@ -304,7 +304,7 @@
 {#if info.open}
   <!-- the sheet mirrors the side it was opened from: blog views get the
      blog-archive stats, every talk view the message one -->
-  <InfoSheet {archive} blog={!talkView} onclose={() => (info.open = false)} />
+  <InfoSheet {archive} blog={!talkView} talkView onclose={() => (info.open = false)} />
 {/if}
 {#if auth.open || (auth.checked && auth.required && !auth.authed && talkView)}
   <!-- login gate: the Blog tab stays public; any talk view asks for the

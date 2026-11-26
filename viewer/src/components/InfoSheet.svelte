@@ -1,17 +1,33 @@
 <script lang="ts">
   import type { Archive } from '../lib/types'
   import { keynav } from '../lib/actions'
-  import { fmtDateTime, fmtBlogStamp, sizeOf } from '../lib/format'
+  import {
+    fmtDateTime,
+    fmtBlogStamp,
+    fmtDayShort,
+    fmtDur,
+    fmtMonth,
+    fmtStamp,
+    sizeOf,
+  } from '../lib/format'
   import { disp } from '../lib/display'
   import { blogPanel, blogMonth, stackedChart } from '../lib/blogStats'
+  import { talkPanel, TYPE_EMOJI } from '../lib/talkStats'
   import { ui } from '../lib/store.svelte'
   import { fade, slide } from 'svelte/transition'
 
-  let { archive, blog, onclose }: { archive: Archive; blog: boolean; onclose: () => void } = $props()
+  let {
+    archive,
+    blog,
+    talkView,
+    onclose,
+  }: { archive: Archive; blog: boolean; talkView: boolean; onclose: () => void } = $props()
 
   /* the panel mirrors whichever archive you opened it from: the blog tab gets
-     the blog corpus, every talk view the message one */
+     the blog corpus, every talk view the message one (falling back to the
+     bare member sheet when the archive is empty) */
   const panel = $derived(blog ? blogPanel(archive) : null)
+  const talk = $derived(talkView && !blog ? talkPanel(archive) : null)
   /* the chart shows one site (its table row was clicked) or all sites; the
      selection is panel-local — it doesn't move the app's site switcher */
   let chartSite = $state<string | null>(null)
@@ -22,6 +38,29 @@
   /* one bar per year, segmented by site in all-sites mode; a selected site is
      that site alone, in its own color */
   const chart = $derived(panel ? stackedChart(panel.rows, chartSite) : [])
+  /* pulse lines assembled as strings so separators only render when both
+     sides exist (Svelte trims the whitespace between blocks) */
+  const talkMedia = $derived(
+    talk
+      ? `${talk.mediaFiles.toLocaleString()} media files${talk.disk ? ` · ${sizeOf(talk.disk.bytes)}` : ''}`
+      : '',
+  )
+  const fmtListen = (s: number) => (s >= 3600 ? `${Math.round(s / 360) / 10} h` : fmtDur(s))
+  const talkPulse1 = $derived.by(() => {
+    if (!talk) return ''
+    const parts: string[] = []
+    if (talk.last) parts.push(`newest message ${fmtStamp(talk.last)}`)
+    if (talk.busiestDay)
+      parts.push(`busiest day ${fmtDayShort(talk.busiestDay.day)} — ${talk.busiestDay.count} messages`)
+    return parts.join(' · ')
+  })
+  const talkPulse2 = $derived.by(() => {
+    if (!talk) return ''
+    const parts: string[] = []
+    if (talk.last7 != null) parts.push(`${talk.last7} in the last 7 days`)
+    if (talk.listen != null && talk.listen >= 60) parts.push(`listen/watch time ${fmtListen(talk.listen)}`)
+    return parts.join(' · ')
+  })
   const chartMax = $derived(Math.max(...chart.map((y) => y.total), 1))
   /* y-axis gridlines: a nice round step (1/2/5 × 10^k) near a third of the
      peak, thinned so at most five lines — recomputed when the site filter
@@ -174,6 +213,81 @@
         index: {fmtDateTime(archive.generated_at)}<br />
         <br />
         new posts appear here automatically after each sync round
+      </p>
+    {:else if talkView && talk}
+      <h2>アーカイブ / message archive</h2>
+      <button class="close" aria-label="close" onclick={onclose}>✕</button>
+      <p class="big">
+        {talk.msgs.toLocaleString()} messages · {talk.members} members ({talk.sites}
+        {talk.sites === 1 ? 'site' : 'sites'})
+      </p>
+      <p>
+        {talk.first ? fmtMonth(talk.first) : '—'} → {talk.last ? fmtMonth(talk.last) : '—'}<br />
+        {talkMedia}
+      </p>
+
+      <!-- message-type mix: one proportion bar + the counts as a legend -->
+      {#if talk.msgs}
+        <div class="mix" role="img" aria-label="message type mix">
+          {#each talk.types as t (t.type)}
+            {#if t.n}
+              <i
+                class="mixseg"
+                style="width: {(t.n / talk.msgs) * 100}%; background: var(--mix-{t.type})"
+                title={`${TYPE_EMOJI[t.type]} ${t.type} — ${t.n.toLocaleString()} (${Math.round((t.n / talk.msgs) * 100)}%)`}
+              ></i>
+            {/if}
+          {/each}
+        </div>
+        <p class="mixlegend">
+          {#each talk.types as t, i (t.type)}{#if t.n}{i ? ' · ' : ''}{TYPE_EMOJI[t.type]}
+            {t.n.toLocaleString()}{/if}{/each}
+        </p>
+      {/if}
+
+      <table>
+        <tbody>
+          {#each archive.members as m (m.slug)}
+            {#if m.message_count > 0}
+              <tr>
+                <td>
+                  {m.roman ?? m.name}<br />
+                  <span style="color:var(--muted);font-size:12px">{m.name} · group {m.group_id} · {m.site}</span>
+                </td>
+                <td class="r">
+                  {m.message_count} msgs<br />
+                  <span style="color:var(--muted);font-size:12px"
+                    >📷{m.counts.picture ?? 0} 🎬{m.counts.video ?? 0} 🔊{m.counts.voice ?? 0}</span
+                  >
+                </td>
+                <td class="r">
+                  {fmtDateTime(m.first ?? '')}<br />
+                  <span style="color:var(--muted);font-size:12px">→ {fmtDateTime(m.last ?? '')}</span>
+                </td>
+              </tr>
+            {/if}
+          {/each}
+        </tbody>
+      </table>
+
+      <p class="pulse">{talkPulse1}</p>
+      <p class="pulse">{talkPulse2}</p>
+      <p class="pulse">
+        {#if talk.topRate}top talker: {talk.topRate.member.name} —
+          {talk.topRate.perDay.toFixed(1)} msgs/day ({talk.topRate.msgs.toLocaleString()} in
+          {talk.topRate.days}
+          {talk.topRate.days === 1 ? 'day' : 'days'}){/if}
+      </p>
+      {#if talk.missing}
+        <p class="pulse">⚠ {talk.missing} messages were never archived (files missing upstream)</p>
+      {/if}
+
+      <p class="note">
+        index: {fmtDateTime(archive.generated_at)}<br />
+        timestamps shown in your browser's timezone ({Intl.DateTimeFormat().resolvedOptions().timeZone})<br />
+        <br />
+        new messages appear here automatically after each sync<br />
+        blog / news / official tabs are not part of this archive.
       </p>
     {:else}
       <h2>アーカイブ / archive</h2>
@@ -376,5 +490,26 @@
   .pulse {
     color: var(--muted);
     font-size: 13px;
+  }
+  /* message-type mix: neutral + theme colors, legend line under the bar */
+  .mix {
+    --mix-text: var(--muted);
+    --mix-picture: var(--accent);
+    --mix-video: var(--accent-2);
+    --mix-voice: var(--ink);
+    display: flex;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 10px 0 4px;
+  }
+  .mixseg {
+    display: block;
+    height: 100%;
+  }
+  .mixlegend {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 10px;
   }
 </style>

@@ -209,6 +209,21 @@ for (const d of siteScan) {
 
 const members = []
 const thumbJobs = []
+/* archive weight for the Talk Info panel: every archived member's media on
+   disk (type files + single/profile art), one recursive walk per member —
+   byte sizes aren't derivable from the index (file names only) */
+const diskStats = { files: 0, bytes: 0 }
+const walkDisk = (dir) => {
+  for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (d.name.startsWith('.')) continue
+    const p = path.join(dir, d.name)
+    if (d.isDirectory()) walkDisk(p)
+    else {
+      diskStats.files++
+      diskStats.bytes += fs.statSync(p).size
+    }
+  }
+}
 
 for (const { slug, siteHint } of slugs) {
   const dir = siteHint
@@ -235,6 +250,7 @@ for (const { slug, siteHint } of slugs) {
     console.warn(`  ! ${slug}: not in archive.config.json — assuming site "${site}" (add it if that's wrong)`)
 
   const files = filesByMessageId(dir)
+  walkDisk(dir)
   const counts = { text: 0, picture: 0, video: 0, voice: 0 }
   const thumbDirName = slug
   let missing = 0
@@ -329,7 +345,7 @@ const totals = members.reduce(
     t.media += m.media_count
     return t
   },
-  { messages: 0, media: 0 },
+  { messages: 0, media: 0, disk: { files: diskStats.files, bytes: diskStats.bytes } },
 )
 
 // ---------------------------------------------------------------- blogs
