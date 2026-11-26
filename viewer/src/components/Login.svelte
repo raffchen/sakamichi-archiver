@@ -55,6 +55,16 @@
 </div>
 
 <style>
+  /* cover the talk directory behind the gate: the card stretches to fill
+     the whole sheet (divided by --app-zoom like the global .sheet .card
+     rule, so the rendered height fills the viewport at any zoom level) */
+  .sheet.login .card {
+    height: calc(100% / var(--app-zoom));
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* a tall card reads better with the form mid-screen */
+  }
   form {
     display: flex;
     gap: 8px;
