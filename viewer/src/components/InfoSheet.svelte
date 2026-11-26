@@ -627,9 +627,6 @@
     align-items: baseline;
     gap: 6px;
   }
-  .cc {
-    color: var(--chip-accent, var(--accent));
-  }
   .cd {
     display: block;
     margin-top: 4px;
@@ -648,6 +645,8 @@
   .cc {
     font-size: 12px;
     font-weight: 600;
-    color: var(--accent, var(--ink));
+    /* the member's site color (--chip-accent on the chip); falls back to
+       the tab accent — white once the chip is open (rule above) */
+    color: var(--chip-accent, var(--accent));
   }
 </style>
