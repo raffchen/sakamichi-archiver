@@ -19,7 +19,10 @@ House rules:
     "stage N of the search DB");
   - after the em dash, one clause of why or the behavior it fixes
     (e.g. `feat(viewer): blog directory settings gear — hide graduated
-    members, persisted per device`).
+    members, persisted per device`);
+  - keep the whole subject line under 100 characters — if the why needs
+    more than one clause, put the long explanation in the commit body
+    instead of stretching the subject.
 - When an agent commits finished work, deploy it right away with `./deploy.sh` —
   don't leave commits pending a deploy decision or batch them up. Only skip the
   push (`--no-push`) when the deploy is explicitly a rebuild-only request.
