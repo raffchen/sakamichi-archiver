@@ -61,6 +61,21 @@
     if (talk.listen != null && talk.listen >= 60) parts.push(`listen/watch time ${fmtListen(talk.listen)}`)
     return parts.join(' · ')
   })
+  /* compact member roster: chips by message count (desc, kana order on
+     ties), the old row detail — media mix and date span — on hover */
+  const rankedMembers = $derived(
+    archive.members
+      .filter((m) => m.message_count > 0)
+      .sort((a, b) => b.message_count - a.message_count),
+  )
+  const memberTip = (m: (typeof rankedMembers)[number]) =>
+    [
+      `${m.message_count} messages`,
+      `📷 ${m.counts.picture ?? 0} · 🎬 ${m.counts.video ?? 0} · 🔊 ${m.counts.voice ?? 0}`,
+      m.first && m.last ? `${fmtDateTime(m.first)} → ${fmtDateTime(m.last)}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
   const chartMax = $derived(Math.max(...chart.map((y) => y.total), 1))
   /* y-axis gridlines: a nice round step (1/2/5 × 10^k) near a third of the
      peak, thinned so at most five lines — recomputed when the site filter
@@ -245,30 +260,14 @@
         </p>
       {/if}
 
-      <table>
-        <tbody>
-          {#each archive.members as m (m.slug)}
-            {#if m.message_count > 0}
-              <tr>
-                <td>
-                  {m.roman ?? m.name}<br />
-                  <span style="color:var(--muted);font-size:12px">{m.name} · group {m.group_id} · {m.site}</span>
-                </td>
-                <td class="r">
-                  {m.message_count} msgs<br />
-                  <span style="color:var(--muted);font-size:12px"
-                    >📷{m.counts.picture ?? 0} 🎬{m.counts.video ?? 0} 🔊{m.counts.voice ?? 0}</span
-                  >
-                </td>
-                <td class="r">
-                  {fmtDateTime(m.first ?? '')}<br />
-                  <span style="color:var(--muted);font-size:12px">→ {fmtDateTime(m.last ?? '')}</span>
-                </td>
-              </tr>
-            {/if}
-          {/each}
-        </tbody>
-      </table>
+      <div class="chips">
+        {#each rankedMembers as m (m.slug)}
+          <span class="chip" title={memberTip(m)}>
+            <span class="cn">{m.roman ?? m.name}</span>
+            <span class="cc">{m.message_count}</span>
+          </span>
+        {/each}
+      </div>
 
       <p class="pulse">{talkPulse1}</p>
       <p class="pulse">{talkPulse2}</p>
@@ -509,5 +508,33 @@
     color: var(--muted);
     font-size: 13px;
     margin-bottom: 10px;
+  }
+  /* compact member roster — pill chips wrapping 2–3 per row instead of a
+     three-line table row per member */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 4px 0 12px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--pill-bg);
+    max-width: 100%;
+  }
+  .cn {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cc {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent, var(--ink));
   }
 </style>
