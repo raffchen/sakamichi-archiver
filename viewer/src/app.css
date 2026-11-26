@@ -98,10 +98,11 @@ html[data-site='nogizaka46'] {
 html[data-site='sakurazaka46'] {
   --accent: var(--site-sakurazaka46);
   --accent-2: #e9b7c9;
-  /* solid pink header like nogi's solid-style gradient — official-pale
-     gradient dropped (the pastel band read oddly on dark surfaces) */
+  /* slight header gradient like nogi's, centered on the old solid pink
+     so the site keeps its identity (the login gate stays solid — it uses
+     --section) */
   --head-fg: #ffffff;
-  --head-bg: #de8fa9;
+  --head-bg: linear-gradient(90deg, #e8aabc 0%, #d37c95 100%);
   --section: #de8fa9;
   --ava-bg: #4d648a;
   --badge: var(--badge-sakurazaka46);
@@ -109,10 +110,10 @@ html[data-site='sakurazaka46'] {
 html[data-site='hinatazaka46'] {
   --accent: var(--site-hinatazaka46);
   --accent-2: #8ecfef;
-  /* solid header — the app's blue→purple band dropped (per the nogi/sakura
-     precedent), matching the section-text blue the directory uses */
+  /* slight header gradient like nogi's, centered on the old solid blue
+     (the login gate stays solid — it uses --section) */
   --head-fg: #ffffff;
-  --head-bg: #5bb2e5;
+  --head-bg: linear-gradient(90deg, #7cc2ee 0%, #45a0d8 100%);
   --section: #5bb2e5;
   --ava-bg: #a9bfd2;
   --badge: var(--badge-hinatazaka46);
@@ -121,8 +122,8 @@ html[data-site='hinatazaka46'] {
 /* ---------- dark mode ----------
    Set on <html> as data-theme (index.html inline script pre-paint; App keeps
    it in sync). Surfaces invert; the per-site headers/acents above keep their
-   official-app colors in both themes (sakura's pale pink header is a pending
-   decision). color-scheme follows so native scrollbars/controls do too. */
+   official-app colors in both themes. color-scheme follows so native
+   scrollbars/controls do too. */
 html[data-theme='dark'] {
   --page: #19191d;
   --ink: #e8e8ee;
