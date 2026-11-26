@@ -15,7 +15,7 @@ design decisions see the local `docs/search-db.md` (untracked, see §7).
 | Public URL | see `deploy.env` (`HEALTH_URL`) — login-gated talk side (`VIEWER_PASSWORD` in the server's `.env`; blog endpoints + `/api/blog` are public, message endpoints answer 401 to curl) |
 | Local test | `http://127.0.0.1:8080` (docker, container `sakamichi-archiver-viewer-1`) |
 | Server API tests | `http://172.17.0.1:$VIEWER_PORT` via ssh (docker bridge gateway; the viewer port is not exposed publicly) |
-| Remotes | `omv` = the appdata dir itself (see `deploy.env`); `github` = mirror (`raffchen/sakamichi-archiver`) |
+| Remotes | `omv` = the appdata dir itself (see `deploy.env`); `origin` = GitHub mirror (`raffchen/sakamichi-archiver`) |
 | Archive data | `media/` — bind-mounted into containers; **never in git, never in an image**. The full archive exists **only on the server** — the local `media/` is a partial mirror, so anything that must see every entry (surveys, grep sweeps, counts) runs on the server: see §6 |
 | Machine secrets | `ssh-creds.txt`, `deploy.env` — gitignored, this machine only |
 
@@ -48,14 +48,14 @@ NOT update the container. Testing a scripts/ fix in Docker always needs
 ## 3. Deploying
 
 ```bash
-./deploy.sh              # push (omv + github mirror) → build all images → up -d → health poll
+./deploy.sh              # push (omv + GitHub mirror) → build all images → up -d → health poll
 ./deploy.sh --no-push    # rebuild/restart from what's already on the server
 ```
 
 What it does, precisely:
 
 1. `git push omv main` — updates the server's working tree in place; only
-   changed files cross the wire. Also pushes to `github`.
+   changed files cross the wire. Also pushes to `origin` (the GitHub mirror).
 2. Copies `docker-compose.yml` → `Sakamichi Archive.yml` (OMV regenerates its
    compose copy from its DB; this keeps them in sync).
 3. `docker compose build && docker compose up -d`, then polls the health
@@ -209,7 +209,7 @@ new posts instead of the whole archive, which was ~10 min of ffmpeg per boot).
 
 ## 7. Open items at time of writing
 
-- `github` mirror may lag behind `omv` if a deploy was made with
+- the `origin` GitHub mirror may lag behind `omv` if a deploy was made with
   `--no-push`-style manual pushes; keep both in sync.
 - Graduated members' blog posts are absent from the archive (erased
   upstream); they stay listed in the directory pending a re-source.

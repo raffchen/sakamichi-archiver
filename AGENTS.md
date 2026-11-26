@@ -21,7 +21,7 @@ House rules:
     the commit body (one blank line after the subject); the subject line
     carries no em-dash detail clause
 - Commit before deploying — `./deploy.sh` pushes the remotes itself (`omv`, the
-  deploy target, and `github`, the mirror), so the deploy always ships what's
+  deploy target, and `origin`, the GitHub mirror), so the deploy always ships what's
   already in git, never work sitting only in the local tree.
 - When an agent commits finished work, deploy it right away with `./deploy.sh` —
   don't leave commits pending a deploy decision or batch them up. Only skip the

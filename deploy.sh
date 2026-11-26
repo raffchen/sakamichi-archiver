@@ -27,10 +27,10 @@ if [[ "${1:-}" != "--no-push" ]]; then
     git push omv main
     # keep the GitHub mirror in sync — a missing mirror remote is a warning,
     # not a silent skip
-    if git remote get-url github >/dev/null 2>&1; then
-        git push github main
+    if git remote get-url origin >/dev/null 2>&1; then
+        git push origin main
     else
-        echo "WARN: no 'github' remote — GitHub mirror not pushed" >&2
+        echo "WARN: no 'origin' remote — GitHub mirror not pushed" >&2
     fi
 fi
 
