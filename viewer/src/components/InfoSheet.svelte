@@ -62,7 +62,10 @@
     return parts.join(' · ')
   })
   /* compact member roster: chips by message count (desc, kana order on
-     ties), the old row detail — media mix and date span — on hover */
+     ties). The old row detail — media mix and date span — opens on tap or
+     hover: hover via the title tooltip (desktop), tap via the expandable
+     detail block (touch has no hover). One chip open at a time. */
+  let chipOpen = $state<string | null>(null)
   const rankedMembers = $derived(
     archive.members
       .filter((m) => m.message_count > 0)
@@ -262,10 +265,25 @@
 
       <div class="chips">
         {#each rankedMembers as m (m.slug)}
-          <span class="chip" title={memberTip(m)}>
-            <span class="cn">{m.roman ?? m.name}</span>
-            <span class="cc">{m.message_count}</span>
-          </span>
+          <button
+            class="chip"
+            class:open={chipOpen === m.slug}
+            aria-expanded={chipOpen === m.slug}
+            title={memberTip(m)}
+            onclick={() => (chipOpen = chipOpen === m.slug ? null : m.slug)}
+          >
+            <span class="ch">
+              <span class="cn">{m.roman ?? m.name}</span>
+              <span class="cc">{m.message_count}</span>
+            </span>
+            {#if chipOpen === m.slug}
+              <span class="cd">
+                {m.message_count} messages<br />
+                📷 {m.counts.picture ?? 0} · 🎬 {m.counts.video ?? 0} · 🔊 {m.counts.voice ?? 0}<br />
+                {#if m.first && m.last}{fmtDateTime(m.first)} → {fmtDateTime(m.last)}{/if}
+              </span>
+            {/if}
+          </button>
         {/each}
       </div>
 
@@ -514,6 +532,7 @@
   .chips {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start; /* a taller expanded chip must not stretch its neighbours */
     gap: 6px;
     margin: 4px 0 12px;
   }
@@ -525,6 +544,34 @@
     border-radius: 12px;
     background: var(--pill-bg);
     max-width: 100%;
+    /* the chips are real buttons (tap-to-expand) — strip the UA chrome */
+    border: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  /* always a column: the header span holds name + count on one line, the
+     detail block slots underneath when open */
+  .chip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .chip.open {
+    background: var(--raise);
+  }
+  .ch {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .cd {
+    display: block;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
   }
   .cn {
     font-size: 13px;
