@@ -18,16 +18,18 @@
      re-opens the moment a gated request 401s, and the talk directory itself
      is empty until login, so dismissing is harmless. The `login` marker lets
      app.css keep the tab bar clickable above this sheet (a passwordless
-     visitor can still reach the public Blog tab instead of being stuck). -->
+     visitor can still reach the public Blog tab instead of being stuck).
+     Entry is instant (out-only transitions): an animated reveal would show
+     the member directory through the backdrop for the first frames. -->
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="sheet login" role="presentation" transition:fade={{ duration: 120 }}>
+<div class="sheet login" role="presentation" out:fade={{ duration: 120 }}>
   <div
     class="card"
     role="dialog"
     aria-modal="true"
     aria-label="login"
     tabindex="0"
-    transition:slide={{ duration: 200 }}
+    out:slide={{ duration: 200 }}
     use:keynav={{ onEsc: () => (auth.open = false) }}
   >
     <h2>ログイン / login</h2>
