@@ -1494,6 +1494,12 @@ body:has(.sheet.login) .sheet {
   font-weight: 700;
   margin: 24px 0 14px;
 }
+/* the feed's pager is a sibling of .blog-latest in a plain block column —
+   unlike the member list (flex gap) it needs its own spacing from the
+   last card */
+.blog-directory .blog-pager {
+  margin-top: 12px;
+}
 .blog-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1555,11 +1561,14 @@ body:has(.sheet.login) .sheet {
 
 /* "Showing 1-25 of N blogs" count — right-aligned under the search bar,
    same width/padding rules as the other chrome bars so it lines up with
-   the column edge */
+   the column edge. Vertical padding keeps it off the chrome above and
+   gives the list below its gap in BOTH uses: the member column is a flex
+   list (the padding joins its own top padding), and the feed column is
+   plain block flow where this is the only count→first-row spacing. */
 .blog-count {
   width: min(100%, var(--phone-w));
   margin-inline: auto;
-  padding: 0 16px;
+  padding: 6px 16px 10px;
   background: var(--page);
   text-align: right;
   font-size: 12px;
