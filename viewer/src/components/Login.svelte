@@ -105,7 +105,9 @@
     border: none;
     border-radius: 10px;
     background: #fff;
-    color: var(--ink, #1c1c1e); /* pale accents (saku pink) wash out as text */
+    /* fixed dark, NOT var(--ink): dark theme flips --ink to near-white,
+       which washes out on this always-white button */
+    color: #1c1c1e;
     font-weight: 600;
     cursor: pointer;
   }
