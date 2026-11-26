@@ -10,7 +10,6 @@
     genSettingKey,
     gradHiddenFor,
     migrateHideGraduated,
-    openBlog,
     setGradHiddenFor,
     toggleGenHidden,
     toggleTheme,
@@ -340,13 +339,17 @@
     <div class="col blog-directory" bind:clientWidth={colW}>
     <Scrollbar />
     {#snippet card(b: BlogMemberInfo)}
-      <button
+      <!-- an <a href> for archived members so middle-/ctrl-click and the
+           context menu's open-in-new-tab work natively; unarchived ones stay
+           disabled <button>s (no href = inert anchor, no focus, no menu) -->
+      <svelte:element
+        this={b.count ? 'a' : 'button'}
         class="blog-card"
         class:empty={!b.count}
         class:grad={b.graduated}
-        disabled={!b.count}
+        href={b.count ? `#/blog/${encodeURIComponent(b.key)}/p/1` : undefined}
+        disabled={b.count ? undefined : true}
         title={b.count ? '' : 'not archived yet'}
-        onclick={() => openBlog(b.key)}
       >
         {#if b.thumb}
           <img src={b.thumb} loading="lazy" alt={b.name} />
@@ -356,7 +359,7 @@
         <span class="nm">{b.name}{b.graduated ? ' (卒)' : ''}</span>
         {#if b.roman}<span class="sub">{b.roman}</span>{/if}
         <span class="dt">{b.count ? fmtBlogStamp(b.last!) : '—'}</span>
-      </button>
+      </svelte:element>
     {/snippet}
 
     {#if !(archive.blogs?.members ?? []).some((b) => b.site === ui.site)}
@@ -377,7 +380,7 @@
       {:else}
         <div class="blog-latest">
           {#each latestShown as p (p.key + '/' + p.id)}
-            <button class="blog-post-row" onclick={() => openBlog(p.key, Number(p.id))}>
+            <a class="blog-post-row" href={`#/blog/${encodeURIComponent(p.key)}/${p.id}`}>
               {#if p.thumbnail}
                 <img src={p.thumb ?? p.thumbnail} loading="lazy" alt="" />
               {:else}
@@ -391,7 +394,7 @@
                   <span class="dt">{fmtBlogStamp(p.at)}</span>
                 </span>
               </span>
-            </button>
+            </a>
           {/each}
         </div>
         <BlogPager bind:page={ui.blogFeedPage} pages={feedPages} {colW} label="feed pagination" />

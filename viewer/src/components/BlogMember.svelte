@@ -9,7 +9,7 @@
      spilling under the scrollbar's grab band. The page is baked into the
      URL as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { BLOG_PER_PAGE, back, openBlog, toggleTheme, ui } from '../lib/store.svelte'
+  import { BLOG_PER_PAGE, back, toggleTheme, ui } from '../lib/store.svelte'
   import Scrollbar from './Scrollbar.svelte'
   import BlogPager from './BlogPager.svelte'
   import { fmtBlogStamp } from '../lib/format'
@@ -52,7 +52,8 @@
       })
   })
 
-  const open = (id: number) => openBlog(key, id)
+  /* post rows are real <a href> anchors — middle-/ctrl-click opens the post
+     in a new tab; a plain click is just the hash navigation */
 </script>
 
 <header class="head">
@@ -103,7 +104,7 @@
     <div class="muted-note">読み込み中…</div>
   {:else}
     {#each entries as e (e.id)}
-      <button class="blog-post-row" onclick={() => open(e.id)}>
+      <a class="blog-post-row" href={`#/blog/${encodeURIComponent(key)}/${e.id}`}>
         {#if e.thumbnail}
           <!-- thumb = server-generated square crop; the full file is the
                fallback (e.g. --no-thumbs builds) and stays the lightbox src -->
@@ -123,7 +124,7 @@
           <span class="lead">{e.lead ?? ''}</span>
           <span class="dt">{fmtBlogStamp(e.at)}</span>
         </span>
-      </button>
+      </a>
     {/each}
     <BlogPager bind:page={ui.blogPage} {pages} {colW} />
   {/if}

@@ -3,7 +3,7 @@
      post HTML with locally archived images. Tapping an image opens the shared
      global lightbox (same viewer as message media). */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { back, openBlog, showBlogLightbox, toggleTheme, ui } from '../lib/store.svelte'
+  import { back, showBlogLightbox, toggleTheme, ui } from '../lib/store.svelte'
   import { fmtFull } from '../lib/format'
   import { normalizeBlogContent } from '../lib/blog-html'
   import { icon } from '../lib/icons'
@@ -93,24 +93,24 @@
     {#if nav && (nav.prev || nav.next)}
       <nav class="bp-nav" aria-label="post navigation">
         {#if nav.prev}
-          <button class="bp-nav-btn" onclick={() => openBlog(key, Number(nav!.prev!.id))}>
+          <a class="bp-nav-btn" href={`#/blog/${encodeURIComponent(key)}/${nav.prev.id}`}>
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
             <span class="txt">
               <span class="lbl">前の投稿</span>
               <span class="ttl">{nav.prev.title || '(無題)'}</span>
             </span>
-          </button>
+          </a>
         {:else}
           <span></span>
         {/if}
         {#if nav.next}
-          <button class="bp-nav-btn right" onclick={() => openBlog(key, Number(nav!.next!.id))}>
+          <a class="bp-nav-btn right" href={`#/blog/${encodeURIComponent(key)}/${nav.next.id}`}>
             <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
             <span class="txt">
               <span class="lbl">次の投稿</span>
               <span class="ttl">{nav.next.title || '(無題)'}</span>
             </span>
-          </button>
+          </a>
         {:else}
           <span></span>
         {/if}

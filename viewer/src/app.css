@@ -1500,6 +1500,14 @@ body:has(.sheet.login) .sheet {
 .blog-directory .blog-pager {
   margin-top: 12px;
 }
+/* blog links are real <a href> anchors (middle-/ctrl-click = new tab);
+   strip the default link look — the card/row classes carry the styling */
+a.blog-card,
+a.blog-post-row,
+a.bp-nav-btn {
+  color: inherit;
+  text-decoration: none;
+}
 .blog-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

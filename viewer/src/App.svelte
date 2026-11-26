@@ -162,6 +162,10 @@
       ui.focusId = null   // the lightbox is addressed by #/media now
     } else if (route === 'blog') {
       ui.view = 'blog'
+      /* parity with openBlog(): a hash navigation into the blog tab (these
+         routes are real <a href> links now) must drop a stale search scope
+         the same way the programmatic open did */
+      ui.searchScope = 'message'
       /* #/blog/<site> names a site directory, #/blog alone falls back to the
          current site (the hash effect rewrites it to the explicit form);
          site keys are ASCII, member keys are 日本語 — they can't collide.
