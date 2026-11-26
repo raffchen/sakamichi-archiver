@@ -25,7 +25,13 @@ source deploy.env
 if [[ "${1:-}" != "--no-push" ]]; then
     echo "==> pushing code"
     git push omv main
-    git remote get-url github >/dev/null 2>&1 && git push github main   # keep the GitHub mirror in sync
+    # keep the GitHub mirror in sync — a missing mirror remote is a warning,
+    # not a silent skip
+    if git remote get-url github >/dev/null 2>&1; then
+        git push github main
+    else
+        echo "WARN: no 'github' remote — GitHub mirror not pushed" >&2
+    fi
 fi
 
 echo "==> building + restarting on server"
