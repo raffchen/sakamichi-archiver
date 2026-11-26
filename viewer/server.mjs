@@ -1063,10 +1063,12 @@ const app = http.createServer(async (req, res) => {
     try {
       const sdb = getFeedDb()
       if (sdb) {
+        /* ?order=asc = oldest-first, matching the file-scan fallback below */
+        const order = q.get('order') === 'asc' ? 'ASC' : 'DESC'
         feed = sdb
           .prepare(
             `SELECT member_key AS "key", post_id AS id, title, at, member_name AS member, site, thumb, body
-             FROM posts ${site ? 'WHERE site = ?' : ''} ORDER BY at DESC LIMIT ?`,
+             FROM posts ${site ? 'WHERE site = ?' : ''} ORDER BY at ${order} LIMIT ?`,
           )
           .all(...(site ? [site] : []), limit)
           .map((r) => ({
