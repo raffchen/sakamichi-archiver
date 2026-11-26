@@ -277,7 +277,7 @@
               <span class="cc">{m.message_count}</span>
             </span>
             {#if chipOpen === m.slug}
-              <span class="cd">
+              <span class="cd" transition:slide={{ duration: 180 }}>
                 {m.message_count} messages<br />
                 📷 {m.counts.picture ?? 0} · 🎬 {m.counts.video ?? 0} · 🔊 {m.counts.voice ?? 0}<br />
                 {#if m.first && m.last}{fmtDateTime(m.first)} → {fmtDateTime(m.last)}{/if}
@@ -549,6 +549,8 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    /* background eases between pill and accent while the detail slides */
+    transition: background 150ms;
   }
   /* always a column: the header span holds name + count on one line, the
      detail block slots underneath when open */
