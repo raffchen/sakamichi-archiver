@@ -68,9 +68,9 @@
     display: flex;
     flex-direction: column;
     justify-content: center; /* a tall card reads better with the form mid-screen */
-    /* the gate wears the site's own header colors (gradient on nogi, solid
-       on saka/hinata) — entering the private area looks like the app */
-    background: var(--head-bg, var(--accent, #7b6cd9));
+    /* the gate wears the site's solid color (--section — nogi's header
+       gradient would clash with the other sites' flat gates) */
+    background: var(--section, var(--accent, #7b6cd9));
     color: #fff;
   }
   .lock {
