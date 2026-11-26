@@ -408,6 +408,43 @@
     zoomAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, sNat)
   }
 
+  /* wheel over a zoomable picture (mouse + trackpad): while zoomed it pans
+     both axes like the drag does — a trackpad's two-finger scroll emits the
+     same event with pixel deltas — and ctrl+wheel (what trackpad pinch-zoom
+     emits) zooms toward the cursor between fit and the same ceiling the
+     pinch uses. While fit it does nothing but is still swallowed: the wheel
+     must never scroll the thread behind the overlay. Attached imperatively
+     (see the effect below) because Svelte adds template wheel handlers as
+     passive, which can't preventDefault. */
+  function zoomWheel(e: WheelEvent) {
+    if (!shrunk) return
+    e.preventDefault()
+    const tr = trackEl?.getBoundingClientRect()
+    const img = curImgEl
+    if (!tr || !img) return
+    if (e.ctrlKey) {
+      /* anchor: the content fraction under the cursor stays under it; the
+         displayed rect (which includes the live transform) measures it */
+      const ir = img.getBoundingClientRect()
+      if (!ir.width || !ir.height) return
+      const fx = (e.clientX - ir.left) / ir.width
+      const fy = (e.clientY - ir.top) / ir.height
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? bodyH : 1)
+      const target = Math.min(sMax, Math.max(1, scale * Math.exp(-dy * 0.0022)))
+      if (target === scale) return /* parked at fit or the ceiling */
+      zx = clampZ(e.clientX - tr.left - fx * fitW * target, fitW * target, bodyW)
+      zy = clampZ(e.clientY - tr.top - fy * fitH * target, fitH * target, bodyH)
+      scale = target
+      return
+    }
+    if (scale <= 1) return
+    /* line/page delta modes normalize to pixels so Firefox wheel steps pan
+       a usable distance too */
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? bodyH : 1
+    zx = clampZ(zx - e.deltaX * k, dw, bodyW)
+    zy = clampZ(zy - e.deltaY * k, dh, bodyH)
+  }
+
   /* decode the neighbours ahead of the drag — otherwise the incoming slide is
      blank until its image loads and the drag shows nothing arriving */
   $effect(() => {
@@ -417,6 +454,16 @@
       const src = it && (it.type === 'picture' ? (it.file ?? it.thumb) : (it.poster ?? it.thumb))
       if (src) new Image().src = src
     }
+  })
+
+  /* the wheel handler rides the whole track (not just the img) so trackpad
+     two-finger scrolling pans even when the cursor sits over the empty strip
+     beside a narrow zoomed image; non-passive (see zoomWheel) */
+  $effect(() => {
+    const tr = trackEl
+    if (!tr) return
+    tr.addEventListener('wheel', zoomWheel, { passive: false })
+    return () => tr.removeEventListener('wheel', zoomWheel)
   })
 
   /* the lightbox media (video/audio) is ephemeral — pause its own element on
