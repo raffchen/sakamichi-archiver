@@ -1504,7 +1504,8 @@ body:has(.sheet.login) .sheet {
    strip the default link look — the card/row classes carry the styling */
 a.blog-card,
 a.blog-post-row,
-a.bp-nav-btn {
+a.bp-nav-btn,
+a.hit {
   color: inherit;
   text-decoration: none;
 }

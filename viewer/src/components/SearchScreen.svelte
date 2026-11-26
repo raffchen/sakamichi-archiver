@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { Archive, Member, Msg } from '../lib/types'
-  import { openMember, openBlog, ui } from '../lib/store.svelte'
+  import { openBlog, ui } from '../lib/store.svelte'
   import { requireLogin } from '../lib/auth.svelte'
   import { fmtFull } from '../lib/format'
   import { disp } from '../lib/display'
@@ -120,16 +120,17 @@
     }
   })
 
-  const openHit = (h: Hit) => {
-    if (h.type === 'blog' && h.key) {
-      if (h.site) ui.site = h.site
-      openBlog(h.key, Number(h.id))
-    } else if (h.slug) {
-      const mem = memberBySlug.get(h.slug)
-      if (mem?.site) ui.site = mem.site
-      openMember(h.slug, Number(h.id))
-    }
-  }
+  /* hits are real <a href> anchors — middle-/ctrl-click opens the hit in a
+     new tab, plain clicks navigate through the hash router. The deep links
+     carry everything openHit used to set by hand: parseHash's thread/blog
+     branches adopt the site from the member/blog lookup, and the blog
+     branch drops a stale search scope. */
+  const hitHref = (h: Hit) =>
+    h.type === 'blog' && h.key
+      ? `#/blog/${encodeURIComponent(h.key)}/${h.id}`
+      : h.slug
+        ? `#/thread/${encodeURIComponent(h.slug)}/${h.id}`
+        : undefined
 
   const goBack = () => {
     if (ui.searchScope === 'message-member') ui.view = 'thread'
@@ -225,13 +226,7 @@
   {:else if localHits.length}
     <p class="muted-note">{localHits.length}{localHits.length >= 300 ? '+' : ''} 件中</p>
     {#each localHits as h (`${h.m.slug}-${h.msg.id}`)}
-      <button
-        class="hit"
-        onclick={() => {
-          ui.site = h.m.site ?? ui.site
-          openMember(h.m.slug, h.msg.id)
-        }}
-      >
+      <a class="hit" href={`#/thread/${encodeURIComponent(h.m.slug)}/${h.msg.id}`}>
         <img class="ava" src={h.m.avatar ?? h.m.home ?? ''} alt="" loading="lazy" />
         <span>
           <span class="m">{h.m.roman ?? h.m.name} · {fmtFull(h.msg.at)} · {h.msg.type}</span>
@@ -241,7 +236,7 @@
             {/each}
           </span>
         </span>
-      </button>
+      </a>
     {/each}
   {:else}
     <p class="muted-note">該当なし / no matches for “{q}”</p>
@@ -250,7 +245,7 @@
 </div>
 
 {#snippet hitCard(h: Hit, related = false)}
-  <button class="hit" onclick={() => openHit(h)}>
+  <a class="hit" href={hitHref(h)}>
     <img
       class="ava"
       src={
@@ -277,7 +272,7 @@
         <span class="sim">{Math.round(Math.max(0, Math.min(1, h.score)) * 100)}%</span>
       {/if}
     </span>
-  </button>
+  </a>
 {/snippet}
 
 <style>
