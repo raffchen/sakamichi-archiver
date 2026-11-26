@@ -1573,6 +1573,13 @@ body:has(.sheet.login) .sheet {
   flex-direction: column;
   gap: 12px;
 }
+/* cross-member newest/oldest feed: rows live in a wrapper div (not directly
+   in the column like the member list), so give it the same row gap */
+.blog-latest {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .blog-post-row {
   display: flex;
   gap: 12px;
