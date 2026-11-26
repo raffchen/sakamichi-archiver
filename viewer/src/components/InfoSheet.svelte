@@ -287,7 +287,6 @@
         timestamps shown in your browser's timezone ({Intl.DateTimeFormat().resolvedOptions().timeZone})<br />
         <br />
         new messages appear here automatically after each sync<br />
-        blog / news / official tabs are not part of this archive.
       </p>
     {:else}
       <h2>アーカイブ / archive</h2>
@@ -320,7 +319,6 @@
         timestamps shown in your browser's timezone ({Intl.DateTimeFormat().resolvedOptions().timeZone})<br />
         <br />
         new messages appear here automatically after each sync<br />
-        blog / news / official tabs are not part of this archive.
       </p>
     {/if}
   </div>
