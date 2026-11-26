@@ -74,6 +74,11 @@
       .sort((a, b) => b.message_count - a.message_count),
   )
   const roster = $derived(rosterGroups(rankedMembers, archive.sites))
+  /* the open chip fills with the member's own site color — matching the
+     heading dot — rather than the tab's accent, which can contradict it;
+     siteless members keep the tab accent */
+  const chipBg = (m: (typeof rankedMembers)[number]) =>
+    `background: ${m.site ? `var(--site-${m.site}, var(--accent))` : 'var(--accent)'}`
   const memberTip = (m: (typeof rankedMembers)[number]) =>
     [
       `${m.message_count} messages`,
@@ -295,6 +300,7 @@
               class="chip"
               class:open={chipOpen === m.slug}
               aria-expanded={chipOpen === m.slug}
+              style={chipOpen === m.slug ? chipBg(m) : ''}
               title={memberTip(m)}
               onclick={() => (chipOpen = chipOpen === m.slug ? null : m.slug)}
             >
