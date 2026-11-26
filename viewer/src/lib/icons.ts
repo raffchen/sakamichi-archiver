@@ -18,6 +18,8 @@
 const S = 'viewBox="0 0 24 24"'
 
 export const icons: Record<string, string> = {
+  /* padlock for the login gate (currentColor so it works on any background) */
+  lock: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="10.2" width="13.6" height="9.6" rx="2"/><path d="M8.3 10.2V7.5a3.7 3.7 0 0 1 7.4 0v2.7"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg>`,
   talk: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"><path d="M6.1 4.3h11.8c1 0 1.8.8 1.8 1.8v7.8c0 1-.8 1.8-1.8 1.8h-2.9v4.9l-2.9-4.9H6.1c-1 0-1.8-.8-1.8-1.8V6.1c0-1 .8-1.8 1.8-1.8z"/></svg>`,
   blog: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="4.9" y="3.9" width="14.2" height="16.2" rx="1.6" stroke-linejoin="round"/><path d="M8.4 8.4h7.2M8.4 12h7.2M8.4 15.6h7.2"/></svg>`,
   news: `<svg ${S} fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"><path d="M6.6 10.4 20 4.4v15.2L6.6 13.6z"/><path d="M4.1 9.2h2.5v5.6H4.1z"/><path d="M8.6 14.9v2.5c0 .7.6 1.3 1.3 1.3h.9c.7 0 1.3-.6 1.3-1.3v-2.5"/></svg>`,

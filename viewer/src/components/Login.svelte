@@ -1,6 +1,7 @@
 <script lang="ts">
   import { auth, login } from '../lib/auth.svelte'
   import { keynav } from '../lib/actions'
+  import { icon } from '../lib/icons'
   import { fade, slide } from 'svelte/transition'
 
   let input = $state<HTMLInputElement | undefined>()
@@ -32,6 +33,7 @@
     out:slide={{ duration: 200 }}
     use:keynav={{ onEsc: () => (auth.open = false) }}
   >
+    <span class="lock" aria-hidden="true">{@html icon('lock')}</span>
     <h2>ログイン / login</h2>
     <p class="note">
       Talk アーカイブの閲覧にはログインが必要です<br />
@@ -66,6 +68,20 @@
     display: flex;
     flex-direction: column;
     justify-content: center; /* a tall card reads better with the form mid-screen */
+    /* the gate wears the site's own header colors (gradient on nogi, solid
+       on saka/hinata) — entering the private area looks like the app */
+    background: var(--head-bg, var(--accent, #7b6cd9));
+    color: #fff;
+  }
+  .lock {
+    display: block;
+    width: 34px;
+    margin-bottom: 10px;
+    opacity: 0.9;
+  }
+  .lock :global(svg) {
+    display: block;
+    width: 100%;
   }
   form {
     display: flex;
@@ -76,20 +92,21 @@
     flex: 1;
     font-size: 16px;
     padding: 9px 12px;
-    border: 1px solid var(--line);
+    border: 1px solid transparent;
     border-radius: 10px;
     outline: none;
   }
   input:focus {
-    border-color: var(--accent, #7b6cd9);
+    border-color: #fff;
   }
   button {
     font-size: 14px;
     padding: 9px 16px;
     border: none;
     border-radius: 10px;
-    background: var(--accent, #7b6cd9);
-    color: #fff;
+    background: #fff;
+    color: var(--ink, #1c1c1e); /* pale accents (saku pink) wash out as text */
+    font-weight: 600;
     cursor: pointer;
   }
   button:disabled {
@@ -97,12 +114,13 @@
     cursor: default;
   }
   .err {
-    color: #c0392b;
+    color: #fff;
     font-size: 13px;
     margin: 10px 0 0;
   }
-  .note {
-    color: var(--muted);
+  /* beat the global .sheet .note (muted gray reads badly on the gradient) */
+  .sheet.login .note {
+    color: rgba(255, 255, 255, 0.92);
     font-size: 12.5px;
     line-height: 1.7;
     margin: 0 0 12px;
