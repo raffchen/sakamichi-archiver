@@ -76,9 +76,10 @@
   const roster = $derived(rosterGroups(rankedMembers, archive.sites))
   /* the open chip fills with the member's own site color — matching the
      heading dot — rather than the tab's accent, which can contradict it;
-     siteless members keep the tab accent */
-  const chipBg = (m: (typeof rankedMembers)[number]) =>
-    `background: ${m.site ? `var(--site-${m.site}, var(--accent))` : 'var(--accent)'}`
+     the count badge picks the same color up, white once open. Siteless
+     members keep the tab accent. */
+  const chipAccent = (m: (typeof rankedMembers)[number]) =>
+    m.site ? `var(--site-${m.site}, var(--accent))` : 'var(--accent)'
   const memberTip = (m: (typeof rankedMembers)[number]) =>
     [
       `${m.message_count} messages`,
@@ -300,7 +301,7 @@
               class="chip"
               class:open={chipOpen === m.slug}
               aria-expanded={chipOpen === m.slug}
-              style={chipOpen === m.slug ? chipBg(m) : ''}
+              style={`--chip-accent: ${chipAccent(m)}`}
               title={memberTip(m)}
               onclick={() => (chipOpen = chipOpen === m.slug ? null : m.slug)}
             >
@@ -608,7 +609,7 @@
     align-items: flex-start;
   }
   .chip.open {
-    background: var(--accent);
+    background: var(--chip-accent, var(--accent));
     border-radius: 12px;
   }
   /* accent container: white on top like the site headers do (the pale pink
@@ -625,6 +626,9 @@
     display: inline-flex;
     align-items: baseline;
     gap: 6px;
+  }
+  .cc {
+    color: var(--chip-accent, var(--accent));
   }
   .cd {
     display: block;
