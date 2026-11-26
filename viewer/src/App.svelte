@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import {
+    BLOG_SORT_IDS,
     closeLightbox,
     getArchive,
     getMember,
@@ -9,6 +10,7 @@
     searchBarContext,
     showLightbox,
     ui,
+    type BlogSort,
     type View,
   } from './lib/store.svelte'
   import Gallery from './components/Gallery.svelte'
@@ -171,6 +173,11 @@
         ui.blogMember = null
         ui.blogPost = null
         ui.blogPage = 1
+        /* #/blog/<site>/<sort> carries the ⇅ menu choice (default gen-asc is
+           bare — see blogHash). An unrecognized segment (junk/old link) is
+           ignored; the hash effect rewrites the URL to the real sort. */
+        if (parts[2] && (BLOG_SORT_IDS as readonly string[]).includes(parts[2]))
+          ui.blogSort = parts[2] as BlogSort
       } else {
         ui.blogMember = slug
         if (parts[2] === 'p') {
@@ -245,10 +252,22 @@
     return '#/search'
   }
 
+  /* the sort segment regex — built from the store's id list so the router
+     and the hash stay in sync (blogHash emits, parseHash validates) */
+  const sortStrip = new RegExp(`^(#/blog/[^/]+)/(${BLOG_SORT_IDS.join('|')})$`)
+
   $effect(() => {
     if (!routed) return
     const want = ui.view === 'blog' ? blogHash() : ui.view === 'search' ? searchHash() : hashFor(ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
+    /* toggling the ⇅ sort only swaps the view of the same screen — never a
+       history entry. A sort-only diff (same URL with the sort segment added,
+       changed, or removed) replaces in place; anything else (member, page,
+       post…) falls through and pushes as usual. */
+    if (location.hash.replace(sortStrip, '$1') === want.replace(sortStrip, '$1')) {
+      history.replaceState(null, '', want)
+      return
+    }
     /* on the media route: stepping (next/prev) edits the same history
        entry; closing POPS the entry the app pushed on open (Back returns
        to exactly where you were — one press, nothing left behind), and a
@@ -280,8 +299,13 @@
        imply the site.  Member list URLs ALWAYS carry /p/<n> — clicking a
        member lands on /p/1, and any page is linkable. Bare #/blog/<key>
        still parses (page 1) so older links keep working; post IDs are bare
-       numbers and outrank the page suffix. */
-    if (!ui.blogMember) return `#/blog/${encodeURIComponent(ui.site)}`
+       numbers and outrank the page suffix. The directory also carries the
+       sort when it isn't the default (e.g. #/blog/<site>/latest) so feed
+       views are shareable and survive a reload. */
+    if (!ui.blogMember)
+      return ui.blogSort === 'gen-asc'
+        ? `#/blog/${encodeURIComponent(ui.site)}`
+        : `#/blog/${encodeURIComponent(ui.site)}/${ui.blogSort}`
     const m = encodeURIComponent(ui.blogMember)
     if (ui.blogPost != null) return `#/blog/${m}/${ui.blogPost}`
     return `#/blog/${m}/p/${ui.blogPage}`

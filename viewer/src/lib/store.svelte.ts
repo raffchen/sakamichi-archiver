@@ -8,6 +8,16 @@ export type View = 'home' | 'thread' | 'gallery' | 'search' | 'blog'
 /* the Blogs ⇅ menu: every mode ascends/descends — generation, name, or the
    cross-member newest-posts feed */
 export type BlogSort = 'gen-asc' | 'gen-desc' | 'name-asc' | 'name-desc' | 'latest' | 'oldest'
+/* the same ids as a runtime list — App.svelte's hash router validates the
+   #/blog/<site>/<sort> segment against this */
+export const BLOG_SORT_IDS: readonly BlogSort[] = [
+  'gen-asc',
+  'gen-desc',
+  'name-asc',
+  'name-desc',
+  'latest',
+  'oldest',
+]
 
 /* legacy all-sites form of the graduated filter (boolean per device); kept
    only to migrate the old value into the per-site list below */
