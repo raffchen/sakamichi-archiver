@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { talkPanel } from './talkStats'
+import { rosterGroups, talkPanel } from './talkStats'
 import type { Archive, Member, Msg } from './types'
 
 const msg = (o: Partial<Msg>): Msg => ({
@@ -163,5 +163,47 @@ describe('talkPanel', () => {
     expect(p.last7).toBeNull()
     expect(p.listen).toBeNull()
     expect(p.topRate!.member.slug).toBe('a') // still derivable from member fields
+  })
+})
+
+describe('rosterGroups', () => {
+  const sites = {
+    nogizaka46: { name: '乃木坂46', roman: 'nogizaka46' },
+    sakurazaka46: { name: '桜坂46', roman: 'sakurazaka46' },
+  }
+
+  it('groups by site in archive order, counts desc within each group', () => {
+    const g = rosterGroups(
+      [
+        member({ slug: 'a', site: 'sakurazaka46', message_count: 3 }),
+        member({ slug: 'b', site: 'nogizaka46', message_count: 5 }),
+        member({ slug: 'c', site: 'nogizaka46', message_count: 9 }),
+        member({ slug: 'd', site: 'sakurazaka46', message_count: 1 }),
+      ],
+      sites,
+    )
+    expect(g.map((x) => x.name)).toEqual(['乃木坂46', '桜坂46'])
+    expect(g[0].members.map((m) => m.slug)).toEqual(['c', 'b'])
+    expect(g[1].members.map((m) => m.slug)).toEqual(['a', 'd'])
+  })
+
+  it('puts siteless members in a trailing fallback group', () => {
+    const g = rosterGroups(
+      [member({ slug: 'x', site: undefined, message_count: 2 }), member({ slug: 'y', site: 'nogizaka46', message_count: 1 })],
+      sites,
+    )
+    expect(g.map((x) => x.name)).toEqual(['乃木坂46', ''])
+    expect(g[1].members.map((m) => m.slug)).toEqual(['x'])
+  })
+
+  it('labels unknown site ids with the key itself, sorted after the known ones', () => {
+    const g = rosterGroups(
+      [
+        member({ slug: 'z', site: 'tokyo46', message_count: 4 }),
+        member({ slug: 'y', site: 'nogizaka46', message_count: 1 }),
+      ],
+      sites,
+    )
+    expect(g.map((x) => x.name)).toEqual(['乃木坂46', 'tokyo46'])
   })
 })

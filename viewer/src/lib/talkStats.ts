@@ -104,3 +104,27 @@ export function talkPanel(archive: Archive): TalkPanel | null {
     perMessage,
   }
 }
+
+export interface RosterGroup {
+  key: string // site id ('nogizaka46'…), '' for members without a site
+  name: string // site display name (乃木坂46…), fallback to the key itself
+  members: Member[] // counts desc
+}
+
+/* the Info-panel member roster: chips grouped by site — sites in archive
+   order (nogi → saku → hinata), counts desc within each group. Members with
+   no site trail in a final unnamed group; labels come from the site table. */
+export function rosterGroups(members: Member[], sites: Archive['sites']): RosterGroup[] {
+  const pos = new Map(Object.keys(sites).map((k, i) => [k, i]))
+  const bySite = new Map<string, Member[]>()
+  for (const m of [...members].sort((a, b) => b.message_count - a.message_count)) {
+    const k = m.site ?? ''
+    const g = bySite.get(k)
+    if (g) g.push(m)
+    else bySite.set(k, [m])
+  }
+  const n = Object.keys(sites).length
+  return [...bySite]
+    .sort((a, b) => (pos.get(a[0]) ?? n) - (pos.get(b[0]) ?? n))
+    .map(([key, ms]) => ({ key, name: sites[key]?.name ?? key, members: ms }))
+}

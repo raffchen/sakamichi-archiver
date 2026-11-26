@@ -12,7 +12,7 @@
   } from '../lib/format'
   import { disp } from '../lib/display'
   import { blogPanel, blogMonth, stackedChart } from '../lib/blogStats'
-  import { talkPanel, TYPE_EMOJI } from '../lib/talkStats'
+  import { talkPanel, rosterGroups, TYPE_EMOJI } from '../lib/talkStats'
   import { ui } from '../lib/store.svelte'
   import { fade, slide } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
@@ -63,7 +63,8 @@
     return parts.join(' · ')
   })
   /* compact member roster: chips by message count (desc, kana order on
-     ties). The old row detail — media mix and date span — opens on tap or
+     ties), grouped under small site headings when more than one site has
+     members. The old row detail — media mix and date span — opens on tap or
      hover: hover via the title tooltip (desktop), tap via the expandable
      detail block (touch has no hover). One chip open at a time. */
   let chipOpen = $state<string | null>(null)
@@ -72,6 +73,7 @@
       .filter((m) => m.message_count > 0)
       .sort((a, b) => b.message_count - a.message_count),
   )
+  const roster = $derived(rosterGroups(rankedMembers, archive.sites))
   const memberTip = (m: (typeof rankedMembers)[number]) =>
     [
       `${m.message_count} messages`,
@@ -281,29 +283,36 @@
         </p>
       {/if}
 
-      <div class="chips">
-        {#each rankedMembers as m (m.slug)}
-          <button
-            class="chip"
-            class:open={chipOpen === m.slug}
-            aria-expanded={chipOpen === m.slug}
-            title={memberTip(m)}
-            onclick={() => (chipOpen = chipOpen === m.slug ? null : m.slug)}
-          >
-            <span class="ch">
-              <span class="cn">{m.roman ?? m.name}</span>
-              <span class="cc">{m.message_count}</span>
-            </span>
-            {#if chipOpen === m.slug}
-              <span class="cd" transition:slideChip>
-                {m.message_count} messages<br />
-                📷 {m.counts.picture ?? 0} · 🎬 {m.counts.video ?? 0} · 🔊 {m.counts.voice ?? 0}<br />
-                {#if m.first && m.last}{fmtDateTime(m.first)} → {fmtDateTime(m.last)}{/if}
+      {#each roster as g (g.key)}
+        {#if roster.length > 1 && g.name}
+          <div class="chiph">
+            <i class="dot" style="background: var(--site-{g.key}, var(--accent))"></i>{g.name}
+          </div>
+        {/if}
+        <div class="chips">
+          {#each g.members as m (m.slug)}
+            <button
+              class="chip"
+              class:open={chipOpen === m.slug}
+              aria-expanded={chipOpen === m.slug}
+              title={memberTip(m)}
+              onclick={() => (chipOpen = chipOpen === m.slug ? null : m.slug)}
+            >
+              <span class="ch">
+                <span class="cn">{m.roman ?? m.name}</span>
+                <span class="cc">{m.message_count}</span>
               </span>
-            {/if}
-          </button>
-        {/each}
-      </div>
+              {#if chipOpen === m.slug}
+                <span class="cd" transition:slideChip>
+                  {m.message_count} messages<br />
+                  📷 {m.counts.picture ?? 0} · 🎬 {m.counts.video ?? 0} · 🔊 {m.counts.voice ?? 0}<br />
+                  {#if m.first && m.last}{fmtDateTime(m.first)} → {fmtDateTime(m.last)}{/if}
+                </span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/each}
 
       <p class="pulse">{talkPulse1}</p>
       <p class="pulse">{talkPulse2}</p>
@@ -546,7 +555,23 @@
     margin-bottom: 10px;
   }
   /* compact member roster — pill chips wrapping 2–3 per row instead of a
-     three-line table row per member */
+     three-line table row per member, grouped under site headings */
+  .chiph {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 2px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .chiph .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
   .chips {
     display: flex;
     flex-wrap: wrap;
