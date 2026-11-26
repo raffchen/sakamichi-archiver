@@ -100,7 +100,18 @@
     return `#/${v}${s ? '/' + s : ''}${focus ? '/' + focus : ''}`
   }
 
+  /* whether the CURRENT history entry is a #/media route the app itself
+     pushed by opening the lightbox (vs one the browser loaded directly —
+     a paste/refresh). Closing pops the former (history.back) and rewrites
+     the latter (replaceState): replaceState alone can never remove the
+     pushed entry, which is what used to stack one history entry per
+     open/close cycle. parseHash runs on every Back/Forward/hash edit, so
+     it re-derives this from scratch — only the push branch (below) can
+     set it true. */
+  let mediaWasPushed = false
+
   function parseHash() {
+    mediaWasPushed = false
     const parts = location.hash.replace(/^#\/?/, '').split('/')
     /* 'site' is the pre-2026-02 name of the talk-directory route — kept as a
        legacy alias so old shared links still resolve */
@@ -238,18 +249,29 @@
     if (!routed) return
     const want = ui.view === 'blog' ? blogHash() : ui.view === 'search' ? searchHash() : hashFor(ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
-    /* on the media route, every change (next/prev, ✕/Back-close) edits the
-       same history entry — Back exits the viewer in one step; opening the
-       viewer from a thread/grid address is a new entry, so Back returns to
-       exactly where you were; a consumed focus segment cleans up in place.
-       Blog post URLs also end in digits — those push normally (each screen
-       is its own history entry, like the app) */
-    if (
-      /^#\/media\//.test(location.hash) ||
-      (!lightbox.open && !location.hash.startsWith('#/blog/') && /\/\d+$/.test(location.hash))
-    )
+    /* on the media route: stepping (next/prev) edits the same history
+       entry; closing POPS the entry the app pushed on open (Back returns
+       to exactly where you were — one press, nothing left behind), and a
+       directly-loaded media URL (paste/refresh, nothing behind it to pop)
+       is rewritten into its screen address. Elsewhere a consumed focus
+       segment cleans up in place. Blog post URLs also end in digits —
+       those push normally (each screen is its own history entry, like the
+       app) */
+    if (/^#\/media\//.test(location.hash)) {
+      if (!lightbox.open && mediaWasPushed) {
+        mediaWasPushed = false
+        history.back() // pop the open-push; popstate → parseHash restores the screen
+        return
+      }
       history.replaceState(null, '', want)
-    else history.pushState(null, '', want)
+      return
+    }
+    if (!lightbox.open && !location.hash.startsWith('#/blog/') && /\/\d+$/.test(location.hash))
+      history.replaceState(null, '', want)
+    else {
+      history.pushState(null, '', want)
+      if (/^#\/media\//.test(want)) mediaWasPushed = true // opening the viewer — remember so close can pop
+    }
   })
 
   function blogHash() {
