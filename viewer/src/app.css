@@ -153,6 +153,13 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* the document never scrolls (the .screen scroll plane owns scrolling), so
+     overscroll here is always an accident: pull-to-refresh / rubber-band at
+     the root. Blocking it at the root (not on .screen!) keeps that guard
+     while still letting a browser pinch-zoom's pan chain out of .screen —
+     with overscroll-behavior on .screen itself, that chain is severed and
+     the zoomed page can't be panned in any direction */
+  overscroll-behavior-y: none;
 }
 body {
   background: var(--desk);
@@ -342,7 +349,11 @@ img {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden; /* zoomed layouts can phantom-overflow horizontally */
-  overscroll-behavior: contain;
+  /* NO overscroll-behavior: contain here — it would sever the gesture chain
+     the browser uses to pan a pinch-zoomed page (the zoom lens never moves:
+     horizontal drags scroll nothing, and at a scroll edge vertical drags die
+     too). The pull-to-refresh guard this used to provide now lives on
+     html/body above. */
   -webkit-overflow-scrolling: touch;
   /* the custom scrollbar (Scrollbar.svelte, in each screen's .col) replaces
      the native one — hide it and drop the gutter reservation so .col centers
