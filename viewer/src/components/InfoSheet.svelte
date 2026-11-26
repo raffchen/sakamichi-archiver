@@ -15,6 +15,7 @@
   import { talkPanel, TYPE_EMOJI } from '../lib/talkStats'
   import { ui } from '../lib/store.svelte'
   import { fade, slide } from 'svelte/transition'
+  import { cubicOut } from 'svelte/easing'
 
   let {
     archive,
@@ -79,6 +80,23 @@
     ]
       .filter(Boolean)
       .join('\n')
+  /* svelte's slide animates height only; the chip detail is wider than the
+     header, so it also needs the horizontal axis — slide both at once */
+  function slideChip(node: HTMLElement, { duration = 180 }: { duration?: number } = {}) {
+    const s = getComputedStyle(node)
+    const w = node.offsetWidth
+    const h = node.offsetHeight
+    const px = (t: number, v: number) => `${t * v}px`
+    return {
+      duration,
+      easing: cubicOut,
+      css: (t: number) =>
+        `overflow: hidden; width: ${px(t, w)}; height: ${px(t, h)};` +
+        ` padding-top: ${px(t, parseFloat(s.paddingTop))};` +
+        ` margin-top: ${px(t, parseFloat(s.marginTop))};` +
+        ` border-top-width: ${px(t, parseFloat(s.borderTopWidth))}; min-height: 0;`,
+    }
+  }
   const chartMax = $derived(Math.max(...chart.map((y) => y.total), 1))
   /* y-axis gridlines: a nice round step (1/2/5 × 10^k) near a third of the
      peak, thinned so at most five lines — recomputed when the site filter
@@ -277,7 +295,7 @@
               <span class="cc">{m.message_count}</span>
             </span>
             {#if chipOpen === m.slug}
-              <span class="cd" transition:slide={{ duration: 180 }}>
+              <span class="cd" transition:slideChip>
                 {m.message_count} messages<br />
                 📷 {m.counts.picture ?? 0} · 🎬 {m.counts.video ?? 0} · 🔊 {m.counts.voice ?? 0}<br />
                 {#if m.first && m.last}{fmtDateTime(m.first)} → {fmtDateTime(m.last)}{/if}
