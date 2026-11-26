@@ -20,6 +20,8 @@ House rules:
   - all detail — the why, the behavior it fixes, how it works — lives in
     the commit body (one blank line after the subject); the subject line
     carries no em-dash detail clause
+- `git push` before deploying — the deploy should always ship what's already
+  in git, not work sitting only in the local tree.
 - When an agent commits finished work, deploy it right away with `./deploy.sh` —
   don't leave commits pending a deploy decision or batch them up. Only skip the
   push (`--no-push`) when the deploy is explicitly a rebuild-only request.
