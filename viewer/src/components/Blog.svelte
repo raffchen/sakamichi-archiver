@@ -79,6 +79,23 @@
   const graduatedKeys = $derived(
     new Set((archive.blogs?.members ?? []).filter((b) => b.graduated).map((b) => b.key)),
   )
+  /* member keys hidden for THIS site (graduated toggle + gen checkboxes),
+     sent to /api/blog as ?exclude= — the feed is capped at 60 posts, and with
+     oldest-first the 60 oldest all come from the oldest generations, so
+     filtering only on the client would empty the list. Reading this derived
+     set in the fetch effect also re-fetches when the settings change. */
+  const hiddenFeedKeys = $derived.by(() => {
+    const keys = new Set<string>()
+    for (const b of archive.blogs?.members ?? []) {
+      if (b.site !== ui.site || !b.key) continue
+      if (
+        (gradHiddenFor(ui.site) && b.graduated) ||
+        genHidden.has(genSettingKey(ui.site, b.gen_num))
+      )
+        keys.add(b.key)
+    }
+    return keys
+  })
 
   type SortId = BlogSort
   const sortOptions: { id: SortId; label: string }[] = [
@@ -136,11 +153,13 @@
   $effect(() => {
     if (!ui.blogMember && (ui.blogSort === 'latest' || ui.blogSort === 'oldest')) {
       const site = ui.site
+      const exclude = [...hiddenFeedKeys]
       latest = null
       latestErr = ''
       fetch(
         `/api/blog?site=${encodeURIComponent(site)}&limit=60` +
-          (ui.blogSort === 'oldest' ? '&order=asc' : ''),
+          (ui.blogSort === 'oldest' ? '&order=asc' : '') +
+          (exclude.length ? `&exclude=${encodeURIComponent(exclude.join(','))}` : ''),
       )
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
         .then((d: { posts: LatestPost[] }) => {
@@ -150,8 +169,10 @@
     }
   })
 
-  /* the feed is filtered reactively (not at fetch time) so toggling the
-     settings doesn't refetch — it just reshapes what's already here */
+  /* the feed is ALSO filtered client-side: belt-and-braces against a stale
+     response landing after a settings toggle (the server excludes hidden
+     members too — see hiddenFeedKeys), and it reshapes what's already here
+     while the re-fetch is in flight */
   const latestShown = $derived(
     latest
       ? latest.filter((p) => {

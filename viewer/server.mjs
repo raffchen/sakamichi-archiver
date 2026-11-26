@@ -988,8 +988,12 @@ const app = http.createServer(async (req, res) => {
   // /api/blog — the official app's "sort by upload time" view: the newest
   // posts across EVERY archived member in one feed. ?site=<key> filters to
   // one site, ?limit= caps the response (default 60, max 200), ?order=asc
-  // flips to oldest-first. Reads each member's _blogs.json (small files;
-  // directory metadata only, no bodies).
+  // flips to oldest-first, ?exclude=<key,key,…> drops whole members (the
+  // viewer's hide-graduated / hide-generation settings are client-side
+  // state the DB doesn't know — without it, oldest-first would return only
+  // hidden members' posts and the client filter would empty the list).
+  // Reads each member's _blogs.json (small files; directory metadata only,
+  // no bodies).
   /* blog member dirs live at media/<site>/blogs/<key>/blog (group-first
      layout); the legacy flat tree media/blogs/<key> is still honored so the
      server works before and after a migration. blogMedia() builds /media URLs
@@ -1056,6 +1060,12 @@ const app = http.createServer(async (req, res) => {
     const q = new URL(req.url, 'http://x').searchParams
     const site = q.get('site')
     const limit = Math.min(Number(q.get('limit')) || 60, 200)
+    const exclude = new Set(
+      (q.get('exclude') ?? '')
+        .split(',')
+        .filter(Boolean)
+        .map(decodeURIComponent),
+    )
     /* stage 6: read the feed from the search DB when possible — O(1) instead
        of re-reading every member's _blogs.json per request. Falls back to the
        file scan whenever the DB is absent/corrupt (graceful, as always). */
@@ -1063,14 +1073,19 @@ const app = http.createServer(async (req, res) => {
     try {
       const sdb = getFeedDb()
       if (sdb) {
-        /* ?order=asc = oldest-first, matching the file-scan fallback below */
+        /* ?order=asc = oldest-first, ?exclude drops members — both matching
+           the file-scan fallback below */
         const order = q.get('order') === 'asc' ? 'ASC' : 'DESC'
+        const exKeys = [...exclude]
+        const where = [site ? 'site = ?' : null, exKeys.length ? `member_key NOT IN (${exKeys.map(() => '?').join(',')})` : null]
+          .filter(Boolean)
+          .join(' AND ')
         feed = sdb
           .prepare(
             `SELECT member_key AS "key", post_id AS id, title, at, member_name AS member, site, thumb, body
-             FROM posts ${site ? 'WHERE site = ?' : ''} ORDER BY at ${order} LIMIT ?`,
+             FROM posts ${where ? `WHERE ${where}` : ''} ORDER BY at ${order} LIMIT ?`,
           )
-          .all(...(site ? [site] : []), limit)
+          .all(...(site ? [site] : []), ...exKeys, limit)
           .map((r) => ({
             key: r.key,
             member: r.member,
@@ -1096,6 +1111,7 @@ const app = http.createServer(async (req, res) => {
         } catch {}
         if (!state?.entries?.length) continue
         if (site && (state.site ?? rootSite ?? '') !== site) continue
+        if (exclude.has(key)) continue // whole member hidden — skip their file entirely
         for (const e of state.entries)
           posts.push({
             key,
