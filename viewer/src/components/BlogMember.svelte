@@ -60,7 +60,11 @@
   <button class="ic back" aria-label="back" onclick={() => back(null)}>
     <i class="fa-solid fa-chevron-left"></i>
   </button>
-  <h1>{memberName}</h1>
+  <!-- the name links the list's first page (jump home from a deep page);
+       real anchor, so middle-/ctrl-click opens the list in a new tab too -->
+  <h1>
+    <a class="head-name" href={`#/blog/${encodeURIComponent(key)}/p/1`}>{memberName}</a>
+  </h1>
   <!-- dark-mode toggle in the trailing slot — keeps the title centered, and
        the theme is reachable on every blog screen -->
   <button
