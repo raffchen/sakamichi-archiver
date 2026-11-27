@@ -66,7 +66,11 @@
   <button class="ic back" aria-label="back" onclick={() => back(null)}>
     <i class="fa-solid fa-chevron-left"></i>
   </button>
-  <h1>{entry?.creator ?? ''}</h1>
+  <!-- the name links the member's list page 1 — real anchor, so middle-/
+       ctrl-click opens the list in a new tab too -->
+  <h1>
+    <a class="head-name" href={`#/blog/${encodeURIComponent(key)}/p/1`}>{entry?.creator ?? ''}</a>
+  </h1>
   <!-- dark-mode toggle in the trailing slot — keeps the title centered, and
        the theme is reachable on every blog screen -->
   <button

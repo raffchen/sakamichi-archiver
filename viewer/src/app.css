@@ -1501,11 +1501,13 @@ body:has(.sheet.login) .sheet {
   margin-top: 12px;
 }
 /* blog links are real <a href> anchors (middle-/ctrl-click = new tab);
-   strip the default link look — the card/row classes carry the styling */
+   strip the default link look — the card/row classes carry the styling.
+   a.head-name sits inside .head h1 and inherits the header's type. */
 a.blog-card,
 a.blog-post-row,
 a.bp-nav-btn,
-a.hit {
+a.hit,
+a.head-name {
   color: inherit;
   text-decoration: none;
 }
