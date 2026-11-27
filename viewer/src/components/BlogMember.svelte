@@ -9,7 +9,7 @@
      spilling under the scrollbar's grab band. The page is baked into the
      URL as #/blog/<key>/p/<n> so links to a specific page are shareable. */
   import type { Archive, BlogEntry } from '../lib/types'
-  import { BLOG_PER_PAGE, back, toggleTheme, ui } from '../lib/store.svelte'
+  import { BLOG_PER_PAGE, back, toggleTheme, ui, type MemberSort } from '../lib/store.svelte'
   import Scrollbar from './Scrollbar.svelte'
   import BlogPager from './BlogPager.svelte'
   import { fmtBlogStamp } from '../lib/format'
@@ -22,6 +22,24 @@
   const key = $derived(ui.blogMember!)
   const info = $derived(archive.blogs?.members.find((b) => b.key === key) ?? null)
   const memberName = $derived(info?.name ?? key.replace(/_/g, ' '))
+
+  /* the ⇅ menu: newest-first (the official app's order) or oldest-first */
+  const sortOptions: { id: MemberSort; label: string }[] = [
+    { id: 'latest', label: 'Newest first' },
+    { id: 'oldest', label: 'Oldest first' },
+  ]
+  let menuOpen = $state(false)
+  function pickSort(id: MemberSort) {
+    if (id !== ui.blogMemberSort) {
+      ui.blogMemberSort = id
+      ui.blogPage = 1 // the page numbers name a different ordering now
+      ui.blogSortSwap = true // same screen, different view — replace, don't push
+    }
+    menuOpen = false
+  }
+  /* the row/post links carry the sort so the detail's rank — and therefore
+     back()'s return page — is computed in the ordering being read */
+  const sortSeg = $derived(ui.blogMemberSort === 'oldest' ? '/oldest' : '')
 
   let entries = $state<BlogEntry[] | null>(null)
   let total = $state(0)
@@ -37,24 +55,30 @@
   $effect(() => {
     const k = key
     const pg = ui.blogPage
+    const order = ui.blogMemberSort
     screen?.scrollTo(0, 0) // a page change lands at the top, like a fresh tap
     entries = null
     error = ''
-    fetch(`/api/blog/${encodeURIComponent(k)}?limit=${PER_PAGE}&offset=${(pg - 1) * PER_PAGE}`)
+    fetch(
+      `/api/blog/${encodeURIComponent(k)}?limit=${PER_PAGE}&offset=${(pg - 1) * PER_PAGE}` +
+        (order === 'oldest' ? '&order=asc' : ''),
+    )
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: { entries: BlogEntry[]; total: number }) => {
-        if (k !== ui.blogMember) return // raced: member switched mid-flight
+        if (k !== ui.blogMember || order !== ui.blogMemberSort) return // raced
         entries = d.entries
         total = d.total
       })
       .catch((e) => {
-        if (k === ui.blogMember) error = String(e)
+        if (k === ui.blogMember && order === ui.blogMemberSort) error = String(e)
       })
   })
 
   /* post rows are real <a href> anchors — middle-/ctrl-click opens the post
      in a new tab; a plain click is just the hash navigation */
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (menuOpen = false)} />
 
 <header class="head">
   <button class="ic back" aria-label="back" onclick={() => back(null)}>
@@ -63,8 +87,22 @@
   <!-- the name links the list's first page (jump home from a deep page);
        real anchor, so middle-/ctrl-click opens the list in a new tab too -->
   <h1>
-    <a class="head-name" href={`#/blog/${encodeURIComponent(key)}/p/1`}>{memberName}</a>
+    <a class="head-name" href={`#/blog/${encodeURIComponent(key)}${sortSeg}/p/1`}>{memberName}</a>
   </h1>
+  <button class="ic" aria-label="sort" onclick={() => (menuOpen = !menuOpen)}>
+    {@html icon('sort')}
+  </button>
+  {#if menuOpen}
+    <button class="menu-backdrop" aria-label="close menu" onclick={() => (menuOpen = false)}></button>
+    <div class="blog-sort-menu" role="menu">
+      {#each sortOptions as o (o.id)}
+        <button role="menuitem" class:on={ui.blogMemberSort === o.id} onclick={() => pickSort(o.id)}>
+          <span>{o.label}</span>
+          {#if ui.blogMemberSort === o.id}{@html icon('check')}{/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
   <!-- dark-mode toggle in the trailing slot — keeps the title centered, and
        the theme is reachable on every blog screen -->
   <button
@@ -108,7 +146,7 @@
     <div class="muted-note">読み込み中…</div>
   {:else}
     {#each entries as e (e.id)}
-      <a class="blog-post-row" href={`#/blog/${encodeURIComponent(key)}/${e.id}`}>
+      <a class="blog-post-row" href={`#/blog/${encodeURIComponent(key)}${sortSeg}/${e.id}`}>
         {#if e.thumbnail}
           <!-- thumb = server-generated square crop; the full file is the
                fallback (e.g. --no-thumbs builds) and stays the lightbox src -->

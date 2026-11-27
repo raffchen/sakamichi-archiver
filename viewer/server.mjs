@@ -1170,6 +1170,7 @@ const app = http.createServer(async (req, res) => {
         ? html.replace(/(["'])(files\/)/g, `$1${blogMedia(found.site, key, '')}$2`)
         : html
     const parts = p.split('/').slice(3).map(decodeURIComponent)
+    const q = new URL(req.url, 'http://x').searchParams
     if (parts[1] != null) {
       /* _blogs.json is oldest-first; the post footer's prev/next chain from
          these stubs — the list route is paginated (25/page), so the client
@@ -1178,42 +1179,47 @@ const app = http.createServer(async (req, res) => {
       const idx = list.findIndex((e) => String(e.id) === parts[1])
       if (idx < 0) return sendJson(res, 404, { error: 'no such post' })
       const stub = (e) => (e ? { id: String(e.id), title: e.title } : null)
+      /* rank = 0-based position in the ORDERING THE VIEWER IS READING
+         (?order=asc → oldest-first index, default newest-first) — the
+         viewer derives the back-to-list page from it, so the rank must
+         match the list sort the user came from */
+      const rank = q.get('order') === 'asc' ? idx : list.length - 1 - idx
       return sendJson(res, 200, {
         key,
         member: state.member,
         site: state.site ?? found.site,
-        /* 0-based, newest-first position in the full list — the viewer
-           derives the back-to-list page from it (page size is a client
-           setting, and the post URL never carries a page number) */
-        rank: list.length - 1 - idx,
+        /* 0-based position in the requested ordering — the viewer derives
+           the back-to-list page from it (page size is a client setting, and
+           the post URL never carries a page number) */
+        rank,
         entry: { ...list[idx], content: prefixLocal(list[idx].content, dir), lead: blogLead(list[idx].content) },
         prev: stub(list[idx - 1]), // older post (file is oldest-first)
         next: stub(list[idx + 1]), // newer post
       })
     }
     /* member list is paginated by the viewer (25 per page): ?limit caps the
-       page (default 25, max 200), ?offset skips into the newest-first list.
+       page (default 25, max 200), ?offset skips into the ordered list.
        `total` lets the client render page controls without a second fetch. */
-    const q = new URL(req.url, 'http://x').searchParams
     const limit = Math.min(Math.max(Number(q.get('limit')) || 25, 1), 200)
     const offset = Math.max(Number(q.get('offset')) || 0, 0)
     /* thumb = the square /thumbs/blog/ crop for the list row; `thumbnail`
        stays the bare files/ name (the client derives the full-size URL from
        it for the lightbox). dir, not key — thumbs/ is laid out by physical
        folder name, which the fold matching may not return verbatim. */
-    const newestFirst = (state.entries ?? [])
-      .map(({ content, ...e }) => ({
-        ...e,
-        lead: blogLead(content),
-        thumb: e.thumbnail ? blogThumb(dir, e.thumbnail) : null,
-      }))
-      .reverse()
+    /* ?order=asc serves the file's native oldest-first order; default is
+       newest-first (the official app's list view) */
+    const rows = (state.entries ?? []).map(({ content, ...e }) => ({
+      ...e,
+      lead: blogLead(content),
+      thumb: e.thumbnail ? blogThumb(dir, e.thumbnail) : null,
+    }))
+    const ordered = q.get('order') === 'asc' ? rows : rows.reverse()
     return sendJson(res, 200, {
       key,
       member: state.member,
       site: state.site ?? found.site,
-      total: newestFirst.length,
-      entries: newestFirst.slice(offset, offset + limit),
+      total: ordered.length,
+      entries: ordered.slice(offset, offset + limit),
     })
   }
 

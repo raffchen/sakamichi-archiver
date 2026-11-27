@@ -18,6 +18,8 @@ export const BLOG_SORT_IDS: readonly BlogSort[] = [
   'latest',
   'oldest',
 ]
+/* a member's list is flat — only the two feed directions apply */
+export type MemberSort = 'latest' | 'oldest'
 
 /* legacy all-sites form of the graduated filter (boolean per device); kept
    only to migrate the old value into the per-site list below */
@@ -101,6 +103,16 @@ export const ui = $state({
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
   blogFeedPage: 1 as number, // cross-member feed page (1-based); #/blog/<site>/<sort>/p/<n>
+  /* member list order (the ⇅ menu on the member's list). 'latest' is the
+     default and stays bare in the URL; 'oldest' shows as
+     #/blog/<key>/oldest/p/<n>. parseHash sets it explicitly from the URL on
+     every member navigation, and it rides along through prev/next via the
+     post links so back() computes the page in the same ordering. */
+  blogMemberSort: 'latest' as MemberSort,
+  /* one-shot: the ⇅ menus set this when the sort actually changes so the
+     hash effect replaceState-s instead of pushing — a sort toggle is the
+     same screen in a different view, never a history entry */
+  blogSortSwap: false as boolean,
   /* directory setting: sites hiding graduated members' cards (the ⚙ menu,
      per site). A device preference, so it persists like volume does. */
   blogGradHiddenSites: loadGradSites(),

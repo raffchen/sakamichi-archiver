@@ -212,8 +212,11 @@
   let menuOpen = $state(false)
   let settingsOpen = $state(false)
   function pickSort(id: SortId) {
-    ui.blogSort = id
-    ui.blogFeedPage = 1 // the page numbers name a different list now
+    if (id !== ui.blogSort) {
+      ui.blogSort = id
+      ui.blogFeedPage = 1 // the page numbers name a different list now
+      ui.blogSortSwap = true // same screen, different view — replace, don't push
+    }
     menuOpen = false
   }
   function toggleGrad() {

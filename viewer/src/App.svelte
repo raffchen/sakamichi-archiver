@@ -215,14 +215,24 @@
           wasView === 'blog' &&
           !wasBlogMember &&
           (wasBlogSort === 'latest' || wasBlogSort === 'oldest')
+        /* member list order: #/blog/<key>/oldest/… — 'latest' is the default
+           and stays bare. A leading sort id is recognized; anything else in
+           that slot is a post id (numeric) or legacy junk. Post ids are
+           numeric, 'p' is the page marker, sort ids alphabetic — no
+           collisions. Set explicitly either way so the state always matches
+           the address. */
+        const segs0 = parts[2] ?? null
+        const memberSort = segs0 === 'oldest' || segs0 === 'latest' ? segs0 : null
+        const rest = memberSort ? parts.slice(3) : parts.slice(2)
+        ui.blogMemberSort = memberSort === 'oldest' ? 'oldest' : 'latest'
         ui.blogMember = slug
-        if (parts[2] === 'p') {
+        if (rest[0] === 'p') {
           ui.blogPost = null
-          ui.blogPage = Math.max(1, Number(parts[3]) || 1)
+          ui.blogPage = Math.max(1, Number(rest[1]) || 1)
         } else {
           /* no p/<n> segment = page 1 — set it explicitly so Back from
              #/blog/<key>/p/2 to #/blog/<key> restores the first page */
-          ui.blogPost = parts[2] ? Number(parts[2]) : null
+          ui.blogPost = rest[0] ? Number(rest[0]) : null
           ui.blogPage = 1
         }
         /* a post is on screen: record where this navigation came from so the
@@ -306,6 +316,14 @@
     if (!routed) return
     const want = ui.view === 'blog' ? blogHash() : ui.view === 'search' ? searchHash() : hashFor(ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
+    /* a ⇅ sort toggle marks itself (blogSortSwap): the same screen in a
+       different view — replace the entry, never push. Consumed here even on
+       the equal-hash path so a stale flag can't swallow a later push. */
+    if (ui.blogSortSwap) {
+      ui.blogSortSwap = false
+      if (location.hash !== want) history.replaceState(null, '', want)
+      return
+    }
     /* toggling the ⇅ sort only swaps the view of the same screen — never a
        history entry. A sort-only diff (same URL with the sort segment added,
        changed, or removed) replaces in place; anything else (member, page,
@@ -354,9 +372,14 @@
       const page = ui.blogFeedPage > 1 ? `/p/${ui.blogFeedPage}` : ''
       return `#/blog/${encodeURIComponent(ui.site)}${sort}${page}`
     }
+    /* member URLs ALWAYS carry /p/<n>, and the member's ⇅ order when it
+       isn't the default (oldest) — so back()/refresh land on the same
+       ordering, and an oldest-context post link (#/blog/<key>/oldest/<id>)
+       shares correctly */
     const m = encodeURIComponent(ui.blogMember)
-    if (ui.blogPost != null) return `#/blog/${m}/${ui.blogPost}`
-    return `#/blog/${m}/p/${ui.blogPage}`
+    const mSort = ui.blogMemberSort === 'oldest' ? '/oldest' : ''
+    if (ui.blogPost != null) return `#/blog/${m}${mSort}/${ui.blogPost}`
+    return `#/blog/${m}${mSort}/p/${ui.blogPage}`
   }
 </script>
 

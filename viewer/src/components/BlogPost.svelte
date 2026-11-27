@@ -31,14 +31,20 @@
     ui.blogPostRank = null // stale until this post's detail lands
     error = ''
     screen?.scrollTo(0, 0) // a chained post opens at the top, like a fresh tap
-    fetch(`/api/blog/${encodeURIComponent(key)}/${postId}`)
+    /* rank must be computed in the ordering the member list is being read in
+       (blogMemberSort) — back() derives the return page from it */
+    const order = ui.blogMemberSort
+    fetch(
+      `/api/blog/${encodeURIComponent(key)}/${postId}` +
+        (order === 'oldest' ? '?order=asc' : ''),
+    )
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: { entry: BlogEntry; rank: number; prev: { id: string; title: string | null } | null; next: { id: string; title: string | null } | null }) => {
         entry = d.entry
         nav = d
-        /* newest-first position in the member's list — back() derives the
-           list page holding this post from it, so back works after a
-           refresh or a shared post link (no page in the post URL) */
+        /* position in the member's list under the current sort — back()
+           derives the list page holding this post from it, so back works
+           after a refresh or a shared post link (no page in the post URL) */
         ui.blogPostRank = d.rank
       })
       .catch((e) => (error = String(e)))
@@ -97,7 +103,7 @@
     {#if nav && (nav.prev || nav.next)}
       <nav class="bp-nav" aria-label="post navigation">
         {#if nav.prev}
-          <a class="bp-nav-btn" href={`#/blog/${encodeURIComponent(key)}/${nav.prev.id}`}>
+          <a class="bp-nav-btn" href={`#/blog/${encodeURIComponent(key)}${ui.blogMemberSort === 'oldest' ? '/oldest' : ''}/${nav.prev.id}`}>
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
             <span class="txt">
               <span class="lbl">前の投稿</span>
@@ -108,7 +114,7 @@
           <span></span>
         {/if}
         {#if nav.next}
-          <a class="bp-nav-btn right" href={`#/blog/${encodeURIComponent(key)}/${nav.next.id}`}>
+          <a class="bp-nav-btn right" href={`#/blog/${encodeURIComponent(key)}${ui.blogMemberSort === 'oldest' ? '/oldest' : ''}/${nav.next.id}`}>
             <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
             <span class="txt">
               <span class="lbl">次の投稿</span>
