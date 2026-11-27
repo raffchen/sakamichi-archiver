@@ -215,7 +215,6 @@
     if (id !== ui.blogSort) {
       ui.blogSort = id
       ui.blogFeedPage = 1 // the page numbers name a different list now
-      ui.blogSortSwap = true // same screen, different view — replace, don't push
     }
     menuOpen = false
   }

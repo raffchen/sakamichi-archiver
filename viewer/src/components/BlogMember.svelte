@@ -33,7 +33,6 @@
     if (id !== ui.blogMemberSort) {
       ui.blogMemberSort = id
       ui.blogPage = 1 // the page numbers name a different ordering now
-      ui.blogSortSwap = true // same screen, different view — replace, don't push
     }
     menuOpen = false
   }

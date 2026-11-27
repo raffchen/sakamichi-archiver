@@ -308,30 +308,17 @@
     return '#/search'
   }
 
-  /* the sort segment regex — built from the store's id list so the router
-     and the hash stay in sync (blogHash emits, parseHash validates) */
-  const sortStrip = new RegExp(`^(#/blog/[^/]+)/(${BLOG_SORT_IDS.join('|')})$`)
-
   $effect(() => {
     if (!routed) return
     const want = ui.view === 'blog' ? blogHash() : ui.view === 'search' ? searchHash() : hashFor(ui.view, ui.slug, ui.focusId)
     if (location.hash === want) return
-    /* a ⇅ sort toggle marks itself (blogSortSwap): the same screen in a
-       different view — replace the entry, never push. Consumed here even on
-       the equal-hash path so a stale flag can't swallow a later push. */
-    if (ui.blogSortSwap) {
-      ui.blogSortSwap = false
-      if (location.hash !== want) history.replaceState(null, '', want)
-      return
-    }
-    /* toggling the ⇅ sort only swaps the view of the same screen — never a
-       history entry. A sort-only diff (same URL with the sort segment added,
-       changed, or removed) replaces in place; anything else (member, page,
-       post…) falls through and pushes as usual. */
-    if (location.hash.replace(sortStrip, '$1') === want.replace(sortStrip, '$1')) {
-      history.replaceState(null, '', want)
-      return
-    }
+    /* every state change is a new screen or a new page/view of one — it
+       pushes, so browser back retraces the user's actual steps, sort
+       toggles included. (Sort toggles used to replaceState on the theory
+       that they were "the same screen, different view"; with pagination the
+       toggle also resets the page, and replacing clobbered the entry for
+       the page you were on — back jumped a page. Uniform push is the
+       consistent rule.) */
     /* on the media route: stepping (next/prev) edits the same history
        entry; closing POPS the entry the app pushed on open (Back returns
        to exactly where you were — one press, nothing left behind), and a

@@ -109,10 +109,6 @@ export const ui = $state({
      every member navigation, and it rides along through prev/next via the
      post links so back() computes the page in the same ordering. */
   blogMemberSort: 'latest' as MemberSort,
-  /* one-shot: the ⇅ menus set this when the sort actually changes so the
-     hash effect replaceState-s instead of pushing — a sort toggle is the
-     same screen in a different view, never a history entry */
-  blogSortSwap: false as boolean,
   /* directory setting: sites hiding graduated members' cards (the ⚙ menu,
      per site). A device preference, so it persists like volume does. */
   blogGradHiddenSites: loadGradSites(),
