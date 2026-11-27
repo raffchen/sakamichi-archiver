@@ -114,6 +114,13 @@
 
   function parseHash() {
     mediaWasPushed = false
+    /* origin snapshot for blogPostFrom (the in-app back button's return
+       target): read BEFORE anything below mutates the store — the blog
+       branch overwrites view/scope/member on its way in */
+    const wasView = ui.view
+    const wasBlogMember = ui.blogMember
+    const wasBlogSort = ui.blogSort
+    const wasSearchScope = ui.searchScope
     const parts = location.hash.replace(/^#\/?/, '').split('/')
     /* 'site' is the pre-2026-02 name of the talk-directory route — kept as a
        legacy alias so old shared links still resolve */
@@ -195,6 +202,19 @@
         const pi = segs[0] === 'p' ? 0 : segs[1] === 'p' ? 1 : -1
         ui.blogFeedPage = pi >= 0 ? Math.max(1, Number(segs[pi + 1]) || 1) : 1
       } else {
+        /* where is this post link landing FROM? Read before mutating state:
+           a feed view (no member, feed sort) vs the search that surfaced the
+           hit vs anything else (= member's list / directory / fresh load).
+           Prev/next chaining within the post view (wasOnPost) keeps the
+           origin — back from the 3rd post in a row still returns to the
+           feed/search you started from. */
+        const wasOnPost = wasView === 'blog' && ui.blogPost != null
+        const cameFromSearch =
+          wasView === 'search' && (wasSearchScope === 'blog' || wasSearchScope === 'blog-member')
+        const cameFromFeed =
+          wasView === 'blog' &&
+          !wasBlogMember &&
+          (wasBlogSort === 'latest' || wasBlogSort === 'oldest')
         ui.blogMember = slug
         if (parts[2] === 'p') {
           ui.blogPost = null
@@ -205,6 +225,16 @@
           ui.blogPost = parts[2] ? Number(parts[2]) : null
           ui.blogPage = 1
         }
+        /* a post is on screen: record where this navigation came from so the
+           in-app back button returns there (blogPostFrom in the store). The
+           scope comes from the SNAPSHOT — the blog branch has already reset
+           ui.searchScope to 'message' by this point. */
+        if (ui.blogPost != null && !wasOnPost)
+          ui.blogPostFrom = cameFromSearch
+            ? { kind: 'search', scope: wasSearchScope as 'blog' | 'blog-member' }
+            : cameFromFeed
+              ? { kind: 'feed' }
+              : { kind: 'member' }
         /* a deep link names the member — adopt their site so the theme matches */
         if (slug) {
           const bm = archive.blogs?.members.find((b) => b.key === slug)

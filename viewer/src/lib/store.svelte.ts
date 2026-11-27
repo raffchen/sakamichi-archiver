@@ -87,6 +87,17 @@ export const ui = $state({
      page holding that post, so back works after refresh/deep links and
      under any page size. Null until the detail fetch lands. */
   blogPostRank: null as number | null,
+  /* where the on-screen post was opened FROM — the in-app back button
+     returns there (feed, the member's list, or the search that surfaced
+     the post). Set by parseHash when a post deep link lands from another
+     view; kept across prev/next within the post view. Null = unknown
+     (programmatic open / direct load) — back() then falls back to the
+     member's list, the pre-feed behavior. */
+  blogPostFrom: null as
+    | null
+    | { kind: 'feed' }
+    | { kind: 'member' }
+    | { kind: 'search'; scope: 'blog' | 'blog-member' },
   /* directory sort (the official ⇅ menu) */
   blogSort: 'gen-asc' as BlogSort,
   blogFeedPage: 1 as number, // cross-member feed page (1-based); #/blog/<site>/<sort>/p/<n>
@@ -234,14 +245,26 @@ export function openBlog(member: string | null = null, post: number | null = nul
 export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
   else if (ui.view === 'blog' && ui.blogPost != null) {
-    /* the list page comes from the post's rank, not from ui.blogPage — that
-       way back lands on the right page even after a refresh or a shared
-       post link (whose hash carries no page), and it tracks the page size
-       setting. Falls back to the current blogPage while the detail fetch is
-       still in flight. prev/next chaining updates the rank per post, so
-       back follows the post you're ON. openBlog keeps it (same member). */
-    if (ui.blogPostRank != null) ui.blogPage = Math.floor(ui.blogPostRank / BLOG_PER_PAGE) + 1
-    openBlog(ui.blogMember)
+    /* back returns to where the post was opened from (blogPostFrom, set by
+       parseHash). Member list (or unknown origin): the list page comes from
+       the post's rank, not from ui.blogPage — that way back lands on the
+       right page even after a refresh or a shared post link (whose hash
+       carries no page), and it tracks the page size setting. Falls back to
+       the current blogPage while the detail fetch is still in flight.
+       prev/next chaining updates the rank per post, so back follows the
+       post you're ON. openBlog keeps it (same member). Feed origin: the
+       sort and feed page are still in the store, so just drop the post. */
+    const from = ui.blogPostFrom
+    if (from?.kind === 'feed') {
+      openBlog(null) // blogMember=null → the newest/oldest feed, same page
+    } else if (from?.kind === 'search') {
+      ui.blogPost = null
+      ui.view = 'search'
+      ui.searchScope = from.scope // ui.query is untouched — results re-fetch
+    } else {
+      if (ui.blogPostRank != null) ui.blogPage = Math.floor(ui.blogPostRank / BLOG_PER_PAGE) + 1
+      openBlog(ui.blogMember)
+    }
   }
   else if (ui.view === 'blog' && ui.blogMember) openBlog()
   else if (ui.view === 'search' && ui.searchScope === 'message-member') ui.view = 'thread'

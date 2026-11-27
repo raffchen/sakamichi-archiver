@@ -162,6 +162,31 @@ describe('back()', () => {
     expect(store.ui.blogPage).toBe(1)
   })
 
+  it('back from a feed-opened post returns to the feed at its page', () => {
+    store.ui.blogSort = 'oldest'
+    store.ui.blogFeedPage = 3
+    store.openBlog('m1', 77)
+    store.ui.blogPostFrom = { kind: 'feed' }
+    store.back(null)
+    expect(store.ui.view).toBe('blog')
+    expect(store.ui.blogPost).toBeNull()
+    expect(store.ui.blogMember).toBeNull()
+    expect(store.ui.blogSort).toBe('oldest')
+    expect(store.ui.blogFeedPage).toBe(3)
+  })
+
+  it('back from a search-opened post returns to that search', () => {
+    store.ui.query = '卒業'
+    store.openBlog('m1', 77)
+    store.ui.blogPostFrom = { kind: 'search', scope: 'blog-member' }
+    store.back(null)
+    expect(store.ui.view).toBe('search')
+    expect(store.ui.searchScope).toBe('blog-member')
+    expect(store.ui.blogPost).toBeNull()
+    expect(store.ui.blogMember).toBe('m1') // the member scope needs it
+    expect(store.ui.query).toBe('卒業')
+  })
+
   it('goes blog-scoped search back to the blog directory', () => {
     store.ui.view = 'search'
     store.ui.searchScope = 'blog'
