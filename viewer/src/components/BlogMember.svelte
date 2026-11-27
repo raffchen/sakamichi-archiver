@@ -86,7 +86,7 @@
   <!-- the name links the list's first page (jump home from a deep page);
        real anchor, so middle-/ctrl-click opens the list in a new tab too -->
   <h1>
-    <a class="head-name" href={`#/blog/${encodeURIComponent(key)}${sortSeg}/p/1`}>{memberName}</a>
+    <a class="head-name" href={`#/blog/${encodeURIComponent(key)}/p/1`}>{memberName}</a>
   </h1>
   <button class="ic" aria-label="sort" onclick={() => (menuOpen = !menuOpen)}>
     {@html icon('sort')}

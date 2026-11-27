@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Archive } from '../lib/types'
-  import { goHome, openBlog, info, ui } from '../lib/store.svelte'
+  import { goHome, openBlogTab, info, ui } from '../lib/store.svelte'
   import { auth } from '../lib/auth.svelte'
   import { icon } from '../lib/icons'
 
@@ -45,7 +45,7 @@
       title={t.url ?? (t.locked ? (t.lockedTitle ?? 'not part of the archive') : '')}
       onclick={() => {
         if (t.id === 'talk') goHome()
-        else if (t.id === 'blog') openBlog()
+        else if (t.id === 'blog') openBlogTab()
         else if (t.url) window.open(t.url, '_blank', 'noopener') // external site, archive stays put
         else if (!t.locked) info.open = true
       }}

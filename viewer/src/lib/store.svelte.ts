@@ -250,6 +250,15 @@ export function openBlog(member: string | null = null, post: number | null = nul
   ui.blogMember = member
   ui.blogPost = post
 }
+/* the Blog tab button: the tab's home — the member directory at the default
+   sort, feed page 1. Unlike openBlog() (which preserves the current sort and
+   page for back()/prev-next flows), re-entering the tab from its button
+   always starts fresh. Same state a bare #/blog/<site> deep link produces. */
+export function openBlogTab() {
+  ui.blogSort = 'gen-asc'
+  ui.blogFeedPage = 1
+  openBlog()
+}
 export function back(archiveMembers: { slug: string }[] | null) {
   if (ui.view === 'gallery' && ui.slug) ui.view = 'thread'
   else if (ui.view === 'blog' && ui.blogPost != null) {

@@ -122,6 +122,25 @@ describe('navigation state', () => {
     expect(store.ui.blogMember).toBeNull()
     expect(store.ui.blogPost).toBeNull()
   })
+
+  it('openBlogTab resets sort and feed page; openBlog keeps them', () => {
+    store.openBlog()
+    store.ui.blogSort = 'oldest'
+    store.ui.blogFeedPage = 3
+    store.openBlog('teresa-ikeda', 1) // drill into a member — sort survives
+    expect(store.ui.blogSort).toBe('oldest')
+    store.openBlog() // back to the feed — sort/page survive (prev/next flows)
+    expect(store.ui.blogSort).toBe('oldest')
+    expect(store.ui.blogFeedPage).toBe(3)
+    store.ui.blogMember = 'teresa-ikeda'
+    store.ui.blogPost = 2
+    store.openBlogTab() // the Blog tab button — always starts fresh
+    expect(store.ui.view).toBe('blog')
+    expect(store.ui.blogMember).toBeNull()
+    expect(store.ui.blogPost).toBeNull()
+    expect(store.ui.blogSort).toBe('gen-asc')
+    expect(store.ui.blogFeedPage).toBe(1)
+  })
 })
 
 describe('back()', () => {
